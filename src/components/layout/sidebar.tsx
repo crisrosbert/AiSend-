@@ -31,21 +31,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// Nav items — slug prefix added dynamically below
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/inbox", label: "Inbox", icon: MessageSquare },
-  { href: "/contacts", label: "Contacts", icon: Users },
-  { href: "/pipelines", label: "Pipelines", icon: GitBranch },
-  { href: "/broadcasts", label: "Broadcasts", icon: Radio },
-  { href: "/automations", label: "Automations", icon: Zap },
+  { path: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { path: "inbox", label: "Inbox", icon: MessageSquare },
+  { path: "contacts", label: "Contacts", icon: Users },
+  { path: "pipelines", label: "Pipelines", icon: GitBranch },
+  { path: "broadcasts", label: "Broadcasts", icon: Radio },
+  { path: "automations", label: "Automations", icon: Zap },
 ];
 
 const bottomNavItems = [
-  { href: "/settings", label: "Settings", icon: Settings },
+  { path: "settings", label: "Settings", icon: Settings },
 ];
 
 interface SidebarProps {
-  /** Controlled on mobile by the Header's hamburger button. Ignored on lg+. */
   open?: boolean;
   onClose?: () => void;
 }
@@ -55,16 +55,30 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { profile, signOut } = useAuth();
   const totalUnread = useTotalUnread();
 
-  // Close the drawer when route changes — users opened it to navigate,
-  // so once they pick a destination the drawer should get out of the way.
+  // Build base URL prefix using slug if available
+  // e.g. /we3media or "" for legacy accounts
+  const slugPrefix = profile?.slug ? `/${profile.slug}` : "";
+
+  // Helper — build full href for a nav path
+  const href = (path: string) => `${slugPrefix}/${path}`;
+
+  // Active check — works for both /we3media/dashboard and /dashboard
+  const isActive = (path: string) => {
+    const full = href(path);
+    const legacy = `/${path}`;
+    if (path === "dashboard") {
+      return pathname === full || pathname === legacy;
+    }
+    return pathname.startsWith(full) || pathname.startsWith(legacy);
+  };
+
+  // Close drawer on route change
   useEffect(() => {
     onClose?.();
-    // Only pathname drives this — onClose identity doesn't need to re-run it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  // Lock body scroll and allow Escape to close while the drawer is open on
-  // mobile. No-ops on desktop because the sidebar isn't positioned there.
+  // Lock body scroll on mobile when drawer open
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -81,9 +95,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Backdrop — only exists on mobile and only when open. Clicking
-          it closes the drawer. Hidden from lg+ since the sidebar is
-          part of the main flex row there. */}
+      {/* Mobile backdrop */}
       <button
         type="button"
         aria-label="Close menu"
@@ -98,24 +110,21 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          // Mobile: fixed drawer that slides in from the left.
           "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-slate-800 bg-slate-900",
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
-          // Desktop: static, always visible — reset all the mobile framing.
           "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
         )}
         aria-label="Primary"
       >
-        {/* Logo row. On mobile we put a close button here; on desktop the
-            close button is hidden since the sidebar is always-visible. */}
+        {/* Logo */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link href={href("dashboard")} className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500">
               <MessageSquare className="h-4 w-4 text-white" />
             </div>
             <span className="text-sm font-semibold text-white">
-              CRM Template for WhatsApp
+              {profile?.business_name ?? "WhatsApp CRM"}
             </span>
           </Link>
           <button
@@ -132,21 +141,17 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href));
-
+              const active = isActive(item.path);
               const showUnreadDot =
-                item.href === "/inbox" && totalUnread > 0 && !isActive;
+                item.path === "inbox" && totalUnread > 0 && !active;
 
               return (
-                <li key={item.href}>
+                <li key={item.path}>
                   <Link
-                    href={item.href}
+                    href={href(item.path)}
                     className={cn(
-                      // Taller on mobile so fingers can hit the row reliably (≥44px).
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
-                      isActive
+                      active
                         ? "bg-violet-500/10 text-violet-500"
                         : "text-slate-400 hover:bg-slate-800 hover:text-white",
                     )}
@@ -155,7 +160,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     <span className="flex-1">{item.label}</span>
                     {showUnreadDot && (
                       <span
-                        aria-label={`${totalUnread} unread conversation${totalUnread === 1 ? "" : "s"}`}
+                        aria-label={`${totalUnread} unread`}
                         className="relative flex h-2 w-2"
                       >
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
@@ -172,14 +177,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
           <ul className="flex flex-col gap-1">
             {bottomNavItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
+              const active = isActive(item.path);
               return (
-                <li key={item.href}>
+                <li key={item.path}>
                   <Link
-                    href={item.href}
+                    href={href(item.path)}
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
-                      isActive
+                      active
                         ? "bg-violet-500/10 text-violet-500"
                         : "text-slate-400 hover:bg-slate-800 hover:text-white",
                     )}
@@ -228,7 +233,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               <DropdownMenuItem
                 render={
                   <Link
-                    href="/settings?tab=profile"
+                    href={`${slugPrefix}/settings?tab=profile`}
                     onClick={onClose}
                     className="text-slate-200 focus:bg-slate-800 focus:text-white"
                   />
@@ -240,7 +245,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               <DropdownMenuItem
                 render={
                   <Link
-                    href="/settings?tab=whatsapp"
+                    href={`${slugPrefix}/settings?tab=whatsapp`}
                     onClick={onClose}
                     className="text-slate-200 focus:bg-slate-800 focus:text-white"
                   />

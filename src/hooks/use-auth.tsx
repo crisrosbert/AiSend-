@@ -17,6 +17,9 @@ interface Profile {
   email: string;
   avatar_url: string | null;
   role: string | null;
+  slug: string | null;
+  business_name: string | null;
+  org_id: string | null;
 }
 
 interface AuthContextValue {
@@ -24,43 +27,27 @@ interface AuthContextValue {
   profile: Profile | null;
   loading: boolean;
   signOut: () => Promise<void>;
-  /** Re-fetch the current user's profile row — call after a save from
-   *  the settings form so header/sidebar reflect the change without a
-   *  full page reload. */
   refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/**
- * AuthProvider — wrap this around the dashboard layout.
- * Makes ONE getSession() call for the whole tree instead of one per
- * component, avoiding internal lock contention in the Supabase client.
- */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Shared across init, auth-state-change listener, and the exposed
-  // refreshProfile() callback. Reads the current session's user id and
-  // pulls the matching profile row.
   const fetchProfile = useCallback(async (userId: string) => {
     const supabase = createClient();
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, avatar_url, role")
+        .select("id, full_name, email, avatar_url, role, slug, business_name, org_id")
         .eq("user_id", userId)
         .maybeSingle();
 
       if (error) {
-        console.error("[AuthProvider] fetchProfile error:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
+        console.error("[AuthProvider] fetchProfile error:", error.message);
         return;
       }
 
@@ -95,8 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(currentUser);
 
         if (currentUser) {
-          // Don't block loading on profile fetch — let the UI render
-          // with the user info we already have, profile enriches async.
           fetchProfile(currentUser.id);
         }
       } catch (err) {
@@ -154,22 +139,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * useAuth — read the shared auth state from context.
- * Must be used inside an <AuthProvider>.
- */
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    // Fallback for components rendered outside the provider (shouldn't
-    // happen in normal flow, but don't crash the page).
     return {
       user: null,
       profile: null,
       loading: false,
-      signOut: async () => {
-        window.location.href = "/login";
-      },
+      signOut: async () => { window.location.href = "/login"; },
       refreshProfile: async () => {},
     };
   }

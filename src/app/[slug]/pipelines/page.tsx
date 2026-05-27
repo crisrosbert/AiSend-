@@ -1,5 +1,1 @@
-import { redirect } from "next/navigation";
-
-export default function SlugPipelinesPage() {
-  redirect("/pipelines");
-}
+import { redirect } from "next/navigation"; export default function Page() { redirect("/pipelines"); }

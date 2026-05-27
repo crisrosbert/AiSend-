@@ -1,5 +1,1 @@
-import { redirect } from "next/navigation";
-
-export default function SlugAutomationsPage() {
-  redirect("/automations");
-}
+import { redirect } from "next/navigation"; export default function Page() { redirect("/automations"); }

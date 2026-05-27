@@ -1,5 +1,1 @@
-import { redirect } from "next/navigation";
-
-export default function SlugSettingsPage() {
-  redirect("/settings");
-}
+import { redirect } from "next/navigation"; export default function Page() { redirect("/settings"); }

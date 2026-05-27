@@ -1,5 +1,1 @@
-import { redirect } from "next/navigation";
-
-export default function SlugContactsPage() {
-  redirect("/contacts");
-}
+import { redirect } from "next/navigation"; export default function Page() { redirect("/contacts"); }

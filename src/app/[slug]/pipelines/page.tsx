@@ -1,1 +1,3 @@
-import { redirect } from "next/navigation"; export default function Page() { redirect("/pipelines"); }
+"use client";
+import PipelinesPage from "@/app/(dashboard)/pipelines/page";
+export default function SlugPipelinesPage() { return <PipelinesPage />; }

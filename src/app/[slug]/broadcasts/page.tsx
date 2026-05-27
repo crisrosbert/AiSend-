@@ -1,1 +1,3 @@
-import { redirect } from "next/navigation"; export default function Page() { redirect("/broadcasts"); }
+"use client";
+import BroadcastsPage from "@/app/(dashboard)/broadcasts/page";
+export default function SlugBroadcastsPage() { return <BroadcastsPage />; }

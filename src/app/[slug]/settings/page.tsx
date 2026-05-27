@@ -1,1 +1,5 @@
-export { default } from "@/app/(dashboard)/settings/page";
+import { redirect } from "next/navigation";
+
+export default function SlugSettingsPage() {
+  redirect("/settings");
+}

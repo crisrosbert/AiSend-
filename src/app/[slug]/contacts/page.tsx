@@ -1,1 +1,5 @@
-export { default } from "@/app/(dashboard)/contacts/page";
+import { redirect } from "next/navigation";
+
+export default function SlugContactsPage() {
+  redirect("/contacts");
+}

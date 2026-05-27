@@ -1,1 +1,5 @@
-export { default } from "@/app/(dashboard)/automations/page";
+import { redirect } from "next/navigation";
+
+export default function SlugAutomationsPage() {
+  redirect("/automations");
+}

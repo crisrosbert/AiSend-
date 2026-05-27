@@ -1,1 +1,5 @@
-export { default } from "@/app/(dashboard)/broadcasts/page";
+import { redirect } from "next/navigation";
+
+export default function SlugBroadcastsPage() {
+  redirect("/broadcasts");
+}

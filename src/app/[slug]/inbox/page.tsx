@@ -1,1 +1,5 @@
-export { default } from "@/app/(dashboard)/inbox/page";
+import { redirect } from "next/navigation";
+
+export default function SlugInboxPage() {
+  redirect("/inbox");
+}

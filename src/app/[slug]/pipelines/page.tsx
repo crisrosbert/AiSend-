@@ -1,1 +1,5 @@
-export { default } from "@/app/(dashboard)/pipelines/page";
+import { redirect } from "next/navigation";
+
+export default function SlugPipelinesPage() {
+  redirect("/pipelines");
+}

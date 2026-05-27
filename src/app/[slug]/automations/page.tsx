@@ -1,3 +1,1 @@
-"use client";
-import AutomationsPage from "@/app/(dashboard)/automations/page";
-export default function SlugAutomationsPage() { return <AutomationsPage />; }
+import { redirect } from "next/navigation"; export default function Page() { redirect("/automations"); }

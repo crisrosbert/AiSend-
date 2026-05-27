@@ -1,3 +1,1 @@
-"use client";
-import InboxPage from "@/app/(dashboard)/inbox/page";
-export default function SlugInboxPage() { return <InboxPage />; }
+import { redirect } from "next/navigation"; export default function Page() { redirect("/inbox"); }

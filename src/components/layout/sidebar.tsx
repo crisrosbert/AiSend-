@@ -30,7 +30,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
+import {
+  LayoutDashboard,
+  MessageSquare,
+  Users,
+  GitBranch,
+  Radio,
+  Zap,
+  Settings,
+  LogOut,
+  ...
+} from "lucide-react";
 const navItems = [
   { path: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { path: "inbox", label: "Live Chat", icon: MessageSquare },

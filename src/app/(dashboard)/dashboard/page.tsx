@@ -114,7 +114,7 @@ export default function DashboardPage() {
               {activity.map((a) => (
                 <div key={a.id} className="cwa-activity-row">
                   <div className="cwa-activity-ic"><Users size={15} /></div>
-                  <span className="cwa-activity-text">{a.title}</span>
+               <span className="cwa-activity-text">{a.text}</span>
                 </div>
               ))}
             </div>

@@ -97,6 +97,22 @@ h1, h2, h3, h4, .font-display {
 .ring-violet-500\/20 { --tw-ring-color: rgba(16,185,129,.2) !important; }
 .focus-visible\:ring-violet-500\/20:focus-visible { --tw-ring-color: rgba(16,185,129,.2) !important; }
 
+/* --- ALL remaining violet shades (50,200,300,700) --- */
+.bg-violet-700 { background-color: #047857 !important; }
+.hover\:bg-violet-700:hover { background-color: #047857 !important; }
+.bg-violet-50 { background-color: #ecfdf5 !important; }
+.bg-violet-200 { background-color: #a7f3d0 !important; }
+.bg-violet-300 { background-color: #6ee7b7 !important; }
+.text-violet-200 { color: #047857 !important; }
+.text-violet-300 { color: #059669 !important; }
+.text-violet-600 { color: #047857 !important; }
+.border-violet-400 { border-color: #34d399 !important; }
+.border-violet-600 { border-color: #059669 !important; }
+.outline-violet-400 { outline-color: #34d399 !important; }
+.bg-violet-500\/5 { background-color: #f0fdf9 !important; }
+.text-violet-50 { color: #ecfdf5 !important; }
+.ring-violet-500 { --tw-ring-color: #10b981 !important; }
+
 /* --- HOVER STATES --- */
 .hover\:bg-slate-800:hover { background-color: #f1f5f4 !important; }
 .hover\:bg-slate-800\/30:hover { background-color: #f8faf9 !important; }
@@ -116,23 +132,10 @@ h1, h2, h3, h4, .font-display {
 .ring-slate-800 { --tw-ring-color: #eef2f0 !important; }
 .ring-white\/10 { --tw-ring-color: rgba(12,31,23,.08) !important; }
 
-/* --- SIDEBAR special: keep it as a clean white panel with subtle border --- */
-aside.bg-slate-900,
-aside[class*="bg-"] {
+/* --- SIDEBAR special: only the main nav aside, scoped tightly --- */
+aside[aria-label="Primary"] {
   background-color: #ffffff !important;
   border-right: 1px solid #e7ece9 !important;
-}
-
-/* --- shadcn / radix surfaces that used dark --- */
-[class*="bg-slate-9"],
-[class*="bg-slate-8"] {
-  /* fallback safety for compound utilities */
-}
-
-/* --- Cards get a soft shadow like AiSensy --- */
-.border.border-slate-800,
-.border.border-slate-700 {
-  box-shadow: 0 1px 2px rgba(12,31,23,.04), 0 8px 24px rgba(12,31,23,.05);
 }
 
 /* ============================================================

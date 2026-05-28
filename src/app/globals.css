@@ -3,152 +3,161 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================================
+   CLICKSTREAM WA — AISENSY-STYLE LIGHT THEME
+   This file overrides the original dark theme globally.
+   No need to edit individual component files.
+   ============================================================ */
+
 :root {
-  /* Clickstream WA Brand Colors */
-  --brand-primary: #10b981;
-  --brand-primary-dark: #059669;
-  --brand-primary-light: #34d399;
-  --brand-accent: #06d6a0;
-  
-  /* Background scale */
-  --bg-base: #0a0a0f;
-  --bg-elevated: #0d0d18;
-  --bg-card: #111120;
-  --bg-hover: rgba(255,255,255,0.04);
-  
-  /* Border */
-  --border-subtle: rgba(255,255,255,0.06);
-  --border-default: rgba(255,255,255,0.1);
-  
-  /* Text */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #475569;
-  
-  --radius: 0.75rem;
-  --font-display: var(--font-display, 'Syne', sans-serif);
-  --font-sans: var(--font-sans, 'DM Sans', sans-serif);
+  --brand:#10b981;
+  --brand-deep:#059669;
+  --brand-50:#ecfdf5;
+  --brand-100:#d1fae5;
+  --radius:0.75rem;
+  --font-display: var(--font-display, 'Sora', sans-serif);
+  --font-sans: var(--font-sans, 'Plus Jakarta Sans', sans-serif);
 }
 
 @theme inline {
-  --color-background: var(--bg-base);
-  --color-foreground: var(--text-primary);
+  --color-background: #f4f7f5;
+  --color-foreground: #0c1f17;
   --font-sans: var(--font-sans);
-  --font-display: var(--font-display);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
 }
 
-* {
-  box-sizing: border-box;
-  border-color: var(--border-subtle);
-}
+* { box-sizing: border-box; }
 
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--bg-base);
-  color: var(--text-primary);
+  background: #f4f7f5;
+  color: #0c1f17;
   font-family: var(--font-sans);
   min-height: 100vh;
 }
 
-/* Display font utility */
-.font-display {
+h1, h2, h3, h4, .font-display {
   font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1);
-  border-radius: 99px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.2);
+/* ============================================================
+   DARK → LIGHT CLASS REMAPPING
+   Every slate-dark class from the original theme is remapped
+   to AiSensy-style light equivalents using !important so it
+   wins against the inline Tailwind utilities.
+   ============================================================ */
+
+/* --- BACKGROUNDS --- */
+.bg-slate-950 { background-color: #f4f7f5 !important; }   /* app shell bg */
+.bg-slate-900 { background-color: #ffffff !important; }   /* cards / sidebar */
+.bg-slate-800 { background-color: #ffffff !important; }   /* inputs / surfaces */
+.bg-slate-800\/30,
+.bg-slate-800\/60,
+.bg-slate-800\/50 { background-color: #f8faf9 !important; }
+.bg-slate-700 { background-color: #f1f5f4 !important; }
+.bg-slate-600 { background-color: #e7ece9 !important; }
+.bg-slate-500 { background-color: #d8e0dc !important; }
+
+/* --- TEXT --- */
+.text-white   { color: #0c1f17 !important; }
+.text-slate-100 { color: #0c1f17 !important; }
+.text-slate-200 { color: #1a2b23 !important; }
+.text-slate-300 { color: #334155 !important; }
+.text-slate-400 { color: #5b6b63 !important; }
+.text-slate-500 { color: #6b7c73 !important; }
+.text-slate-600 { color: #8a978f !important; }
+
+/* --- BORDERS --- */
+.border-slate-500 { border-color: #cfd8d3 !important; }
+.border-slate-600 { border-color: #dde4e0 !important; }
+.border-slate-700 { border-color: #e7ece9 !important; }
+.border-slate-800 { border-color: #eef2f0 !important; }
+
+/* --- BRAND COLOR REMAP (violet → emerald) --- */
+.bg-violet-500 { background-color: #10b981 !important; }
+.bg-violet-600 { background-color: #059669 !important; }
+.bg-violet-400 { background-color: #34d399 !important; }
+.hover\:bg-violet-500:hover { background-color: #10b981 !important; }
+.hover\:bg-violet-400:hover { background-color: #34d399 !important; }
+.hover\:bg-violet-500\/10:hover { background-color: #ecfdf5 !important; }
+.text-violet-500 { color: #059669 !important; }
+.text-violet-400 { color: #059669 !important; }
+.hover\:text-violet-400:hover { color: #047857 !important; }
+.bg-violet-500\/10 { background-color: #ecfdf5 !important; }
+.bg-violet-500\/20 { background-color: #d1fae5 !important; }
+.border-violet-500 { border-color: #10b981 !important; }
+.focus-visible\:border-violet-500:focus-visible { border-color: #10b981 !important; }
+.ring-violet-500\/20 { --tw-ring-color: rgba(16,185,129,.2) !important; }
+.focus-visible\:ring-violet-500\/20:focus-visible { --tw-ring-color: rgba(16,185,129,.2) !important; }
+
+/* --- HOVER STATES --- */
+.hover\:bg-slate-800:hover { background-color: #f1f5f4 !important; }
+.hover\:bg-slate-800\/30:hover { background-color: #f8faf9 !important; }
+.hover\:bg-slate-800\/60:hover { background-color: #f1f5f4 !important; }
+.hover\:bg-slate-700:hover { background-color: #e7ece9 !important; }
+.hover\:text-white:hover { color: #0c1f17 !important; }
+.focus\:bg-slate-800:focus { background-color: #f1f5f4 !important; }
+.focus\:bg-slate-800\/60:focus { background-color: #f1f5f4 !important; }
+
+/* --- PLACEHOLDERS --- */
+.placeholder\:text-slate-500::placeholder { color: #9aa8a0 !important; }
+.placeholder\:text-slate-600::placeholder { color: #9aa8a0 !important; }
+
+/* --- RINGS / DIVIDERS --- */
+.divide-slate-800 > * + * { border-color: #eef2f0 !important; }
+.ring-slate-700 { --tw-ring-color: #e7ece9 !important; }
+.ring-slate-800 { --tw-ring-color: #eef2f0 !important; }
+.ring-white\/10 { --tw-ring-color: rgba(12,31,23,.08) !important; }
+
+/* --- SIDEBAR special: keep it as a clean white panel with subtle border --- */
+aside.bg-slate-900,
+aside[class*="bg-"] {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e7ece9 !important;
 }
 
-/* Selection */
-::selection {
-  background: rgba(16, 185, 129, 0.25);
-  color: #fff;
+/* --- shadcn / radix surfaces that used dark --- */
+[class*="bg-slate-9"],
+[class*="bg-slate-8"] {
+  /* fallback safety for compound utilities */
 }
 
-/* Focus ring */
-:focus-visible {
-  outline: 2px solid var(--brand-primary);
-  outline-offset: 2px;
+/* --- Cards get a soft shadow like AiSensy --- */
+.border.border-slate-800,
+.border.border-slate-700 {
+  box-shadow: 0 1px 2px rgba(12,31,23,.04), 0 8px 24px rgba(12,31,23,.05);
 }
+
+/* ============================================================
+   GLOBAL POLISH
+   ============================================================ */
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d8e0dc; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #c2cdc7; }
+
+::selection { background: rgba(16,185,129,.2); color: #053b2a; }
+
+:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
+
+/* Buttons get emerald primary treatment */
+button.bg-violet-600,
+button.bg-violet-500 {
+  box-shadow: 0 6px 18px rgba(16,185,129,.28);
+}
+
+/* Loading spinner color */
+.border-violet-500 { border-color: #10b981 !important; }
+.border-t-transparent { border-top-color: transparent !important; }
 
 /* Animations */
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes slide-in {
-  from { opacity: 0; transform: translateX(-12px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.3s ease forwards;
-}
-
-.animate-slide-in {
-  animation: slide-in 0.25s ease forwards;
-}
-
-/* Card styles */
-.card-base {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-}
-
-/* Brand gradient text */
-.text-brand-gradient {
-  background: linear-gradient(135deg, #10b981, #06d6a0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Emerald glow effect */
-.glow-emerald {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
-}
-
-/* Input base */
-input, textarea, select {
-  font-family: var(--font-sans);
-}
-
-/* Button hover effects */
-.btn-primary {
-  background: var(--brand-primary);
-  color: white;
-  transition: all 0.15s ease;
-}
-.btn-primary:hover {
-  background: var(--brand-primary-light);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
-}
+@keyframes fade-in { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:none; } }
+.animate-fade-in { animation: fade-in .3s ease forwards; }

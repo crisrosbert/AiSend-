@@ -1,18 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Syne, DM_Sans } from "next/font/google";
+import { Sora, Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const syne = Syne({
+const sora = Sora({
   variable: "--font-display",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
 });
 
-const dmSans = DM_Sans({
+const jakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -22,43 +22,30 @@ export const metadata: Metadata = {
   },
   description:
     "Clickstream WA — The smartest WhatsApp CRM for Indian businesses. Manage conversations, broadcast campaigns, and automate follow-ups.",
-  keywords: ["WhatsApp CRM", "WhatsApp Marketing", "WhatsApp Business API", "Clickstream"],
-  robots: {
-    index: false,
-    follow: false,
-  },
-  icons: {
-    icon: [{ url: "/icon" }],
-  },
-  formatDetection: {
-    email: false,
-    address: false,
-    telephone: false,
-  },
+  robots: { index: false, follow: false },
+  icons: { icon: [{ url: "/icon" }] },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0f",
-  colorScheme: "dark",
+  themeColor: "#10b981",
+  colorScheme: "light",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${syne.variable} ${dmSans.variable} h-full antialiased`}>
-      <body className="min-h-full bg-[#0a0a0f] text-white font-sans">
+    <html lang="en" className={`${sora.variable} ${jakarta.variable} h-full antialiased`}>
+      <body className="min-h-full bg-[#f4f7f5] text-[#0c1f17]" style={{ fontFamily: "var(--font-sans)" }}>
         {children}
         <Toaster
-          theme="dark"
+          theme="light"
           position="top-right"
           toastOptions={{
             style: {
-              background: "rgb(15 15 25)",
-              border: "1px solid rgb(39 39 60)",
-              color: "white",
+              background: "#ffffff",
+              border: "1px solid #e7ece9",
+              color: "#0c1f17",
               fontFamily: "var(--font-sans)",
             },
           }}

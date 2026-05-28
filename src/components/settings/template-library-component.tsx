@@ -6,8 +6,8 @@ import { Loader2, Plus, Sparkles, Search, Check } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import {
-  TEMPLATE_LIBRARY,
   TEMPLATE_INDUSTRIES,
+  TEMPLATE_LANGUAGES,
   filterTemplates,
   type LibraryTemplate,
 } from '@/lib/template-library';
@@ -25,11 +25,12 @@ export function TemplateLibrary({ onUsed }: { onUsed?: () => void }) {
   const supabase = createClient();
   const [industry, setIndustry] = useState<string>('All');
   const [category, setCategory] = useState<string>('All');
+  const [language, setLanguage] = useState<string>('All');
   const [search, setSearch] = useState('');
   const [usingId, setUsingId] = useState<string | null>(null);
   const [usedIds, setUsedIds] = useState<Set<string>>(new Set());
 
-  const filtered = filterTemplates(industry, category, search);
+  const filtered = filterTemplates(industry, category, language, search);
 
   const useTemplate = async (tpl: LibraryTemplate) => {
     if (!user) {
@@ -85,7 +86,7 @@ export function TemplateLibrary({ onUsed }: { onUsed?: () => void }) {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -96,12 +97,21 @@ export function TemplateLibrary({ onUsed }: { onUsed?: () => void }) {
           />
         </div>
         <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+          className="rounded-lg border border-[#e7ece9] bg-white px-3 py-2.5 text-sm font-medium text-slate-700 focus:border-emerald-500 focus:outline-none"
+        >
+          {TEMPLATE_LANGUAGES.map((l) => (
+            <option key={l} value={l}>{l === 'All' ? 'All Languages' : l}</option>
+          ))}
+        </select>
+        <select
           value={industry}
           onChange={(e) => setIndustry(e.target.value)}
           className="rounded-lg border border-[#e7ece9] bg-white px-3 py-2.5 text-sm font-medium text-slate-700 focus:border-emerald-500 focus:outline-none"
         >
           {TEMPLATE_INDUSTRIES.map((i) => (
-            <option key={i} value={i}>{i}</option>
+            <option key={i} value={i}>{i === 'All' ? 'All Industries' : i}</option>
           ))}
         </select>
         <select
@@ -114,6 +124,8 @@ export function TemplateLibrary({ onUsed }: { onUsed?: () => void }) {
           ))}
         </select>
       </div>
+
+      <p className="text-xs text-slate-400">{filtered.length} templates</p>
 
       {/* Grid */}
       {filtered.length === 0 ? (
@@ -138,7 +150,6 @@ export function TemplateLibrary({ onUsed }: { onUsed?: () => void }) {
 
                 <p className="mb-3 text-xs text-slate-500">{tpl.description}</p>
 
-                {/* Preview bubble */}
                 <div className="mb-3 flex-1 rounded-lg bg-[#f0f7f3] p-3">
                   <p className="whitespace-pre-line text-xs leading-relaxed text-slate-700">
                     {tpl.body_text}
@@ -148,7 +159,6 @@ export function TemplateLibrary({ onUsed }: { onUsed?: () => void }) {
                   )}
                 </div>
 
-                {/* Variables */}
                 <div className="mb-3 flex flex-wrap gap-1">
                   {tpl.variables.map((v, i) => (
                     <span key={i} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
@@ -157,10 +167,9 @@ export function TemplateLibrary({ onUsed }: { onUsed?: () => void }) {
                   ))}
                 </div>
 
-                {/* Footer */}
                 <div className="flex items-center justify-between border-t border-[#e7ece9] pt-3">
                   <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                    {tpl.industry} · {tpl.language}
+                    {tpl.industry} · {tpl.language === 'hi' ? 'Hindi' : tpl.language}
                   </span>
                   <button
                     onClick={() => useTemplate(tpl)}

@@ -14,6 +14,7 @@ import {
   Radio,
   Zap,
   Settings,
+  Wallet,
   LogOut,
   X,
   ChevronRight,
@@ -30,17 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  LayoutDashboard,
-  MessageSquare,
-  Users,
-  GitBranch,
-  Radio,
-  Zap,
-  Settings,
-  LogOut,
-  ...
-} from "lucide-react";
+
 const navItems = [
   { path: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { path: "inbox", label: "Live Chat", icon: MessageSquare },
@@ -51,6 +42,7 @@ const navItems = [
 ];
 
 const bottomNavItems = [
+  { path: "billing", label: "Billing", icon: Wallet },
   { path: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -210,6 +202,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="top" sideOffset={6}
               className="min-w-52 border-white/10 bg-[#0d0d18] text-slate-200">
+              <DropdownMenuItem render={<Link href={`${slugPrefix}/billing`} onClick={onClose} className="focus:bg-white/5" />}>
+                <Wallet className="size-4 text-slate-500" />
+                Billing
+              </DropdownMenuItem>
               <DropdownMenuItem render={<Link href={`${slugPrefix}/settings?tab=profile`} onClick={onClose} className="focus:bg-white/5" />}>
                 <Settings className="size-4 text-slate-500" />
                 Settings

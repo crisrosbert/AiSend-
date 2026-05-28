@@ -2,7 +2,6 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Settings, MessageSquare, Tag, User } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { TagManager } from '@/components/settings/tag-manager';
@@ -13,6 +12,13 @@ import { SessionsCard } from '@/components/settings/sessions-card';
 const TAB_VALUES = ['profile', 'whatsapp', 'templates', 'tags'] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
+const TABS: { value: TabValue; label: string; icon: typeof User }[] = [
+  { value: 'profile', label: 'Profile', icon: User },
+  { value: 'whatsapp', label: 'WhatsApp Config', icon: Settings },
+  { value: 'templates', label: 'Templates', icon: MessageSquare },
+  { value: 'tags', label: 'Tags', icon: Tag },
+];
+
 function isTabValue(v: string | null): v is TabValue {
   return !!v && (TAB_VALUES as readonly string[]).includes(v);
 }
@@ -21,10 +27,6 @@ export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // The URL is the single source of truth for the active tab — no
-  // local state, no sync effect. A previous revision duplicated this
-  // into `useState` + a sync effect, which tripped React 19's
-  // set-state-in-effect rule and was also redundant.
   const queryTab = searchParams.get('tab');
   const tab: TabValue = isTabValue(queryTab) ? queryTab : 'profile';
 
@@ -35,65 +37,51 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Manage your profile, WhatsApp® integration, message templates, and
-          tags.
+    <div className="mx-auto max-w-4xl">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>
+          Settings
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Manage your profile, WhatsApp integration, message templates, and tags.
         </p>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => onChange(v as TabValue)}>
-        <TabsList className="bg-slate-900 border border-slate-700">
-          <TabsTrigger
-            value="profile"
-            className="data-active:bg-slate-800 data-active:text-violet-400 text-slate-400"
-          >
-            <User className="size-4" />
-            Profile
-          </TabsTrigger>
-          <TabsTrigger
-            value="whatsapp"
-            className="data-active:bg-slate-800 data-active:text-violet-400 text-slate-400"
-          >
-            <Settings className="size-4" />
-            WhatsApp Config
-          </TabsTrigger>
-          <TabsTrigger
-            value="templates"
-            className="data-active:bg-slate-800 data-active:text-violet-400 text-slate-400"
-          >
-            <MessageSquare className="size-4" />
-            Templates
-          </TabsTrigger>
-          <TabsTrigger
-            value="tags"
-            className="data-active:bg-slate-800 data-active:text-violet-400 text-slate-400"
-          >
-            <Tag className="size-4" />
-            Tags
-          </TabsTrigger>
-        </TabsList>
+      {/* Tab bar — clean pill style */}
+      <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-[#e7ece9] bg-white p-1.5 shadow-sm">
+        {TABS.map((t) => {
+          const active = tab === t.value;
+          return (
+            <button
+              key={t.value}
+              onClick={() => onChange(t.value)}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                active
+                  ? 'bg-emerald-500 text-white shadow-sm'
+                  : 'text-slate-500 hover:bg-emerald-50 hover:text-emerald-700'
+              }`}
+            >
+              <t.icon className="size-4" />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
 
-        <TabsContent value="profile" className="space-y-6">
-          <ProfileForm />
-          <PasswordForm />
-          <SessionsCard />
-        </TabsContent>
-
-        <TabsContent value="whatsapp">
-          <WhatsAppConfig />
-        </TabsContent>
-
-        <TabsContent value="templates">
-          <TemplateManager />
-        </TabsContent>
-
-        <TabsContent value="tags">
-          <TagManager />
-        </TabsContent>
-      </Tabs>
+      {/* Tab content */}
+      <div>
+        {tab === 'profile' && (
+          <div className="space-y-6">
+            <ProfileForm />
+            <PasswordForm />
+            <SessionsCard />
+          </div>
+        )}
+        {tab === 'whatsapp' && <WhatsAppConfig />}
+        {tab === 'templates' && <TemplateManager />}
+        {tab === 'tags' && <TagManager />}
+      </div>
     </div>
   );
 }

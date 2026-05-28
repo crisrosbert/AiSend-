@@ -1,5 +1,5 @@
 "use client";
-
+import { WalletBalanceCard } from '@/components/dashboard/wallet-balance-card';
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";

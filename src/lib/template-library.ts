@@ -1,336 +1,263 @@
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sendly — Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-:root{
-  /* ====== EDIT THESE THREE LINES TO REBRAND ====== */
-  --brand-name:"Sendly";
-  --brand:#0f9d58;          /* primary green */
-  --brand-deep:#0b6e3f;     /* deep green for headers/CTAs */
-  /* =============================================== */
-  --brand-50:#e9f7ef;
-  --brand-100:#cdeddc;
-  --ink:#0c1f17;
-  --muted:#5b6b63;
-  --line:#e7ece9;
-  --bg:#f4f7f5;
-  --card:#ffffff;
-  --gold:#e6a817;
-  --shadow:0 1px 2px rgba(12,31,23,.04),0 8px 24px rgba(12,31,23,.06);
-  --shadow-lg:0 12px 40px rgba(12,31,23,.12);
-  --r:16px;
-  --sidebar:84px;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-  font-family:"Plus Jakarta Sans",system-ui,sans-serif;
-  background:var(--bg);color:var(--ink);
-  -webkit-font-smoothing:antialiased;
-}
-h1,h2,h3,h4,.font-display{font-family:"Sora",sans-serif;letter-spacing:-.02em}
-.app{display:flex;min-height:100vh}
+// src/lib/template-library.ts
+// Pre-built, Meta-guideline-compliant WhatsApp message templates.
+// English + Hindi versions across many industries.
+// These are STARTING POINTS — the client still submits them to Meta
+// for approval in WhatsApp Manager before sending.
 
-/* ---------- SIDEBAR ---------- */
-.side{
-  width:var(--sidebar);background:linear-gradient(180deg,var(--brand-deep),#073d24);
-  display:flex;flex-direction:column;align-items:center;padding:18px 0;gap:6px;
-  position:sticky;top:0;height:100vh;flex-shrink:0;
-}
-.logo{
-  width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.14);
-  display:grid;place-items:center;margin-bottom:14px;color:#fff;
-  border:1px solid rgba(255,255,255,.18);
-}
-.logo svg{width:24px;height:24px}
-.nav-item{
-  width:60px;padding:10px 0;border-radius:13px;color:rgba(255,255,255,.62);
-  display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;
-  font-size:10.5px;font-weight:600;transition:.18s;text-align:center;
-}
-.nav-item svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8}
-.nav-item:hover{color:#fff;background:rgba(255,255,255,.08)}
-.nav-item.active{color:#fff;background:rgba(255,255,255,.16)}
-.side .spacer{flex:1}
-.avatar{
-  width:40px;height:40px;border-radius:50%;background:#7bd6a3;color:#073d24;
-  display:grid;place-items:center;font-weight:800;font-family:"Sora"
+export interface LibraryTemplate {
+  id: string;
+  title: string;
+  name: string;
+  category: 'Marketing' | 'Utility' | 'Authentication';
+  language: string;
+  industry: string;
+  header_type?: 'text' | 'image' | 'video' | 'document';
+  header_content?: string;
+  body_text: string;
+  footer_text?: string;
+  description: string;
+  variables: string[];
 }
 
-/* ---------- MAIN ---------- */
-.main{flex:1;min-width:0}
-.topbar{
-  height:66px;background:var(--card);border-bottom:1px solid var(--line);
-  display:flex;align-items:center;gap:18px;padding:0 26px;position:sticky;top:0;z-index:20;
-}
-.topbar h1{font-size:20px;font-weight:700}
-.status-pill{
-  display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);font-weight:600;
-}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 4px var(--brand-50)}
-.live{color:var(--brand);font-weight:700}
-.topbar .right{margin-left:auto;display:flex;align-items:center;gap:14px}
-.plan-tag{font-size:13px;color:var(--muted);font-weight:600}
-.plan-tag b{color:var(--ink)}
-.btn{
-  border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:13.5px;
-  padding:10px 18px;border-radius:11px;display:inline-flex;align-items:center;gap:8px;transition:.18s;
-}
-.btn-primary{background:var(--brand);color:#fff;box-shadow:0 6px 18px rgba(15,157,88,.32)}
-.btn-primary:hover{background:var(--brand-deep);transform:translateY(-1px)}
-.btn-ghost{background:var(--brand-50);color:var(--brand-deep)}
-.btn-ghost:hover{background:var(--brand-100)}
-.btn-outline{background:#fff;border:1.5px solid var(--line);color:var(--ink)}
-.btn-outline:hover{border-color:var(--brand)}
-.icon-btn{width:40px;height:40px;border-radius:11px;background:var(--bg);display:grid;place-items:center;cursor:pointer;border:1px solid var(--line)}
-.icon-btn svg{width:19px;height:19px;stroke:var(--muted);fill:none;stroke-width:1.8}
+export const TEMPLATE_INDUSTRIES = [
+  'All', 'General', 'E-commerce', 'Healthcare', 'Education',
+  'Real Estate', 'Restaurant', 'Services', 'Finance', 'Travel', 'Fitness',
+] as const;
 
-.content{padding:26px;display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start}
-@media(max-width:1100px){.content{grid-template-columns:1fr}}
+export const TEMPLATE_LANGUAGES = ['All', 'English', 'Hindi'] as const;
 
-/* banner */
-.banner{
-  grid-column:1/-1;border-radius:var(--r);padding:22px 26px;color:#fff;
-  background:radial-gradient(120% 160% at 0% 0%,#13b06a 0%,var(--brand-deep) 55%,#063a23 100%);
-  display:flex;align-items:center;gap:20px;box-shadow:var(--shadow);overflow:hidden;position:relative;
-}
-.banner::after{content:"";position:absolute;right:-40px;top:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.07)}
-.banner .emoji{font-size:34px}
-.banner h3{font-size:18px;margin-bottom:4px}
-.banner p{font-size:13.5px;opacity:.9}
-.tag-up{background:rgba(255,255,255,.2);font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;letter-spacing:.06em;margin-left:8px;vertical-align:middle}
-.banner .btn{margin-left:auto;background:#fff;color:var(--brand-deep);white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+export const TEMPLATE_LIBRARY: LibraryTemplate[] = [
+  // ===== ENGLISH — UTILITY =====
+  {
+    id: 'order-confirmation-en', title: 'Order Confirmation', name: 'order_confirmation',
+    category: 'Utility', language: 'en_US', industry: 'E-commerce',
+    body_text: 'Hi {{1}}, your order #{{2}} has been confirmed! 🎉\n\nTotal: {{3}}\nEstimated delivery: {{4}}\n\nThank you for shopping with us.',
+    footer_text: 'Reply STOP to unsubscribe',
+    description: 'Sent automatically when a customer places an order.',
+    variables: ['Customer name', 'Order number', 'Order total', 'Delivery date'],
+  },
+  {
+    id: 'order-shipped-en', title: 'Order Shipped', name: 'order_shipped',
+    category: 'Utility', language: 'en_US', industry: 'E-commerce',
+    body_text: 'Good news {{1}}! Your order #{{2}} is on its way. 📦\n\nTrack it here: {{3}}\n\nExpected delivery: {{4}}',
+    description: 'Notify customer when their order ships with tracking link.',
+    variables: ['Customer name', 'Order number', 'Tracking link', 'Delivery date'],
+  },
+  {
+    id: 'appointment-reminder-en', title: 'Appointment Reminder', name: 'appointment_reminder',
+    category: 'Utility', language: 'en_US', industry: 'Healthcare',
+    body_text: 'Hello {{1}}, this is a reminder for your appointment with {{2}} on {{3}} at {{4}}.\n\nPlease arrive 10 minutes early. To reschedule, reply to this message.',
+    footer_text: 'See you soon!',
+    description: 'Reduce no-shows by reminding patients of upcoming appointments.',
+    variables: ['Patient name', 'Doctor/clinic name', 'Date', 'Time'],
+  },
+  {
+    id: 'payment-received-en', title: 'Payment Received', name: 'payment_received',
+    category: 'Utility', language: 'en_US', industry: 'Finance',
+    body_text: 'Hi {{1}}, we have received your payment of {{2}}. ✅\n\nInvoice: #{{3}}\nDate: {{4}}\n\nThank you for your business.',
+    description: 'Confirm payment receipt to customers.',
+    variables: ['Customer name', 'Amount', 'Invoice number', 'Date'],
+  },
+  {
+    id: 'payment-reminder-en', title: 'Payment Reminder', name: 'payment_reminder',
+    category: 'Utility', language: 'en_US', industry: 'Finance',
+    body_text: 'Hi {{1}}, a friendly reminder that your payment of {{2}} for invoice #{{3}} is due on {{4}}.\n\nTo pay now, reply to this message.',
+    description: 'Remind customers of upcoming or overdue payments.',
+    variables: ['Customer name', 'Amount', 'Invoice number', 'Due date'],
+  },
+  {
+    id: 'booking-confirmation-en', title: 'Table Booking Confirmation', name: 'booking_confirmation',
+    category: 'Utility', language: 'en_US', industry: 'Restaurant',
+    body_text: 'Hi {{1}}, your table for {{2}} on {{3}} at {{4}} is confirmed. 🍽️\n\nWe look forward to serving you. To modify your booking, reply here.',
+    description: 'Confirm restaurant table reservations.',
+    variables: ['Customer name', 'Number of guests', 'Date', 'Time'],
+  },
+  {
+    id: 'travel-reminder-en', title: 'Travel Booking Reminder', name: 'travel_booking_reminder',
+    category: 'Utility', language: 'en_US', industry: 'Travel',
+    body_text: 'Hi {{1}}, your booking to {{2}} is confirmed for {{3}}. ✈️\n\nBooking ID: {{4}}\n\nHave a great trip! Reply for any assistance.',
+    description: 'Confirm travel/flight/hotel bookings.',
+    variables: ['Customer name', 'Destination', 'Travel date', 'Booking ID'],
+  },
+  {
+    id: 'class-reminder-en', title: 'Class Reminder', name: 'class_reminder',
+    category: 'Utility', language: 'en_US', industry: 'Fitness',
+    body_text: 'Hi {{1}}, reminder for your {{2}} class today at {{3}}. 💪\n\nSee you at {{4}}! Reply to cancel or reschedule.',
+    description: 'Remind members of their booked fitness/yoga classes.',
+    variables: ['Member name', 'Class type', 'Time', 'Location'],
+  },
+  {
+    id: 'service-followup-en', title: 'Service Follow-up', name: 'service_followup',
+    category: 'Utility', language: 'en_US', industry: 'Services',
+    body_text: 'Hi {{1}}, thank you for choosing {{2}}! How was your experience with our {{3}} service?\n\nWe would love your feedback. Reply here to let us know.',
+    description: 'Follow up after a service is completed to gather feedback.',
+    variables: ['Customer name', 'Business name', 'Service name'],
+  },
+  {
+    id: 'quote-ready-en', title: 'Quote Ready', name: 'quote_ready',
+    category: 'Utility', language: 'en_US', industry: 'Services',
+    body_text: 'Hi {{1}}, your quote for {{2}} is ready.\n\nEstimated cost: {{3}}\nValid until: {{4}}\n\nReply to confirm or ask any questions.',
+    description: 'Send a service quote to a customer who requested one.',
+    variables: ['Customer name', 'Service/project', 'Cost', 'Validity date'],
+  },
 
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
-.left-col{display:flex;flex-direction:column;gap:22px}
-.right-col{display:flex;flex-direction:column;gap:22px}
+  // ===== ENGLISH — MARKETING =====
+  {
+    id: 'welcome-offer-en', title: 'Welcome Offer', name: 'welcome_offer',
+    category: 'Marketing', language: 'en_US', industry: 'E-commerce',
+    body_text: 'Welcome to {{1}}, {{2}}! 🎁\n\nHere is a special {{3}} discount on your first purchase. Use code: {{4}}\n\nShop now and save!',
+    footer_text: 'Reply STOP to opt out',
+    description: 'Greet new subscribers with a first-purchase discount.',
+    variables: ['Business name', 'Customer name', 'Discount %', 'Promo code'],
+  },
+  {
+    id: 'festive-sale-en', title: 'Festive Sale', name: 'festive_sale',
+    category: 'Marketing', language: 'en_US', industry: 'General',
+    body_text: 'Hi {{1}}! 🎉 Our {{2}} sale is LIVE!\n\nGet up to {{3}} off on all products. Offer valid till {{4}}.\n\nVisit us today to grab the best deals!',
+    footer_text: 'Reply STOP to unsubscribe',
+    description: 'Promote seasonal or festival sales to your contact list.',
+    variables: ['Customer name', 'Sale name', 'Max discount', 'End date'],
+  },
+  {
+    id: 'abandoned-cart-en', title: 'Abandoned Cart', name: 'abandoned_cart',
+    category: 'Marketing', language: 'en_US', industry: 'E-commerce',
+    body_text: 'Hi {{1}}, you left some items in your cart! 🛒\n\nComplete your purchase before they sell out. Your cart: {{2}}\n\nNeed help? Just reply here.',
+    footer_text: 'Reply STOP to opt out',
+    description: 'Recover lost sales by reminding customers of items left in cart.',
+    variables: ['Customer name', 'Cart link'],
+  },
+  {
+    id: 'new-course-en', title: 'New Course Launch', name: 'new_course_launch',
+    category: 'Marketing', language: 'en_US', industry: 'Education',
+    body_text: 'Hi {{1}}! 📚 We just launched a new course: {{2}}.\n\nEnroll before {{3}} and get {{4}} off the fee.\n\nReply YES to know more.',
+    footer_text: 'Reply STOP to unsubscribe',
+    description: 'Announce new courses or batches to students and leads.',
+    variables: ['Student name', 'Course name', 'Deadline', 'Discount'],
+  },
+  {
+    id: 'property-listing-en', title: 'New Property Listing', name: 'new_property_listing',
+    category: 'Marketing', language: 'en_US', industry: 'Real Estate',
+    body_text: 'Hi {{1}}, a new property matching your interest is available! 🏡\n\n{{2}} | {{3}}\nPrice: {{4}}\n\nReply to schedule a visit.',
+    footer_text: 'Reply STOP to opt out',
+    description: 'Alert leads about new property listings that match their needs.',
+    variables: ['Lead name', 'Property type/location', 'Key features', 'Price'],
+  },
+  {
+    id: 'membership-offer-en', title: 'Membership Offer', name: 'membership_offer',
+    category: 'Marketing', language: 'en_US', industry: 'Fitness',
+    body_text: 'Hi {{1}}! 💪 Get fit this season at {{2}}.\n\nJoin now and get {{3}} off on annual membership. Offer ends {{4}}.\n\nReply to claim your spot!',
+    footer_text: 'Reply STOP to opt out',
+    description: 'Promote gym/fitness membership offers.',
+    variables: ['Customer name', 'Gym name', 'Discount', 'End date'],
+  },
 
-/* stat row */
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:0;padding:22px 26px}
-.stat{display:flex;flex-direction:column;gap:8px;padding-right:22px}
-.stat+.stat{border-left:1px solid var(--line);padding-left:22px}
-.stat .label{font-size:12.5px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:5px}
-.badge{font-size:11px;font-weight:800;padding:5px 11px;border-radius:8px;width:max-content}
-.badge.green{background:var(--brand-50);color:var(--brand-deep)}
-.badge.amber{background:#fdf3dc;color:#92670a}
-.stat .big{font-family:"Sora";font-size:26px;font-weight:700}
+  // ===== ENGLISH — AUTHENTICATION =====
+  {
+    id: 'otp-verification-en', title: 'OTP Verification', name: 'otp_verification',
+    category: 'Authentication', language: 'en_US', industry: 'General',
+    body_text: '{{1}} is your verification code. For your security, do not share this code with anyone.',
+    description: 'Send one-time passwords for login or signup verification.',
+    variables: ['OTP code'],
+  },
+  {
+    id: 'account-verification-en', title: 'Account Verification', name: 'account_verification',
+    category: 'Authentication', language: 'en_US', industry: 'General',
+    body_text: 'Your {{1}} verification code is {{2}}. This code expires in {{3}} minutes.',
+    description: 'Verify a new account or device with a time-limited code.',
+    variables: ['Business name', 'Code', 'Expiry minutes'],
+  },
 
-/* progress steps */
-.steps-card{padding:24px 26px;background:linear-gradient(135deg,#0e6e42,#073d24);color:#fff;border:none}
-.steps-card .head{display:flex;align-items:center;gap:12px;margin-bottom:22px}
-.steps-card .head .bag{font-size:26px}
-.steps-card .head h3{font-size:16px}
-.steps{display:flex;align-items:flex-start;justify-content:space-between;position:relative}
-.step{display:flex;flex-direction:column;align-items:center;text-align:center;flex:1;position:relative;z-index:2;gap:8px}
-.step .circle{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px}
-.step.done .circle{background:#34c77b;color:#06351f}
-.step.pending .circle{background:var(--gold);color:#3a2900}
-.step .stitle{font-size:11px;font-weight:700;opacity:.9}
-.step .sstate{font-size:9px;font-weight:800;letter-spacing:.08em;opacity:.85;margin-top:-3px}
-.step .sdesc{font-size:11px;opacity:.7;line-height:1.3;max-width:110px}
-.track{position:absolute;top:17px;left:8%;right:8%;height:3px;background:rgba(255,255,255,.18);z-index:1}
-.track .fill{height:100%;width:18%;background:#34c77b;border-radius:3px}
+  // ===== HINDI — UTILITY =====
+  {
+    id: 'order-confirmation-hi', title: 'ऑर्डर कन्फर्मेशन (Order Confirmation)', name: 'order_confirmation_hi',
+    category: 'Utility', language: 'hi', industry: 'E-commerce',
+    body_text: 'नमस्ते {{1}}, आपका ऑर्डर #{{2}} कन्फर्म हो गया है! 🎉\n\nकुल राशि: {{3}}\nडिलीवरी की तारीख: {{4}}\n\nहमारे साथ खरीदारी करने के लिए धन्यवाद।',
+    footer_text: 'रुकने के लिए STOP भेजें',
+    description: 'ग्राहक द्वारा ऑर्डर देने पर स्वतः भेजा जाता है।',
+    variables: ['ग्राहक का नाम', 'ऑर्डर नंबर', 'कुल राशि', 'डिलीवरी तारीख'],
+  },
+  {
+    id: 'appointment-reminder-hi', title: 'अपॉइंटमेंट रिमाइंडर (Appointment)', name: 'appointment_reminder_hi',
+    category: 'Utility', language: 'hi', industry: 'Healthcare',
+    body_text: 'नमस्ते {{1}}, यह {{2}} के साथ आपके अपॉइंटमेंट का रिमाइंडर है — {{3}} को {{4}} बजे।\n\nकृपया 10 मिनट पहले पहुँचें। बदलाव के लिए इस संदेश का उत्तर दें।',
+    footer_text: 'जल्द मिलते हैं!',
+    description: 'मरीजों को आने वाले अपॉइंटमेंट की याद दिलाएं।',
+    variables: ['मरीज का नाम', 'डॉक्टर/क्लिनिक', 'तारीख', 'समय'],
+  },
+  {
+    id: 'payment-received-hi', title: 'भुगतान प्राप्त (Payment Received)', name: 'payment_received_hi',
+    category: 'Utility', language: 'hi', industry: 'Finance',
+    body_text: 'नमस्ते {{1}}, हमें आपका {{2}} का भुगतान प्राप्त हो गया है। ✅\n\nइनवॉइस: #{{3}}\nतारीख: {{4}}\n\nधन्यवाद।',
+    description: 'ग्राहकों को भुगतान प्राप्ति की पुष्टि भेजें।',
+    variables: ['ग्राहक का नाम', 'राशि', 'इनवॉइस नंबर', 'तारीख'],
+  },
+  {
+    id: 'booking-confirmation-hi', title: 'टेबल बुकिंग (Table Booking)', name: 'booking_confirmation_hi',
+    category: 'Utility', language: 'hi', industry: 'Restaurant',
+    body_text: 'नमस्ते {{1}}, {{2}} लोगों के लिए आपकी टेबल {{3}} को {{4}} बजे बुक हो गई है। 🍽️\n\nआपकी सेवा के लिए हम उत्सुक हैं। बदलाव हेतु उत्तर दें।',
+    description: 'रेस्टोरेंट टेबल बुकिंग की पुष्टि करें।',
+    variables: ['ग्राहक का नाम', 'मेहमानों की संख्या', 'तारीख', 'समय'],
+  },
 
-/* setup card */
-.setup{padding:24px 26px}
-.setup .row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.setup h3{font-size:17px}
-.setup .left-meta{font-size:12.5px;color:var(--muted);font-weight:600}
-.next-pill{background:var(--brand-50);color:var(--brand-deep);font-size:10px;font-weight:800;padding:4px 10px;border-radius:7px;letter-spacing:.05em;width:max-content;margin:16px 0 8px}
-.setup .task{background:var(--brand-50);border-radius:13px;padding:18px 20px;display:flex;gap:14px}
-.task .ic{width:38px;height:38px;border-radius:11px;background:var(--gold);display:grid;place-items:center;flex-shrink:0;color:#3a2900}
-.task h4{font-size:15px;margin-bottom:8px}
-.task ul{margin:8px 0 0 2px;list-style:none;display:flex;flex-direction:column;gap:6px}
-.task li{font-size:12.5px;color:var(--muted);padding-left:16px;position:relative}
-.task li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:var(--brand)}
-.task .btn{margin-top:16px}
+  // ===== HINDI — MARKETING =====
+  {
+    id: 'welcome-offer-hi', title: 'वेलकम ऑफर (Welcome Offer)', name: 'welcome_offer_hi',
+    category: 'Marketing', language: 'hi', industry: 'E-commerce',
+    body_text: '{{1}} में आपका स्वागत है, {{2}}! 🎁\n\nआपकी पहली खरीद पर {{3}} की विशेष छूट। कोड: {{4}}\n\nअभी खरीदें और बचत करें!',
+    footer_text: 'रुकने के लिए STOP भेजें',
+    description: 'नए ग्राहकों का स्वागत पहली खरीद पर छूट के साथ करें।',
+    variables: ['व्यवसाय का नाम', 'ग्राहक का नाम', 'छूट %', 'प्रोमो कोड'],
+  },
+  {
+    id: 'festive-sale-hi', title: 'त्योहार सेल (Festive Sale)', name: 'festive_sale_hi',
+    category: 'Marketing', language: 'hi', industry: 'General',
+    body_text: 'नमस्ते {{1}}! 🎉 हमारी {{2}} सेल शुरू हो गई है!\n\nसभी प्रोडक्ट्स पर {{3}} तक की छूट। ऑफर {{4}} तक मान्य।\n\nआज ही बेहतरीन डील पाएं!',
+    footer_text: 'रुकने के लिए STOP भेजें',
+    description: 'अपनी संपर्क सूची को त्योहार/सीज़न सेल की जानकारी दें।',
+    variables: ['ग्राहक का नाम', 'सेल का नाम', 'अधिकतम छूट', 'अंतिम तारीख'],
+  },
+  {
+    id: 'new-course-hi', title: 'नया कोर्स (New Course)', name: 'new_course_launch_hi',
+    category: 'Marketing', language: 'hi', industry: 'Education',
+    body_text: 'नमस्ते {{1}}! 📚 हमने एक नया कोर्स शुरू किया है: {{2}}।\n\n{{3}} से पहले एडमिशन लें और फीस पर {{4}} की छूट पाएं।\n\nअधिक जानकारी के लिए YES भेजें।',
+    footer_text: 'रुकने के लिए STOP भेजें',
+    description: 'छात्रों और लीड्स को नए कोर्स/बैच की जानकारी दें।',
+    variables: ['छात्र का नाम', 'कोर्स का नाम', 'अंतिम तारीख', 'छूट'],
+  },
+  {
+    id: 'property-listing-hi', title: 'नई प्रॉपर्टी (New Property)', name: 'new_property_listing_hi',
+    category: 'Marketing', language: 'hi', industry: 'Real Estate',
+    body_text: 'नमस्ते {{1}}, आपकी पसंद की एक नई प्रॉपर्टी उपलब्ध है! 🏡\n\n{{2}} | {{3}}\nकीमत: {{4}}\n\nविज़िट शेड्यूल करने के लिए उत्तर दें।',
+    footer_text: 'रुकने के लिए STOP भेजें',
+    description: 'लीड्स को उनकी पसंद की नई प्रॉपर्टी की जानकारी दें।',
+    variables: ['लीड का नाम', 'प्रॉपर्टी प्रकार/स्थान', 'मुख्य विशेषताएं', 'कीमत'],
+  },
 
-/* right column cards */
-.rc{padding:20px}
-.rc h4{font-size:15px;margin-bottom:4px}
-.rc p{font-size:12.5px;color:var(--muted);line-height:1.45}
-.qr-wrap{display:grid;place-items:center;gap:14px;padding:22px}
-.qr{width:140px;height:140px;border-radius:12px;background:
-  repeating-conic-gradient(var(--ink) 0% 25%,#fff 0% 50%) 50%/14px 14px;
-  border:6px solid #fff;box-shadow:var(--shadow)}
-.store{display:flex;gap:8px}
-.store span{background:var(--ink);color:#fff;font-size:11px;font-weight:600;padding:8px 12px;border-radius:9px}
-.feat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-.feat div{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px}
-.feat div::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--brand)}
+  // ===== HINDI — AUTHENTICATION =====
+  {
+    id: 'otp-verification-hi', title: 'OTP वेरिफिकेशन (OTP)', name: 'otp_verification_hi',
+    category: 'Authentication', language: 'hi', industry: 'General',
+    body_text: '{{1}} आपका वेरिफिकेशन कोड है। अपनी सुरक्षा के लिए इसे किसी के साथ साझा न करें।',
+    description: 'लॉगिन या साइनअप के लिए वन-टाइम पासवर्ड भेजें।',
+    variables: ['OTP कोड'],
+  },
+];
 
-.profile{display:flex;align-items:center;gap:14px;padding:20px}
-.profile .pic{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#ffd27a,#f0a82e);flex-shrink:0;display:grid;place-items:center;color:#5a3c00;font-weight:800}
-.profile .num{font-family:"Sora";font-weight:700;font-size:17px}
-.profile .ptag{font-size:10px;font-weight:800;color:var(--muted);letter-spacing:.06em}
-.profile small{color:var(--muted);font-size:11.5px}
-
-.wcc{padding:20px}
-.wcc .meter{height:8px;background:var(--bg);border-radius:99px;margin:10px 0 6px;overflow:hidden}
-.wcc .meter i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--brand),#34c77b)}
-.wcc .scale{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);font-weight:600}
-.wcc .price{display:flex;align-items:center;justify-content:space-between;margin-top:16px}
-.wcc .price .amt{font-family:"Sora";font-size:22px;font-weight:700}
-
-.muted-link{color:var(--brand-deep);font-weight:700;font-size:13px;text-decoration:none}
-.divider{height:1px;background:var(--line);margin:16px 0}
-.fab{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;background:var(--brand);display:grid;place-items:center;box-shadow:var(--shadow-lg);cursor:pointer}
-.fab svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2}
-.fab .ping{position:absolute;top:6px;right:6px;width:11px;height:11px;border-radius:50%;background:#ff5a5a;border:2px solid #fff}
-
-/* load animation */
-.fade{opacity:0;transform:translateY(14px);animation:rise .6s cubic-bezier(.2,.7,.3,1) forwards}
-@keyframes rise{to{opacity:1;transform:none}}
-.d1{animation-delay:.05s}.d2{animation-delay:.12s}.d3{animation-delay:.2s}.d4{animation-delay:.28s}.d5{animation-delay:.36s}
-</style>
-
-<div class="app">
-  <!-- SIDEBAR -->
-  <aside class="side">
-    <div class="logo" title="brand">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.7 14.9L2 22l5.3-1.4A10 10 0 1 0 12 2Zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-3.1.8.8-3-.2-.3A8 8 0 1 1 12 20Z"/><path d="M9 8.5c-.2-.4-.4-.4-.6-.4h-.5c-.2 0-.5 0-.7.4s-.9.9-.9 2.1.9 2.5 1 2.6c.1.2 1.8 2.9 4.5 3.9 2.2.9 2.7.7 3.2.6.5 0 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2 0-.1-.2-.2-.5-.3l-1.7-.8c-.2-.1-.4-.1-.6.1l-.6.8c-.1.1-.3.2-.5.1a6.6 6.6 0 0 1-2-1.2 7.3 7.3 0 0 1-1.3-1.7c-.1-.2 0-.4.1-.5l.4-.5.3-.5v-.4L9 8.5Z"/></svg>
-    </div>
-    <div class="nav-item active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Home</div>
-    <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4L3 21l1.1-3.6A8.4 8.4 0 1 1 21 11.5Z"/></svg>Chat</div>
-    <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>History</div>
-    <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14l-4-2-4 2-4-2-4 2V6a2 2 0 0 1 2-2h2"/><rect x="9" y="2" width="6" height="4" rx="1"/></svg>Contacts</div>
-    <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M3 11l18-7-7 18-2-7-9-4z"/></svg>Campaigns</div>
-    <div class="nav-item"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Ads</div>
-    <div class="nav-item"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8 11l8-4M8 13l8 4"/></svg>Flows</div>
-    <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Dev</div>
-    <div class="spacer"></div>
-    <div class="avatar">A</div>
-  </aside>
-
-  <!-- MAIN -->
-  <div class="main">
-    <header class="topbar">
-      <h1 class="brand-name">Dashboard</h1>
-      <span class="status-pill"><span class="dot"></span>WhatsApp API&nbsp;<span class="live">LIVE</span></span>
-      <div class="right">
-        <span class="plan-tag">Plan: <b>Free Forever</b></span>
-        <button class="btn btn-ghost">✦ Explore Plans</button>
-        <div class="icon-btn"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg></div>
-      </div>
-    </header>
-
-    <div class="content">
-      <!-- BANNER -->
-      <div class="banner fade d1">
-        <span class="emoji">💬</span>
-        <div>
-          <h3>You're on the new marketing API <span class="tag-up">PRO</span></h3>
-          <p>30% better delivery and deeper insights with the latest WhatsApp marketing APIs.</p>
-        </div>
-        <button class="btn">⚡ Upgrade for Free</button>
-      </div>
-
-      <div class="left-col">
-        <!-- STATS -->
-        <div class="card stats fade d2">
-          <div class="stat">
-            <span class="label">API Status ⓘ</span>
-            <span class="badge green">● LIVE</span>
-          </div>
-          <div class="stat">
-            <span class="label">Quality Rating ⓘ</span>
-            <span class="badge green">HIGH</span>
-          </div>
-          <div class="stat">
-            <span class="label">Remaining Quota ⓘ</span>
-            <span class="big">250</span>
-          </div>
-        </div>
-
-        <!-- PROGRESS STEPS -->
-        <div class="card steps-card fade d3">
-          <div class="head"><span class="bag">💰</span><h3>Complete the steps &amp; win 200 Conversation Credits</h3></div>
-          <div class="steps">
-            <div class="track"><div class="fill"></div></div>
-            <div class="step done"><div class="circle">✓</div><div class="stitle">Get API Live</div><div class="sstate" style="color:#34c77b">DONE</div></div>
-            <div class="step pending"><div class="circle">!</div><div class="stitle">Business Verified</div><div class="sstate" style="color:var(--gold)">PENDING</div><div class="sdesc">FBM / KYC</div></div>
-            <div class="step pending"><div class="circle">!</div><div class="stitle">Recharge Credits</div><div class="sstate" style="color:var(--gold)">PENDING</div></div>
-            <div class="step pending"><div class="circle">!</div><div class="stitle">Spend 500</div><div class="sstate" style="color:var(--gold)">PENDING</div></div>
-            <div class="step pending"><div class="circle">👑</div><div class="stitle">Reward Won</div></div>
-          </div>
-        </div>
-
-        <!-- SETUP TASK -->
-        <div class="card setup fade d4">
-          <div class="row">
-            <h3>🟢 Setup Free WhatsApp Business Account</h3>
-            <span class="left-meta">3 steps left</span>
-          </div>
-          <span class="next-pill">NEXT</span>
-          <div class="task">
-            <div class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 10h8M8 14h5"/></svg></div>
-            <div>
-              <h4>Increase your messaging limit &amp; get display name approved</h4>
-              <p style="font-size:12.5px;color:var(--muted)">Complete KYC to boost your messaging limit to 2000 and get name approval.</p>
-              <ul>
-                <li>Legal / Trade name on GST and Business Manager should match</li>
-                <li>Ensure you have an active website before applying for KYC</li>
-                <li>Use director's ID listed on your GST document</li>
-              </ul>
-              <button class="btn btn-primary">Start KYC</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- RIGHT COLUMN -->
-      <div class="right-col">
-        <div class="card qr-wrap fade d2">
-          <h4 style="align-self:flex-start">Scan to get the mobile app</h4>
-          <div class="qr"></div>
-          <div class="store"><span> Google Play</span><span> App Store</span></div>
-          <div class="divider" style="width:100%"></div>
-          <div style="align-self:flex-start;font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.04em">KEY FEATURES</div>
-          <div class="feat" style="width:100%">
-            <div>Real-time alerts</div><div>Live Chat</div>
-            <div>Ads Management</div><div>Analytics</div>
-          </div>
-        </div>
-
-        <div class="card profile fade d3">
-          <div class="pic">P</div>
-          <div>
-            <div class="ptag">PROF_SERVICES</div>
-            <div class="num">+1 555 730 9342</div>
-            <small>wa.sendly.com/15557309342</small>
-          </div>
-        </div>
-
-        <div class="card wcc fade d4">
-          <h4>Free Service Conversations</h4>
-          <div class="meter"><i></i></div>
-          <div class="scale"><span>0</span><span>Unlimited</span></div>
-          <div class="divider"></div>
-          <h4>Conversation Credits</h4>
-          <div class="price"><span class="amt">₹ 50.00</span><button class="btn btn-primary">Buy More</button></div>
-        </div>
-
-        <div class="card rc fade d5">
-          <h4>Customize WhatsApp Link</h4>
-          <p>Create shareable links &amp; QR codes for your WhatsApp business number.</p>
-          <div style="margin-top:14px"><a class="muted-link" href="#">Create link →</a></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="fab"><span class="ping"></span><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4L3 21l1.1-3.6A8.4 8.4 0 1 1 21 11.5Z"/></svg></div>
-
-<script>
-  // Apply brand name from CSS variable everywhere
-  const bn = getComputedStyle(document.documentElement).getPropertyValue('--brand-name').replace(/"/g,'').trim();
-  document.title = bn + ' — Dashboard';
-  // nav interactivity
-  document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
-    document.querySelector('.nav-item.active')?.classList.remove('active');
-    n.classList.add('active');
+export function filterTemplates(industry: string, category: string, language: string, search: string) {
+  const q = search.toLowerCase();
+  return TEMPLATE_LIBRARY.filter((t) => {
+    const matchIndustry = industry === 'All' || t.industry === industry;
+    const matchCategory = category === 'All' || t.category === category;
+    const isHindi = t.language === 'hi';
+    const matchLanguage =
+      language === 'All' ||
+      (language === 'Hindi' && isHindi) ||
+      (language === 'English' && !isHindi);
+    const matchSearch =
+      !q ||
+      t.title.toLowerCase().includes(q) ||
+      t.body_text.toLowerCase().includes(q) ||
+      t.description.toLowerCase().includes(q);
+    return matchIndustry && matchCategory && matchLanguage && matchSearch;
   });
-</script>
+}

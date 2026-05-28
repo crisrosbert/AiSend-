@@ -1,4 +1,5 @@
 'use client';
+import { TemplateLibrary } from './template-library-component';
 import { TemplateLibrary } from './template-library';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';

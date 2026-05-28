@@ -249,10 +249,12 @@ export default function AutomationsPage() {
               Delete
             </Button>
           </DialogFooter>
-        </DialogContent>
+       </DialogContent>
       </Dialog>
+
+      <BotTemplates onCreated={load} />
+
     </div>
-    
   )
 }
 

@@ -58,12 +58,28 @@ h1, h2, h3, h4, .font-display {
 .bg-slate-950 { background-color: #f4f7f5 !important; }   /* app shell bg */
 .bg-slate-900 { background-color: #ffffff !important; }   /* cards / sidebar */
 .bg-slate-800 { background-color: #ffffff !important; }   /* inputs / surfaces */
-.bg-slate-800\/30,
-.bg-slate-800\/60,
-.bg-slate-800\/50 { background-color: #f8faf9 !important; }
 .bg-slate-700 { background-color: #f1f5f4 !important; }
 .bg-slate-600 { background-color: #e7ece9 !important; }
 .bg-slate-500 { background-color: #d8e0dc !important; }
+
+/* --- ALL opacity variants (the /40 /50 /60 etc that were invisible) --- */
+.bg-slate-950\/50,
+.bg-slate-950\/70 { background-color: rgba(12,31,23,.45) !important; }
+.bg-slate-900\/40,
+.bg-slate-900\/50,
+.bg-slate-900\/60,
+.bg-slate-900\/80,
+.bg-slate-900\/95 { background-color: #ffffff !important; }
+.bg-slate-800\/40,
+.bg-slate-800\/70,
+.bg-slate-800\/80 { background-color: #f8faf9 !important; }
+.bg-slate-800\/30,
+.bg-slate-800\/50,
+.bg-slate-800\/60 { background-color: #f8faf9 !important; }
+.bg-slate-700\/40,
+.bg-slate-700\/50 { background-color: #f1f5f4 !important; }
+.bg-slate-600\/20 { background-color: #eef2f0 !important; }
+.bg-slate-500\/10 { background-color: #f4f7f5 !important; }
 
 /* --- TEXT --- */
 .text-white   { color: #0c1f17 !important; }

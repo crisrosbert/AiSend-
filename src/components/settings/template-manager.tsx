@@ -318,7 +318,7 @@ export function TemplateManager() {
               <Label className="text-slate-700">Header Type</Label>
               <Select
                 value={form.header_type}
-                onValueChange={(val) => setForm({ ...form, header_type: val === 'none' ? '' : val })}
+          onValueChange={(val) => setForm({ ...form, header_type: val && val !== 'none' ? val : '' })}
               >
                 <SelectTrigger className="w-full bg-white border-[#e7ece9] text-[#0c1f17]">
                   <SelectValue placeholder="None" />

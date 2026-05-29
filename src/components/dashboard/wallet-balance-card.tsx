@@ -5,24 +5,7 @@ import Link from 'next/link';
 import { Wallet, Plus, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
-import {
-  LayoutDashboard,
-  MessageSquare,
-  Users,
-  GitBranch,
-  Radio,
-  Zap,
-  Settings,
-  Wallet,
-  LogOut,
-  X,
-  ChevronRight,
-} from "lucide-react";
-/**
- * AiSensy-style wallet card for the dashboard.
- * Shows current credit balance + Buy More button that links to /billing.
- * Reads organizations.credit_balance for the logged-in user's org.
- */
+
 export function WalletBalanceCard() {
   const { profile } = useAuth();
   const [balance, setBalance] = useState<number | null>(null);

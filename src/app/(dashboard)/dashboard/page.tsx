@@ -1,14 +1,15 @@
 "use client";
-import { WalletBalanceCard } from '@/components/dashboard/wallet-balance-card';
+
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { loadMetrics, loadActivity } from "@/lib/dashboard/queries";
 import type { MetricsBundle, ActivityItem } from "@/lib/dashboard/types";
+import { WalletBalanceCard } from "@/components/dashboard/wallet-balance-card";
 import {
   MessageSquare, Users, Send, TrendingUp, Zap, QrCode,
   Crown, CheckCircle2, AlertCircle, Sparkles, ArrowRight,
-  RefreshCw, Smartphone, BarChart3, Radio, Link2,
+  BarChart3, Radio,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -26,7 +27,9 @@ export default function DashboardPage() {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const businessName = profile?.business_name || "Your Business";
-  const remainingQuota = metrics?.messagesSentToday ? 250 - (metrics.messagesSentToday.current || 0) : 250;
+  const remainingQuota = metrics?.messagesSentToday
+    ? 250 - (metrics.messagesSentToday.current || 0)
+    : 250;
 
   return (
     <div className="cwa-dash">
@@ -114,7 +117,7 @@ export default function DashboardPage() {
               {activity.map((a) => (
                 <div key={a.id} className="cwa-activity-row">
                   <div className="cwa-activity-ic"><Users size={15} /></div>
-               <span className="cwa-activity-text">{a.text}</span>
+                  <span className="cwa-activity-text">{a.text}</span>
                 </div>
               ))}
             </div>
@@ -131,7 +134,9 @@ export default function DashboardPage() {
               <span>Google Play</span><span>App Store</span>
             </div>
             <div className="cwa-divider" style={{ width: "100%" }} />
-            <div style={{ alignSelf: "flex-start", fontSize: 12, color: "var(--cwa-muted)", fontWeight: 700, letterSpacing: ".04em" }}>KEY FEATURES</div>
+            <div style={{ alignSelf: "flex-start", fontSize: 12, color: "var(--cwa-muted)", fontWeight: 700, letterSpacing: ".04em" }}>
+              KEY FEATURES
+            </div>
             <div className="cwa-feat">
               <div><Radio size={13} /> Real-time alerts</div>
               <div><MessageSquare size={13} /> Live Chat</div>
@@ -150,17 +155,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Conversation credits */}
-          <div className="cwa-card cwa-wcc cwa-fade cwa-d4">
-            <h4>Free Service Conversations</h4>
-            <div className="cwa-meter"><i /></div>
-            <div className="cwa-scale"><span>0</span><span>Unlimited</span></div>
-            <div className="cwa-divider" />
-            <h4>Conversation Credits</h4>
-            <div className="cwa-price">
-              <span className="cwa-amt">₹ 50.00</span>
-              <button className="cwa-btn cwa-btn-primary">Buy More</button>
-            </div>
+          {/* REAL wallet balance card — replaces hardcoded ₹50 */}
+          <div className="cwa-fade cwa-d4">
+            <WalletBalanceCard />
           </div>
 
           {/* Link card */}
@@ -177,7 +174,9 @@ export default function DashboardPage() {
   );
 }
 
-function MetricMini({ icon, label, value, loading }: { icon: React.ReactNode; label: string; value: number; loading: boolean }) {
+function MetricMini({ icon, label, value, loading }: {
+  icon: React.ReactNode; label: string; value: number; loading: boolean;
+}) {
   return (
     <div className="cwa-card cwa-metric-mini">
       <div className="cwa-metric-icon">{icon}</div>
@@ -207,27 +206,11 @@ function Step({ state, title, desc }: { state: "done" | "pending" | "reward"; ti
 }
 
 const cssStyles = `
-.cwa-dash {
-  --cwa-brand:#10b981;
-  --cwa-brand-deep:#059669;
-  --cwa-brand-50:#ecfdf5;
-  --cwa-brand-100:#d1fae5;
-  --cwa-ink:#0c1f17;
-  --cwa-muted:#5b6b63;
-  --cwa-line:#e7ece9;
-  --cwa-card:#ffffff;
-  --cwa-gold:#e6a817;
-  --cwa-r:16px;
-  --cwa-shadow:0 1px 2px rgba(12,31,23,.04),0 8px 24px rgba(12,31,23,.06);
-  font-family:"Plus Jakarta Sans",system-ui,sans-serif;
-  padding:24px;
-  color:var(--cwa-ink);
-}
+.cwa-dash{--cwa-brand:#10b981;--cwa-brand-deep:#059669;--cwa-brand-50:#ecfdf5;--cwa-brand-100:#d1fae5;--cwa-ink:#0c1f17;--cwa-muted:#5b6b63;--cwa-line:#e7ece9;--cwa-card:#ffffff;--cwa-gold:#e6a817;--cwa-r:16px;--cwa-shadow:0 1px 2px rgba(12,31,23,.04),0 8px 24px rgba(12,31,23,.06);font-family:"Plus Jakarta Sans",system-ui,sans-serif;padding:24px;color:var(--cwa-ink)}
 .cwa-dash h1,.cwa-dash h2,.cwa-dash h3,.cwa-dash h4{font-family:"Sora","Plus Jakarta Sans",sans-serif;letter-spacing:-.02em}
 .cwa-grid{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start;margin-top:22px}
 @media(max-width:1100px){.cwa-grid{grid-template-columns:1fr}}
-.cwa-left{display:flex;flex-direction:column;gap:22px}
-.cwa-right{display:flex;flex-direction:column;gap:22px}
+.cwa-left,.cwa-right{display:flex;flex-direction:column;gap:22px}
 .cwa-card{background:var(--cwa-card);border:1px solid var(--cwa-line);border-radius:var(--cwa-r);box-shadow:var(--cwa-shadow)}
 .cwa-banner{border-radius:var(--cwa-r);padding:22px 26px;color:#fff;background:radial-gradient(120% 160% at 0% 0%,#13d188 0%,var(--cwa-brand-deep) 55%,#065f46 100%);display:flex;align-items:center;gap:20px;box-shadow:var(--cwa-shadow);overflow:hidden;position:relative}
 .cwa-banner::after{content:"";position:absolute;right:-40px;top:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.07)}
@@ -295,12 +278,6 @@ const cssStyles = `
 .cwa-num{font-family:"Sora";font-weight:700;font-size:17px}
 .cwa-ptag{font-size:10px;font-weight:800;color:var(--cwa-muted);letter-spacing:.06em}
 .cwa-profile small{color:var(--cwa-muted);font-size:11.5px}
-.cwa-wcc{padding:20px}
-.cwa-meter{height:8px;background:#f1f5f4;border-radius:99px;margin:10px 0 6px;overflow:hidden}
-.cwa-meter i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--cwa-brand),#34c77b)}
-.cwa-scale{display:flex;justify-content:space-between;font-size:10.5px;color:var(--cwa-muted);font-weight:600}
-.cwa-price{display:flex;align-items:center;justify-content:space-between;margin-top:16px}
-.cwa-amt{font-family:"Sora";font-size:22px;font-weight:700}
 .cwa-rc{padding:20px}
 .cwa-rc h4{font-size:15px;margin-bottom:4px}
 .cwa-rc p{font-size:12.5px;color:var(--cwa-muted);line-height:1.45}

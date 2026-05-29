@@ -11,27 +11,28 @@ export function WalletBalanceCard() {
   const [balance, setBalance] = useState<number | null>(null);
   const [plan, setPlan] = useState<string>('free');
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
+useEffect(() => {
     if (!profile?.org_id) {
       setLoading(false);
       return;
     }
     const supabase = createClient();
-    supabase
-      .from('organizations')
-      .select('credit_balance, plan_id')
-      .eq('id', profile.org_id)
-      .maybeSingle()
-      .then(({ data }) => {
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('organizations')
+          .select('credit_balance, plan_id')
+          .eq('id', profile.org_id)
+          .maybeSingle();
         if (data) {
           setBalance(Number(data.credit_balance) || 0);
           setPlan(data.plan_id || 'free');
         }
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [profile?.org_id]);
-
   return (
     <div className="rounded-2xl border border-[#e7ece9] bg-white p-5 shadow-sm">
       <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">

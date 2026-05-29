@@ -42,7 +42,7 @@ const navItems = [
 ];
 
 const bottomNavItems = [
-  { path: "billing", label: "Billing", icon: Wallet },
+  { path: "billing", label: "Billing", icon: Wallet, absolute: true },
   { path: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -168,7 +168,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               return (
                 <li key={item.path}>
                   <Link
-                    href={href(item.path)}
+               href={(item as any).absolute ? `/${item.path}` : href(item.path)}
                     className={cn(
                       "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                       active

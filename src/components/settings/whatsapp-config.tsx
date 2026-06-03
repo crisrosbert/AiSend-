@@ -40,6 +40,8 @@ export function WhatsAppConfig() {
   const [accessToken, setAccessToken] = useState('');
   const [verifyToken, setVerifyToken] = useState('');
   const [tokenEdited, setTokenEdited] = useState(false);
+  const [autoSaving, setAutoSaving] = useState<string | null>(null); // field name being saved
+  const [autoSaved, setAutoSaved] = useState<string | null>(null);   // field name just saved
 
   const webhookUrl =
     typeof window !== 'undefined'
@@ -105,6 +107,41 @@ export function WhatsAppConfig() {
     if (!user) { setLoading(false); return; }
     fetchConfig(user.id);
   }, [authLoading, user, fetchConfig]);
+
+  // Auto-save Phone Number ID or WABA ID directly to Supabase on blur.
+  // Does NOT call the Meta API — just persists the field value so the
+  // user never loses it when switching tabs. The full "Save Configuration"
+  // button still handles token encryption + Meta verification.
+  async function autoSaveField(field: 'phone_number_id' | 'waba_id', value: string) {
+    if (!user || !value.trim()) return;
+    setAutoSaving(field);
+    try {
+      const { data: existing } = await supabase
+        .from('whatsapp_config')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existing) {
+        // Update existing row
+        await supabase
+          .from('whatsapp_config')
+          .update({ [field]: value.trim() })
+          .eq('user_id', user.id);
+      } else {
+        // Insert skeleton row so the field is persisted
+        await supabase
+          .from('whatsapp_config')
+          .insert({ user_id: user.id, [field]: value.trim() });
+      }
+      setAutoSaved(field);
+      setTimeout(() => setAutoSaved(null), 2500);
+    } catch (err) {
+      console.error('Auto-save error:', err);
+    } finally {
+      setAutoSaving(null);
+    }
+  }
 
   async function handleSave() {
     if (!phoneNumberId.trim()) { toast.error('Phone Number ID is required'); return; }
@@ -261,9 +298,20 @@ export function WhatsAppConfig() {
                 placeholder="e.g. 100234567890123"
                 value={phoneNumberId}
                 onChange={(e) => setPhoneNumberId(e.target.value)}
+                onBlur={() => autoSaveField('phone_number_id', phoneNumberId)}
                 className="border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
               />
-              {phoneNumberId && !tokenEdited && (
+              {autoSaving === 'phone_number_id' && (
+                <p className="text-[11px] text-slate-400 flex items-center gap-1">
+                  <Loader2 className="size-3 animate-spin" /> Saving…
+                </p>
+              )}
+              {autoSaved === 'phone_number_id' && (
+                <p className="text-[11px] text-emerald-600 flex items-center gap-1">
+                  <CheckCircle2 className="size-3" /> Saved automatically
+                </p>
+              )}
+              {phoneNumberId && config && autoSaving !== 'phone_number_id' && autoSaved !== 'phone_number_id' && (
                 <p className="text-[11px] text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 className="size-3" /> Loaded from saved config
                 </p>
@@ -276,9 +324,20 @@ export function WhatsAppConfig() {
                 placeholder="e.g. 100234567890456"
                 value={wabaId}
                 onChange={(e) => setWabaId(e.target.value)}
+                onBlur={() => autoSaveField('waba_id', wabaId)}
                 className="border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
               />
-              {wabaId && !tokenEdited && (
+              {autoSaving === 'waba_id' && (
+                <p className="text-[11px] text-slate-400 flex items-center gap-1">
+                  <Loader2 className="size-3 animate-spin" /> Saving…
+                </p>
+              )}
+              {autoSaved === 'waba_id' && (
+                <p className="text-[11px] text-emerald-600 flex items-center gap-1">
+                  <CheckCircle2 className="size-3" /> Saved automatically
+                </p>
+              )}
+              {wabaId && config && autoSaving !== 'waba_id' && autoSaved !== 'waba_id' && (
                 <p className="text-[11px] text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 className="size-3" /> Loaded from saved config
                 </p>

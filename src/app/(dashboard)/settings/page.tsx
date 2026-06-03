@@ -13,10 +13,10 @@ const TAB_VALUES = ['profile', 'whatsapp', 'templates', 'tags'] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
 const TABS: { value: TabValue; label: string; icon: typeof User }[] = [
-  { value: 'profile', label: 'Profile', icon: User },
-  { value: 'whatsapp', label: 'WhatsApp Config', icon: Settings },
-  { value: 'templates', label: 'Templates', icon: MessageSquare },
-  { value: 'tags', label: 'Tags', icon: Tag },
+  { value: 'profile',   label: 'Profile',         icon: User },
+  { value: 'whatsapp',  label: 'WhatsApp Config',  icon: Settings },
+  { value: 'templates', label: 'Templates',        icon: MessageSquare },
+  { value: 'tags',      label: 'Tags',             icon: Tag },
 ];
 
 function isTabValue(v: string | null): v is TabValue {
@@ -26,7 +26,6 @@ function isTabValue(v: string | null): v is TabValue {
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-
   const queryTab = searchParams.get('tab');
   const tab: TabValue = isTabValue(queryTab) ? queryTab : 'profile';
 
@@ -38,7 +37,6 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>
           Settings
@@ -48,7 +46,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* Tab bar — clean pill style */}
+      {/* Tab bar */}
       <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-[#e7ece9] bg-white p-1.5 shadow-sm">
         {TABS.map((t) => {
           const active = tab === t.value;
@@ -69,18 +67,27 @@ export default function SettingsPage() {
         })}
       </div>
 
-      {/* Tab content */}
-      <div>
-        {tab === 'profile' && (
-          <div className="space-y-6">
-            <ProfileForm />
-            <PasswordForm />
-            <SessionsCard />
-          </div>
-        )}
-        {tab === 'whatsapp' && <WhatsAppConfig />}
-        {tab === 'templates' && <TemplateManager />}
-        {tab === 'tags' && <TagManager />}
+      {/* KEY FIX: all tabs stay mounted, only hidden/shown via CSS.
+          This prevents the WhatsApp config from losing its loaded state
+          when user switches to another tab and comes back. */}
+      <div className={tab === 'profile' ? 'block' : 'hidden'}>
+        <div className="space-y-6">
+          <ProfileForm />
+          <PasswordForm />
+          <SessionsCard />
+        </div>
+      </div>
+
+      <div className={tab === 'whatsapp' ? 'block' : 'hidden'}>
+        <WhatsAppConfig />
+      </div>
+
+      <div className={tab === 'templates' ? 'block' : 'hidden'}>
+        <TemplateManager />
+      </div>
+
+      <div className={tab === 'tags' ? 'block' : 'hidden'}>
+        <TagManager />
       </div>
     </div>
   );

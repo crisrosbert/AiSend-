@@ -145,7 +145,7 @@ export async function deductCredits(
     p_org_id: opts.orgId,
     p_user_id: opts.userId,
     p_amount: opts.amount,
-    p_type: 'debit',
+    p_type: 'deduction',
     p_description: opts.description ?? 'Message charge',
     p_reference: opts.reference ?? null,
   })

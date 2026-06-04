@@ -278,3 +278,128 @@ export async function downloadMedia(
   const buffer = Buffer.from(await response.arrayBuffer())
   return { buffer, contentType }
 }
+
+// ============================================================
+// Message templates — create / submit for approval
+// ============================================================
+
+export interface CreateTemplateArgs {
+  wabaId: string
+  accessToken: string
+  name: string
+  /** Meta category: MARKETING | UTILITY | AUTHENTICATION */
+  category: string
+  /** Meta language code, e.g. en_US, hi */
+  language: string
+  bodyText: string
+  /** Optional plain-text header. Media headers aren't supported here yet. */
+  headerText?: string
+  footerText?: string
+}
+
+export interface CreateTemplateResult {
+  id: string
+  status: string
+  category: string
+}
+
+/**
+ * Count {{1}}, {{2}} … placeholders in a string and return the highest
+ * index used. Meta requires example values for every placeholder in a
+ * template body at submit time, or it rejects with a 2388xxx error.
+ */
+function maxPlaceholder(text: string): number {
+  let max = 0
+  const re = /\{\{\s*(\d+)\s*\}\}/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const n = parseInt(m[1], 10)
+    if (n > max) max = n
+  }
+  return max
+}
+
+/**
+ * Submit a new message template to Meta for approval. Mirrors the manual
+ * Graph API call (POST /{waba_id}/message_templates) so clients never
+ * touch the Meta dashboard — the AiSensy "create template" experience.
+ *
+ * Returns Meta's template id + status (usually PENDING; library-derived
+ * or trivially-safe templates may come back APPROVED immediately).
+ */
+export async function createTemplate(
+  args: CreateTemplateArgs
+): Promise<CreateTemplateResult> {
+  const {
+    wabaId,
+    accessToken,
+    name,
+    category,
+    language,
+    bodyText,
+    headerText,
+    footerText,
+  } = args
+
+  const url = `${META_API_BASE}/${wabaId}/message_templates`
+
+  const components: Record<string, unknown>[] = []
+
+  if (headerText && headerText.trim()) {
+    components.push({
+      type: 'HEADER',
+      format: 'TEXT',
+      text: headerText.trim(),
+    })
+  }
+
+  // Body is required. If it has {{n}} placeholders, Meta wants an
+  // example array with one sample value per placeholder.
+  const bodyComponent: Record<string, unknown> = {
+    type: 'BODY',
+    text: bodyText,
+  }
+  const placeholderCount = maxPlaceholder(bodyText)
+  if (placeholderCount > 0) {
+    bodyComponent.example = {
+      body_text: [
+        Array.from({ length: placeholderCount }, (_, i) => `Sample${i + 1}`),
+      ],
+    }
+  }
+  components.push(bodyComponent)
+
+  if (footerText && footerText.trim()) {
+    components.push({
+      type: 'FOOTER',
+      text: footerText.trim(),
+    })
+  }
+
+  const payload = {
+    name: name.trim().toLowerCase().replace(/\s+/g, '_'),
+    category: category.toUpperCase(),
+    language,
+    components,
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  return {
+    id: data.id,
+    status: data.status ?? 'PENDING',
+    category: data.category ?? category.toUpperCase(),
+  }
+}

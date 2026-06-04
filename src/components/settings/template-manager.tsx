@@ -41,12 +41,13 @@ interface TemplateFormData {
   language: string;
   body_text: string;
   header_type: string;
+  header_content: string;
   footer_text: string;
 }
 
 const emptyForm: TemplateFormData = {
   name: '', category: 'Marketing', language: 'en_US',
-  body_text: '', header_type: '', footer_text: '',
+  body_text: '', header_type: '', header_content: '', footer_text: '',
 };
 
 const COMMON_LANGUAGE_CODES = [
@@ -96,25 +97,40 @@ export function TemplateManager() {
     try {
       setSaving(true);
       if (!user) { toast.error('Not authenticated'); return; }
-      const payload = {
-        user_id: user.id,
-        name: form.name.trim(),
-        category: form.category,
-        language: form.language.trim() || 'en_US',
-        body_text: form.body_text.trim(),
-        header_type: form.header_type || null,
-        footer_text: form.footer_text.trim() || null,
-        status: 'Draft' as const,
-      };
-      const { error } = await supabase.from('message_templates').insert(payload);
-      if (error) throw error;
-      toast.success('Template created successfully');
+
+      // Submit to Meta for approval (AiSensy-style) via the create
+      // route. This both POSTs to Meta AND mirrors the row locally with
+      // status Pending. The old behavior (Supabase-only insert) created
+      // templates Meta never saw, which then failed on send with #132001.
+      const res = await fetch('/api/whatsapp/templates/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          category: form.category,
+          language: form.language.trim() || 'en_US',
+          body_text: form.body_text.trim(),
+          header_text: form.header_type === 'text' ? form.header_content?.trim() || undefined : undefined,
+          footer_text: form.footer_text.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || `Submit failed (HTTP ${res.status})`);
+      }
+
+      if (data.warning) {
+        toast.warning(data.warning);
+      } else {
+        toast.success('Template submitted to Meta for approval');
+      }
       setDialogOpen(false);
       setForm(emptyForm);
-      if (user) await fetchTemplates(user.id);
+      await fetchTemplates(user.id);
     } catch (err) {
       console.error('Save error:', err);
-      toast.error('Failed to create template');
+      toast.error(err instanceof Error ? err.message : 'Failed to submit template');
     } finally {
       setSaving(false);
     }
@@ -334,6 +350,18 @@ export function TemplateManager() {
               </Select>
             </div>
 
+            {form.header_type === 'text' && (
+              <div className="space-y-2">
+                <Label className="text-slate-700">Header Text</Label>
+                <Input
+                  placeholder="Header text (shown bold at top)"
+                  value={form.header_content}
+                  onChange={(e) => setForm({ ...form, header_content: e.target.value })}
+                  className="bg-white border-[#e7ece9] text-[#0c1f17] placeholder:text-slate-400"
+                />
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label className="text-slate-700">Body Text</Label>
               <Textarea
@@ -354,6 +382,34 @@ export function TemplateManager() {
                 className="bg-white border-[#e7ece9] text-[#0c1f17] placeholder:text-slate-400"
               />
             </div>
+
+            {/* Live WhatsApp-style preview (AiSensy-style) */}
+            <div className="space-y-2">
+              <Label className="text-slate-700">Preview</Label>
+              <div className="rounded-xl bg-[#e5ddd5] p-4">
+                <div className="ml-auto max-w-[85%] rounded-lg rounded-tr-none bg-[#d9fdd3] px-3 py-2 shadow-sm">
+                  {form.header_type === 'text' && form.header_content.trim() && (
+                    <p className="mb-1 text-sm font-bold text-[#0c1f17] whitespace-pre-line">
+                      {form.header_content}
+                    </p>
+                  )}
+                  <p className="text-sm text-[#0c1f17] whitespace-pre-line">
+                    {form.body_text.trim() || 'Your message body will appear here…'}
+                  </p>
+                  {form.footer_text.trim() && (
+                    <p className="mt-1 text-xs text-slate-500 whitespace-pre-line">
+                      {form.footer_text}
+                    </p>
+                  )}
+                  <span className="mt-1 block text-right text-[10px] text-slate-400">
+                    {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Variables like <code>{'{{1}}'}</code> are filled per-contact when you send.
+              </p>
+            </div>
           </div>
 
           <DialogFooter className="bg-white">
@@ -369,7 +425,7 @@ export function TemplateManager() {
               disabled={saving}
               className="bg-emerald-500 hover:bg-emerald-600 text-white"
             >
-              {saving ? (<><Loader2 className="size-4 animate-spin" />Creating...</>) : 'Create Template'}
+              {saving ? (<><Loader2 className="size-4 animate-spin" />Submitting…</>) : 'Submit to Meta'}
             </Button>
           </DialogFooter>
         </DialogContent>

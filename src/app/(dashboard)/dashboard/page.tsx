@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { loadMetrics, loadActivity, loadConversationsSeries } from "@/lib/dashboard/queries";
 import type { MetricsBundle, ActivityItem, ConversationsSeriesPoint } from "@/lib/dashboard/types";
 import { WalletBalanceCard } from "@/components/dashboard/wallet-balance-card";
+import { PromoSection } from "@/components/dashboard/promo-section";
 import {
   MessageSquare, Users, Send, TrendingUp, TrendingDown, Zap, QrCode,
   Crown, CheckCircle2, AlertCircle, Sparkles, ArrowRight, ArrowUpRight,
@@ -159,6 +160,9 @@ export default function DashboardPage() {
                 ctaText="Send your first campaign" ctaHref="/broadcasts/new" />
             )}
           </div>
+
+          {/* Promo / referral / offer cards */}
+          <PromoSection />
         </div>
 
         {/* RIGHT */}

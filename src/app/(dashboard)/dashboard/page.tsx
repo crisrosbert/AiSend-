@@ -8,6 +8,7 @@ import { loadMetrics, loadActivity, loadConversationsSeries } from "@/lib/dashbo
 import type { MetricsBundle, ActivityItem, ConversationsSeriesPoint } from "@/lib/dashboard/types";
 import { WalletBalanceCard } from "@/components/dashboard/wallet-balance-card";
 import { PromoSection } from "@/components/dashboard/promo-section";
+import { ReferralConsumer } from "@/components/dashboard/referral-capture";
 import {
   MessageSquare, Users, Send, TrendingUp, TrendingDown, Zap, QrCode,
   Crown, CheckCircle2, AlertCircle, Sparkles, ArrowRight, ArrowUpRight,
@@ -63,6 +64,7 @@ export default function DashboardPage() {
   return (
     <div className="cwa-dash">
       <style>{cssStyles}</style>
+      <ReferralConsumer />
 
       {/* Banner */}
       <div className="cwa-banner cwa-fade cwa-d1">

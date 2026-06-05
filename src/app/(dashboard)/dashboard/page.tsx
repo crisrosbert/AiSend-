@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,7 +16,7 @@ import {
 
 /* Tiny inline sparkline — pure SVG, no deps */
 function Sparkline({ data, color }: { data: number[]; color: string }) {
-  let d = data.length ? data : [0, 0];
+  const d = data.length ? data : [0, 0];
   const max = Math.max(...d, 1), min = Math.min(...d, 0), range = max - min || 1;
   const w = 80, h = 28;
   const pts = d.map((v, i) => {
@@ -48,14 +48,12 @@ export default function DashboardPage() {
   const [series, setSeries] = useState<ConversationsSeriesPoint[] | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadAll = useCallback(() => {
+  useEffect(() => {
     const db = createClient();
     void loadMetrics(db).then(setMetrics).catch(console.error).finally(() => setLoading(false));
     void loadActivity(db, 6).then(setActivity).catch(console.error);
     void loadConversationsSeries(db, 7).then(setSeries).catch(console.error);
   }, []);
-
-  useEffect(() => { loadAll(); }, [loadAll]);
 
   const businessName = profile?.business_name || "Your Business";
   const incomingSpark = series?.map((s) => s.incoming) ?? [];

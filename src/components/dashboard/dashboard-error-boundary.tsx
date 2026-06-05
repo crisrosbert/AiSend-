@@ -4,10 +4,10 @@ import React from "react";
 
 interface State { error: Error | null; info: string }
 
-export class DashboardErrorBoundary extends React.Component
-  { children: React.ReactNode },
-  State
-> {
+/* Wrap the dashboard so any render/runtime error shows ON SCREEN
+ * with the real message + stack, instead of Next's generic
+ * "This page couldn't load". Remove once the bug is found. */
+export class DashboardErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { error: null, info: "" };
@@ -31,7 +31,7 @@ export class DashboardErrorBoundary extends React.Component
           whiteSpace: "pre-wrap", wordBreak: "break-word",
         }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>
-            Dashboard crashed — here is the real error:
+            🐛 Dashboard crashed — here is the real error:
           </div>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>
             {this.state.error.name}: {this.state.error.message}

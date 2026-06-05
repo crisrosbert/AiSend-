@@ -37,12 +37,12 @@ export default function DashboardPage() {
 
       {/* Top banner */}
       <div className="cwa-banner cwa-fade cwa-d1">
-        <span className="cwa-banner-emoji"><Sparkles size={30} /></span>
-        <div>
+        <span className="cwa-banner-emoji"><Sparkles size={26} /></span>
+        <div className="cwa-banner-text">
           <h3>You&apos;re on the new marketing API <span className="cwa-tag-up">PRO</span></h3>
           <p>30% better delivery and deeper insights with the latest WhatsApp marketing APIs.</p>
         </div>
-        <button className="cwa-btn cwa-btn-white"><Zap size={15} /> Upgrade for Free</button>
+        <button className="cwa-btn cwa-btn-white"><Zap size={14} /> Upgrade</button>
       </div>
 
       <div className="cwa-grid">
@@ -75,7 +75,7 @@ export default function DashboardPage() {
           {/* Progress steps */}
           <div className="cwa-card cwa-steps-card cwa-fade cwa-d3">
             <div className="cwa-steps-head">
-              <Crown size={24} className="cwa-bag" />
+              <Crown size={22} className="cwa-bag" />
               <h3>Complete the steps &amp; win 200 Conversation Credits</h3>
             </div>
             <div className="cwa-steps">
@@ -126,6 +126,21 @@ export default function DashboardPage() {
 
         {/* RIGHT COLUMN */}
         <div className="cwa-right">
+          {/* Profile / number */}
+          <div className="cwa-card cwa-profile cwa-fade cwa-d3">
+            <div className="cwa-profile-pic">{businessName.charAt(0).toUpperCase()}</div>
+            <div>
+              <div className="cwa-ptag">{businessName.toUpperCase()}</div>
+              <div className="cwa-num">{profile?.slug ? `+91 ••••• •••••` : "Not connected"}</div>
+              <small>wa.clickstream.com/{profile?.slug || "yourbiz"}</small>
+            </div>
+          </div>
+
+          {/* REAL wallet balance card */}
+          <div className="cwa-fade cwa-d4">
+            <WalletBalanceCard />
+          </div>
+
           {/* QR card */}
           <div className="cwa-card cwa-qr-wrap cwa-fade cwa-d2">
             <h4 style={{ alignSelf: "flex-start" }}>Scan to get the mobile app</h4>
@@ -143,21 +158,6 @@ export default function DashboardPage() {
               <div><BarChart3 size={13} /> Ads Management</div>
               <div><TrendingUp size={13} /> Analytics</div>
             </div>
-          </div>
-
-          {/* Profile / number */}
-          <div className="cwa-card cwa-profile cwa-fade cwa-d3">
-            <div className="cwa-profile-pic">{businessName.charAt(0).toUpperCase()}</div>
-            <div>
-              <div className="cwa-ptag">{businessName.toUpperCase()}</div>
-              <div className="cwa-num">{profile?.slug ? `+91 ••••• •••••` : "Not connected"}</div>
-              <small>wa.clickstream.com/{profile?.slug || "yourbiz"}</small>
-            </div>
-          </div>
-
-          {/* REAL wallet balance card — replaces hardcoded ₹50 */}
-          <div className="cwa-fade cwa-d4">
-            <WalletBalanceCard />
           </div>
 
           {/* Link card */}
@@ -206,84 +206,234 @@ function Step({ state, title, desc }: { state: "done" | "pending" | "reward"; ti
 }
 
 const cssStyles = `
-.cwa-dash{--cwa-brand:#10b981;--cwa-brand-deep:#059669;--cwa-brand-50:#ecfdf5;--cwa-brand-100:#d1fae5;--cwa-ink:#0c1f17;--cwa-muted:#5b6b63;--cwa-line:#e7ece9;--cwa-card:#ffffff;--cwa-gold:#e6a817;--cwa-r:16px;--cwa-shadow:0 1px 2px rgba(12,31,23,.04),0 8px 24px rgba(12,31,23,.06);font-family:"Plus Jakarta Sans",system-ui,sans-serif;padding:24px;color:var(--cwa-ink)}
-.cwa-dash h1,.cwa-dash h2,.cwa-dash h3,.cwa-dash h4{font-family:"Sora","Plus Jakarta Sans",sans-serif;letter-spacing:-.02em}
-.cwa-grid{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start;margin-top:22px}
-@media(max-width:1100px){.cwa-grid{grid-template-columns:1fr}}
-.cwa-left,.cwa-right{display:flex;flex-direction:column;gap:22px}
-.cwa-card{background:var(--cwa-card);border:1px solid var(--cwa-line);border-radius:var(--cwa-r);box-shadow:var(--cwa-shadow)}
-.cwa-banner{border-radius:var(--cwa-r);padding:22px 26px;color:#fff;background:radial-gradient(120% 160% at 0% 0%,#13d188 0%,var(--cwa-brand-deep) 55%,#065f46 100%);display:flex;align-items:center;gap:20px;box-shadow:var(--cwa-shadow);overflow:hidden;position:relative}
-.cwa-banner::after{content:"";position:absolute;right:-40px;top:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.07)}
-.cwa-banner-emoji{display:grid;place-items:center}
-.cwa-banner h3{font-size:18px;margin-bottom:4px}
-.cwa-banner p{font-size:13.5px;opacity:.9}
-.cwa-tag-up{background:rgba(255,255,255,.2);font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;letter-spacing:.06em;margin-left:8px;vertical-align:middle}
-.cwa-btn{border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:13.5px;padding:10px 18px;border-radius:11px;display:inline-flex;align-items:center;gap:8px;transition:.18s}
+.cwa-dash{
+  --cwa-brand:#10b981;--cwa-brand-deep:#059669;--cwa-brand-50:#ecfdf5;--cwa-brand-100:#d1fae5;
+  --cwa-ink:#0c1f17;--cwa-muted:#5b6b63;--cwa-line:#e7ece9;--cwa-card:#ffffff;--cwa-gold:#e6a817;
+  --cwa-r:14px;--cwa-shadow:0 1px 2px rgba(12,31,23,.04),0 8px 24px rgba(12,31,23,.06);
+  font-family:"Plus Jakarta Sans",system-ui,sans-serif;
+  padding:16px;color:var(--cwa-ink);
+}
+@media(min-width:640px){.cwa-dash{padding:24px}}
+
+.cwa-dash h1,.cwa-dash h2,.cwa-dash h3,.cwa-dash h4{
+  font-family:"Sora","Plus Jakarta Sans",sans-serif;letter-spacing:-.02em;margin:0
+}
+
+/* ── GRID ── */
+.cwa-grid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start;margin-top:16px}
+@media(min-width:640px){.cwa-grid{gap:20px;margin-top:20px}}
+@media(min-width:1100px){.cwa-grid{grid-template-columns:1fr 320px;gap:22px}}
+.cwa-left,.cwa-right{display:flex;flex-direction:column;gap:14px}
+@media(min-width:640px){.cwa-left,.cwa-right{gap:18px}}
+
+/* ── CARD BASE ── */
+.cwa-card{
+  background:var(--cwa-card);border:1px solid var(--cwa-line);
+  border-radius:var(--cwa-r);box-shadow:var(--cwa-shadow)
+}
+
+/* ── BANNER ── */
+.cwa-banner{
+  border-radius:var(--cwa-r);padding:16px 18px;color:#fff;
+  background:radial-gradient(120% 160% at 0% 0%,#13d188 0%,var(--cwa-brand-deep) 55%,#065f46 100%);
+  display:flex;align-items:center;gap:14px;
+  box-shadow:var(--cwa-shadow);overflow:hidden;position:relative
+}
+.cwa-banner::after{
+  content:"";position:absolute;right:-40px;top:-60px;
+  width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,.07)
+}
+.cwa-banner-emoji{display:grid;place-items:center;flex-shrink:0}
+.cwa-banner-text{flex:1;min-width:0}
+.cwa-banner h3{font-size:14px;margin-bottom:3px;line-height:1.3}
+.cwa-banner p{font-size:12px;opacity:.88;line-height:1.4;margin:0}
+@media(min-width:480px){.cwa-banner h3{font-size:16px}.cwa-banner p{font-size:13px}}
+.cwa-tag-up{
+  background:rgba(255,255,255,.2);font-size:9px;font-weight:800;
+  padding:2px 7px;border-radius:6px;letter-spacing:.06em;
+  margin-left:6px;vertical-align:middle
+}
+
+/* ── BUTTONS ── */
+.cwa-btn{
+  border:none;cursor:pointer;font-family:inherit;font-weight:700;
+  font-size:12px;padding:9px 14px;border-radius:10px;
+  display:inline-flex;align-items:center;gap:6px;
+  transition:.18s;white-space:nowrap;flex-shrink:0
+}
+@media(min-width:480px){.cwa-btn{font-size:13.5px;padding:10px 18px}}
 .cwa-btn-primary{background:var(--cwa-brand);color:#fff;box-shadow:0 6px 18px rgba(16,185,129,.32)}
 .cwa-btn-primary:hover{background:var(--cwa-brand-deep);transform:translateY(-1px)}
-.cwa-btn-white{margin-left:auto;background:#fff;color:var(--cwa-brand-deep);white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.18)}
-.cwa-stats{display:grid;grid-template-columns:repeat(3,1fr);padding:22px 26px}
-.cwa-stat{display:flex;flex-direction:column;gap:8px;padding-right:22px}
-.cwa-stat+.cwa-stat{border-left:1px solid var(--cwa-line);padding-left:22px}
-.cwa-stat-label{font-size:12.5px;color:var(--cwa-muted);font-weight:600}
-.cwa-badge{font-size:11px;font-weight:800;padding:5px 11px;border-radius:8px;width:max-content}
+.cwa-btn-white{background:#fff;color:var(--cwa-brand-deep);box-shadow:0 6px 18px rgba(0,0,0,.18)}
+
+/* ── STATS ── */
+.cwa-stats{display:grid;grid-template-columns:repeat(3,1fr);padding:16px 18px}
+@media(min-width:480px){.cwa-stats{padding:20px 24px}}
+.cwa-stat{display:flex;flex-direction:column;gap:6px}
+.cwa-stat+.cwa-stat{border-left:1px solid var(--cwa-line);padding-left:14px}
+@media(min-width:480px){.cwa-stat+.cwa-stat{padding-left:20px}}
+.cwa-stat-label{font-size:11px;color:var(--cwa-muted);font-weight:600}
+@media(min-width:480px){.cwa-stat-label{font-size:12.5px}}
+.cwa-badge{font-size:10px;font-weight:800;padding:4px 9px;border-radius:7px;width:max-content}
+@media(min-width:480px){.cwa-badge{font-size:11px;padding:5px 11px}}
 .cwa-badge-green{background:var(--cwa-brand-50);color:var(--cwa-brand-deep)}
-.cwa-stat-big{font-family:"Sora";font-size:26px;font-weight:700}
-.cwa-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.cwa-metric-mini{display:flex;align-items:center;gap:10px;padding:16px}
-.cwa-metric-icon{width:36px;height:36px;border-radius:10px;background:var(--cwa-brand-50);color:var(--cwa-brand-deep);display:grid;place-items:center;flex-shrink:0}
-.cwa-metric-value{font-family:"Sora";font-size:20px;font-weight:700;line-height:1}
-.cwa-metric-label{font-size:11px;color:var(--cwa-muted);font-weight:600;margin-top:3px}
-.cwa-steps-card{padding:24px 26px;background:linear-gradient(135deg,#059669,#065f46);color:#fff;border:none}
-.cwa-steps-head{display:flex;align-items:center;gap:12px;margin-bottom:22px}
-.cwa-bag{flex-shrink:0}
-.cwa-steps-head h3{font-size:16px}
-.cwa-steps{display:flex;align-items:flex-start;justify-content:space-between;position:relative}
-.cwa-step{display:flex;flex-direction:column;align-items:center;text-align:center;flex:1;position:relative;z-index:2;gap:8px}
-.cwa-step-circle{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px}
+.cwa-stat-big{font-family:"Sora";font-size:22px;font-weight:700}
+@media(min-width:480px){.cwa-stat-big{font-size:26px}}
+
+/* ── METRICS 4-GRID → 2x2 on mobile ── */
+.cwa-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:640px){.cwa-metrics{grid-template-columns:repeat(4,1fr);gap:12px}}
+.cwa-metric-mini{display:flex;align-items:center;gap:10px;padding:14px}
+@media(min-width:480px){.cwa-metric-mini{padding:16px}}
+.cwa-metric-icon{
+  width:34px;height:34px;border-radius:10px;
+  background:var(--cwa-brand-50);color:var(--cwa-brand-deep);
+  display:grid;place-items:center;flex-shrink:0
+}
+.cwa-metric-value{font-family:"Sora";font-size:18px;font-weight:700;line-height:1}
+@media(min-width:480px){.cwa-metric-value{font-size:20px}}
+.cwa-metric-label{font-size:10.5px;color:var(--cwa-muted);font-weight:600;margin-top:3px}
+
+/* ── STEPS CARD ── */
+.cwa-steps-card{
+  padding:18px 16px;
+  background:linear-gradient(135deg,#059669,#065f46);color:#fff;border:none
+}
+@media(min-width:480px){.cwa-steps-card{padding:22px 24px}}
+.cwa-steps-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:18px}
+.cwa-bag{flex-shrink:0;margin-top:2px}
+.cwa-steps-head h3{font-size:13.5px;line-height:1.4}
+@media(min-width:480px){.cwa-steps-head h3{font-size:16px}}
+
+/* Steps row — scroll on very small screens, wrap text tighter */
+.cwa-steps{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  position:relative;gap:4px
+}
+.cwa-step{
+  display:flex;flex-direction:column;align-items:center;
+  text-align:center;flex:1;position:relative;z-index:2;gap:5px
+}
+.cwa-step-circle{
+  width:30px;height:30px;border-radius:50%;
+  display:grid;place-items:center;font-weight:800;font-size:13px
+}
+@media(min-width:480px){.cwa-step-circle{width:34px;height:34px}}
 .cwa-step-done .cwa-step-circle{background:#34c77b;color:#06351f}
 .cwa-step-pending .cwa-step-circle{background:var(--cwa-gold);color:#3a2900}
 .cwa-step-reward .cwa-step-circle{background:rgba(255,255,255,.2);color:#fff}
-.cwa-step-title{font-size:11px;font-weight:700;opacity:.9}
-.cwa-step-state{font-size:9px;font-weight:800;letter-spacing:.08em;opacity:.85;margin-top:-3px}
-.cwa-step-desc{font-size:11px;opacity:.7;line-height:1.3;max-width:110px}
-.cwa-track{position:absolute;top:17px;left:8%;right:8%;height:3px;background:rgba(255,255,255,.18);z-index:1}
+.cwa-step-title{font-size:9.5px;font-weight:700;opacity:.9;line-height:1.2}
+@media(min-width:480px){.cwa-step-title{font-size:11px}}
+.cwa-step-state{font-size:8px;font-weight:800;letter-spacing:.06em;opacity:.85;margin-top:-2px}
+@media(min-width:480px){.cwa-step-state{font-size:9px;letter-spacing:.08em}}
+.cwa-step-desc{font-size:9px;opacity:.7;line-height:1.3;max-width:70px}
+@media(min-width:480px){.cwa-step-desc{font-size:11px;max-width:110px}}
+.cwa-track{
+  position:absolute;top:15px;left:8%;right:8%;
+  height:3px;background:rgba(255,255,255,.18);z-index:1
+}
+@media(min-width:480px){.cwa-track{top:17px}}
 .cwa-track-fill{height:100%;width:18%;background:#34c77b;border-radius:3px}
-.cwa-setup{padding:24px 26px}
-.cwa-setup-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.cwa-setup h3{font-size:17px}
-.cwa-meta{font-size:12.5px;color:var(--cwa-muted);font-weight:600}
-.cwa-next-pill{background:var(--cwa-brand-50);color:var(--cwa-brand-deep);font-size:10px;font-weight:800;padding:4px 10px;border-radius:7px;letter-spacing:.05em;width:max-content;margin:16px 0 8px;display:inline-block}
-.cwa-task{background:var(--cwa-brand-50);border-radius:13px;padding:18px 20px;display:flex;gap:14px}
-.cwa-task-ic{width:38px;height:38px;border-radius:11px;background:var(--cwa-gold);display:grid;place-items:center;flex-shrink:0;color:#3a2900}
-.cwa-task h4{font-size:15px;margin-bottom:8px}
-.cwa-task-desc{font-size:12.5px;color:var(--cwa-muted)}
-.cwa-task-list{margin:8px 0 0 2px;list-style:none;display:flex;flex-direction:column;gap:6px}
-.cwa-task-list li{font-size:12.5px;color:var(--cwa-muted);padding-left:16px;position:relative}
-.cwa-task-list li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:var(--cwa-brand)}
-.cwa-task .cwa-btn{margin-top:16px}
-.cwa-activity{padding:20px 24px}
-.cwa-activity-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--cwa-line)}
+
+/* ── SETUP ── */
+.cwa-setup{padding:18px 18px}
+@media(min-width:480px){.cwa-setup{padding:22px 24px}}
+.cwa-setup-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px}
+.cwa-setup h3{font-size:15px;line-height:1.3}
+@media(min-width:480px){.cwa-setup h3{font-size:17px}}
+.cwa-meta{font-size:12px;color:var(--cwa-muted);font-weight:600;white-space:nowrap}
+.cwa-next-pill{
+  background:var(--cwa-brand-50);color:var(--cwa-brand-deep);
+  font-size:9px;font-weight:800;padding:3px 9px;border-radius:7px;
+  letter-spacing:.05em;width:max-content;margin:12px 0 8px;display:inline-block
+}
+.cwa-task{
+  background:var(--cwa-brand-50);border-radius:12px;
+  padding:14px 16px;display:flex;gap:12px
+}
+@media(min-width:480px){.cwa-task{padding:18px 20px;gap:14px}}
+.cwa-task-ic{
+  width:36px;height:36px;border-radius:10px;
+  background:var(--cwa-gold);display:grid;place-items:center;
+  flex-shrink:0;color:#3a2900
+}
+.cwa-task h4{font-size:13.5px;margin-bottom:7px;line-height:1.35}
+@media(min-width:480px){.cwa-task h4{font-size:15px}}
+.cwa-task-desc{font-size:12px;color:var(--cwa-muted);line-height:1.4}
+.cwa-task-list{margin:8px 0 0 2px;list-style:none;display:flex;flex-direction:column;gap:5px}
+.cwa-task-list li{
+  font-size:11.5px;color:var(--cwa-muted);padding-left:14px;
+  position:relative;line-height:1.4
+}
+.cwa-task-list li::before{
+  content:"";position:absolute;left:0;top:7px;
+  width:5px;height:5px;border-radius:50%;background:var(--cwa-brand)
+}
+.cwa-task .cwa-btn{margin-top:14px}
+
+/* ── ACTIVITY ── */
+.cwa-activity{padding:18px 20px}
+.cwa-activity-row{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 0;border-bottom:1px solid var(--cwa-line)
+}
 .cwa-activity-row:last-child{border-bottom:none}
-.cwa-activity-ic{width:32px;height:32px;border-radius:9px;background:var(--cwa-brand-50);color:var(--cwa-brand-deep);display:grid;place-items:center;flex-shrink:0}
+.cwa-activity-ic{
+  width:32px;height:32px;border-radius:9px;
+  background:var(--cwa-brand-50);color:var(--cwa-brand-deep);
+  display:grid;place-items:center;flex-shrink:0
+}
 .cwa-activity-text{font-size:13px;color:var(--cwa-ink)}
-.cwa-qr-wrap{display:grid;place-items:center;gap:14px;padding:22px}
-.cwa-qr{width:140px;height:140px;border-radius:12px;display:grid;place-items:center;background:var(--cwa-brand-50);color:var(--cwa-brand-deep);border:6px solid #fff;box-shadow:var(--cwa-shadow)}
+
+/* ── QR CARD ── */
+.cwa-qr-wrap{display:grid;place-items:center;gap:12px;padding:18px 16px}
+@media(min-width:480px){.cwa-qr-wrap{padding:22px}}
+.cwa-qr-wrap h4{font-size:14px}
+.cwa-qr{
+  width:120px;height:120px;border-radius:12px;
+  display:grid;place-items:center;
+  background:var(--cwa-brand-50);color:var(--cwa-brand-deep);
+  border:6px solid #fff;box-shadow:var(--cwa-shadow)
+}
+@media(min-width:480px){.cwa-qr{width:140px;height:140px}}
 .cwa-store{display:flex;gap:8px}
-.cwa-store span{background:var(--cwa-ink);color:#fff;font-size:11px;font-weight:600;padding:8px 12px;border-radius:9px}
-.cwa-feat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;width:100%}
-.cwa-feat div{font-size:12px;color:var(--cwa-muted);display:flex;align-items:center;gap:7px}
-.cwa-profile{display:flex;align-items:center;gap:14px;padding:20px}
-.cwa-profile-pic{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6ee7b7,#10b981);flex-shrink:0;display:grid;place-items:center;color:#053b2a;font-weight:800;font-family:"Sora"}
-.cwa-num{font-family:"Sora";font-weight:700;font-size:17px}
+.cwa-store span{
+  background:var(--cwa-ink);color:#fff;
+  font-size:10.5px;font-weight:600;padding:7px 11px;border-radius:8px
+}
+.cwa-feat{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;width:100%}
+.cwa-feat div{font-size:11.5px;color:var(--cwa-muted);display:flex;align-items:center;gap:6px}
+
+/* ── PROFILE ── */
+.cwa-profile{display:flex;align-items:center;gap:12px;padding:16px 18px}
+@media(min-width:480px){.cwa-profile{gap:14px;padding:20px}}
+.cwa-profile-pic{
+  width:46px;height:46px;border-radius:50%;
+  background:linear-gradient(135deg,#6ee7b7,#10b981);
+  flex-shrink:0;display:grid;place-items:center;
+  color:#053b2a;font-weight:800;font-family:"Sora";font-size:18px
+}
+@media(min-width:480px){.cwa-profile-pic{width:52px;height:52px}}
+.cwa-num{font-family:"Sora";font-weight:700;font-size:16px}
+@media(min-width:480px){.cwa-num{font-size:17px}}
 .cwa-ptag{font-size:10px;font-weight:800;color:var(--cwa-muted);letter-spacing:.06em}
-.cwa-profile small{color:var(--cwa-muted);font-size:11.5px}
-.cwa-rc{padding:20px}
-.cwa-rc h4{font-size:15px;margin-bottom:4px}
-.cwa-rc p{font-size:12.5px;color:var(--cwa-muted);line-height:1.45}
+.cwa-profile small{color:var(--cwa-muted);font-size:11px}
+
+/* ── LINK CARD ── */
+.cwa-rc{padding:18px 20px}
+.cwa-rc h4{font-size:14px;margin-bottom:4px}
+@media(min-width:480px){.cwa-rc h4{font-size:15px}}
+.cwa-rc p{font-size:12px;color:var(--cwa-muted);line-height:1.45;margin:0}
+@media(min-width:480px){.cwa-rc p{font-size:12.5px}}
 .cwa-link{color:var(--cwa-brand-deep);font-weight:700;font-size:13px;text-decoration:none}
-.cwa-divider{height:1px;background:var(--cwa-line);margin:16px 0}
-.cwa-fade{opacity:0;transform:translateY(14px);animation:cwaRise .6s cubic-bezier(.2,.7,.3,1) forwards}
+
+/* ── MISC ── */
+.cwa-divider{height:1px;background:var(--cwa-line);margin:14px 0}
+
+/* ── ANIMATIONS ── */
+.cwa-fade{opacity:0;transform:translateY(12px);animation:cwaRise .6s cubic-bezier(.2,.7,.3,1) forwards}
 @keyframes cwaRise{to{opacity:1;transform:none}}
-.cwa-d1{animation-delay:.05s}.cwa-d2{animation-delay:.12s}.cwa-d3{animation-delay:.2s}.cwa-d4{animation-delay:.28s}.cwa-d5{animation-delay:.36s}
+.cwa-d1{animation-delay:.05s}.cwa-d2{animation-delay:.12s}
+.cwa-d3{animation-delay:.2s}.cwa-d4{animation-delay:.28s}.cwa-d5{animation-delay:.36s}
+@media(prefers-reduced-motion:reduce){.cwa-fade{animation:none;opacity:1;transform:none}}
 `;

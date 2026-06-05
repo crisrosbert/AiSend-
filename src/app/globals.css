@@ -180,3 +180,169 @@ button.bg-violet-500 {
 /* Animations */
 @keyframes fade-in { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:none; } }
 .animate-fade-in { animation: fade-in .3s ease forwards; }
+
+/* ============================================================
+   DESIGN SYSTEM UPGRADE — v2 (professional / AiSensy-grade)
+   Appended below the legacy remaps so it wins by source order
+   without removing anything that already works. Refines the
+   palette, depth, typography, and mobile behavior.
+   ============================================================ */
+
+:root {
+  /* AiSensy-grade green: a confident forest/emerald, not neon.
+     Primary actions use --brand; deep variant for hover/press. */
+  --brand:        #1aa260;   /* primary */
+  --brand-deep:   #14834e;   /* hover */
+  --brand-press:  #0f6b40;   /* active */
+  --brand-50:     #effaf4;
+  --brand-100:    #d6f1e2;
+  --brand-200:    #aee3c6;
+  --ink:          #0b231a;   /* near-black green text */
+  --ink-soft:     #46584f;   /* secondary text */
+  --ink-muted:    #7c8a83;   /* tertiary / placeholder */
+  --line:         #e6ece9;   /* hairline borders */
+  --surface:      #ffffff;   /* cards */
+  --canvas:       #f5f8f6;   /* app background */
+
+  /* Elevation tokens — soft, layered, never harsh */
+  --shadow-xs: 0 1px 2px rgba(11,35,26,.05);
+  --shadow-sm: 0 1px 3px rgba(11,35,26,.06), 0 1px 2px rgba(11,35,26,.04);
+  --shadow-md: 0 4px 12px rgba(11,35,26,.07), 0 2px 4px rgba(11,35,26,.04);
+  --shadow-lg: 0 12px 32px rgba(11,35,26,.10), 0 4px 8px rgba(11,35,26,.05);
+  --shadow-brand: 0 8px 20px rgba(26,162,96,.22);
+}
+
+/* App canvas + base type rhythm */
+body { background: var(--canvas); color: var(--ink); letter-spacing: -0.005em; }
+
+/* ---- Brand remap to the refined green (overrides the neon emerald) ---- */
+.bg-violet-500,
+.bg-emerald-500 { background-color: var(--brand) !important; }
+.bg-violet-600,
+.bg-emerald-600 { background-color: var(--brand-deep) !important; }
+.hover\:bg-violet-600:hover,
+.hover\:bg-emerald-600:hover { background-color: var(--brand-deep) !important; }
+.hover\:bg-violet-500:hover,
+.hover\:bg-emerald-500:hover { background-color: var(--brand) !important; }
+.text-violet-500,
+.text-violet-400,
+.text-emerald-500,
+.text-emerald-600 { color: var(--brand-deep) !important; }
+.border-emerald-500,
+.border-violet-500 { border-color: var(--brand) !important; }
+.ring-emerald-500 { --tw-ring-color: var(--brand) !important; }
+
+/* ---- Cards: soft elevation + hairline, gentle hover lift ---- */
+.bg-white {
+  background-color: var(--surface) !important;
+}
+[class*="rounded-"][class*="border"].bg-white,
+.card, [data-slot="card"] {
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+[data-slot="card"]:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* ---- Primary buttons: weighty, confident, tactile ---- */
+button.bg-violet-600, button.bg-violet-500,
+button.bg-emerald-600, button.bg-emerald-500,
+.btn-primary {
+  background: linear-gradient(180deg, var(--brand) 0%, var(--brand-deep) 100%) !important;
+  color: #fff !important;
+  box-shadow: var(--shadow-brand) !important;
+  font-weight: 600;
+  transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
+}
+button.bg-violet-600:hover, button.bg-violet-500:hover,
+button.bg-emerald-600:hover, button.bg-emerald-500:hover {
+  filter: brightness(1.03);
+  box-shadow: 0 10px 26px rgba(26,162,96,.30) !important;
+}
+button.bg-violet-600:active, button.bg-violet-500:active,
+button.bg-emerald-600:active, button.bg-emerald-500:active {
+  transform: translateY(1px);
+  filter: brightness(.97);
+}
+
+/* ---- Inputs: clean, calm focus ring in brand green ---- */
+input, textarea, select {
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px rgba(26,162,96,.15) !important;
+  outline: none !important;
+}
+:focus-visible { outline-color: var(--brand); }
+::selection { background: rgba(26,162,96,.18); color: var(--brand-press); }
+
+/* ---- Typography scale: tighter, more editorial headings ---- */
+h1 { font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem); font-weight: 700; }
+h2 { font-weight: 700; }
+h1, h2, h3, h4, .font-display { letter-spacing: -0.022em; color: var(--ink); }
+
+/* ---- Sidebar: subtle depth, active item gets a brand rail ---- */
+aside[aria-label="Primary"] {
+  background: var(--surface) !important;
+  border-right: 1px solid var(--line) !important;
+  box-shadow: var(--shadow-xs);
+}
+
+/* ---- Badges/pills get rounded, soft-tinted look (status colors) ---- */
+[class*="rounded-full"][class*="border"] {
+  font-weight: 600;
+}
+
+/* ---- Scrollbar refinement ---- */
+::-webkit-scrollbar-thumb { background: #d3ddd7; }
+::-webkit-scrollbar-thumb:hover { background: #b9c7c0; }
+
+/* ============================================================
+   MOBILE RESPONSIVENESS HARDENING
+   Generic safeguards so dense desktop layouts don't overflow
+   on phones. Page components keep their own responsive classes;
+   these are the safety net.
+   ============================================================ */
+
+@media (max-width: 640px) {
+  /* Prevent horizontal scroll from wide fixed-width children */
+  html, body { overflow-x: hidden; }
+
+  /* Tables become horizontally scrollable instead of breaking layout */
+  table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Multi-column grids collapse to single column on phones unless a
+     component explicitly opts into a mobile grid via sm:/grid-cols. */
+  .grid.grid-cols-2:not([class*="sm:"]):not([class*="xs:"]),
+  .grid.grid-cols-3:not([class*="sm:"]),
+  .grid.grid-cols-4:not([class*="sm:"]) {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Dialogs/sheets: full-width with comfortable insets on phones */
+  [role="dialog"] {
+    max-width: calc(100vw - 1.5rem) !important;
+  }
+
+  /* Tighter heading sizes on phones */
+  h1 { font-size: 1.375rem; }
+
+  /* Big stat numbers shouldn't overflow cards */
+  .text-3xl, .text-4xl { font-size: 1.5rem !important; }
+}
+
+/* Tap targets: ensure buttons/links are finger-friendly on touch */
+@media (pointer: coarse) {
+  button, a[role="button"], .btn { min-height: 40px; }
+}
+
+/* Respect reduced-motion preferences (accessibility / pro polish) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+  }
+}

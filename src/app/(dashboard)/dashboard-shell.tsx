@@ -35,7 +35,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-[#f4f7f5]">
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Main area — on desktop, sidebar is only 72px wide so we get full content space */}
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
       </div>

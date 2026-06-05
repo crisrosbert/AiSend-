@@ -7,7 +7,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { loadMetrics, loadActivity, loadConversationsSeries } from "@/lib/dashboard/queries";
 import type { MetricsBundle, ActivityItem, ConversationsSeriesPoint } from "@/lib/dashboard/types";
 import { WalletBalanceCard } from "@/components/dashboard/wallet-balance-card";
-import { DashboardErrorBoundary } from "@/components/dashboard/dashboard-error-boundary";
 import {
   MessageSquare, Users, Send, TrendingUp, TrendingDown, Zap, QrCode,
   Crown, CheckCircle2, AlertCircle, Sparkles, ArrowRight, ArrowUpRight,
@@ -43,14 +42,6 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
 }
 
 export default function DashboardPage() {
-  return (
-    <DashboardErrorBoundary>
-      <DashboardPageInner />
-    </DashboardErrorBoundary>
-  );
-}
-
-function DashboardPageInner() {
   const { profile } = useAuth();
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null);
   const [activity, setActivity] = useState<ActivityItem[] | null>(null);

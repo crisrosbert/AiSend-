@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Settings, MessageSquare, Tag, User } from 'lucide-react';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
+import { BusinessProfile } from '@/components/settings/business-profile';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { TagManager } from '@/components/settings/tag-manager';
 import { ProfileForm } from '@/components/settings/profile-form';
@@ -79,7 +80,10 @@ export default function SettingsPage() {
       </div>
 
       <div className={tab === 'whatsapp' ? 'block' : 'hidden'}>
-        <WhatsAppConfig />
+        <div className="space-y-6">
+          <WhatsAppConfig />
+          <BusinessProfile />
+        </div>
       </div>
 
       <div className={tab === 'templates' ? 'block' : 'hidden'}>

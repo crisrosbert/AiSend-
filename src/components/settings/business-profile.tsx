@@ -204,7 +204,7 @@ export function BusinessProfile() {
           </div>
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5 text-slate-700"><TagIcon className="size-3.5" />Category</Label>
-            <Select value={form.vertical} onValueChange={(v) => setForm({ ...form, vertical: v })}>
+            <Select value={form.vertical} onValueChange={(v) => setForm({ ...form, vertical: v ?? 'UNDEFINED' })}>
               <SelectTrigger className="w-full bg-white border-[#e7ece9] text-[#0c1f17]">
                 <SelectValue />
               </SelectTrigger>

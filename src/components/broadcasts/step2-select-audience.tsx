@@ -89,6 +89,98 @@ export function Step2SelectAudience({
   const [loadingFields, setLoadingFields] = useState(false);
   const [estimatedCount, setEstimatedCount] = useState<number | null>(null);
   const [loadingCount, setLoadingCount] = useState(false);
+  const [csvFileName, setCsvFileName] = useState<string | null>(null);
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const [csvSkipped, setCsvSkipped] = useState(0);
+
+  // Parse an uploaded CSV/TSV into { phone, name } rows.
+  // - Accepts comma, semicolon, or tab delimiters.
+  // - Detects a header row and locates phone/name columns by name;
+  //   falls back to first column = phone, second = name.
+  // - Normalizes phones to digits (keeps a leading +), de-dupes, and
+  //   reports how many rows were skipped as invalid.
+  function handleCsvFile(file: File) {
+    setCsvError(null);
+    setCsvSkipped(0);
+    setCsvFileName(file.name);
+
+    const reader = new FileReader();
+    reader.onerror = () => setCsvError('Could not read that file. Try re-saving it as CSV.');
+    reader.onload = () => {
+      try {
+        const text = String(reader.result ?? '');
+        const lines = text
+          .split(/\r\n|\r|\n/)
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0);
+
+        if (lines.length === 0) {
+          setCsvError('That file looks empty.');
+          onUpdate({ ...audience, csvContacts: [] });
+          return;
+        }
+
+        const delimiter = lines[0].includes('\t')
+          ? '\t'
+          : lines[0].includes(';')
+          ? ';'
+          : ',';
+
+        const splitRow = (row: string) =>
+          row.split(delimiter).map((c) => c.replace(/^["']|["']$/g, '').trim());
+
+        // Header detection: if the first row has no digits in any cell,
+        // treat it as a header and map columns by name.
+        const first = splitRow(lines[0]);
+        const headerLooksLikeData = first.some((c) => /\d/.test(c));
+        let phoneIdx = 0;
+        let nameIdx = 1;
+        let startRow = 0;
+
+        if (!headerLooksLikeData) {
+          startRow = 1;
+          const lower = first.map((c) => c.toLowerCase());
+          const findCol = (keys: string[]) =>
+            lower.findIndex((c) => keys.some((k) => c.includes(k)));
+          const p = findCol(['phone', 'mobile', 'number', 'whatsapp', 'contact']);
+          const n = findCol(['name', 'first', 'customer']);
+          if (p !== -1) phoneIdx = p;
+          if (n !== -1) nameIdx = n;
+        }
+
+        const seen = new Set<string>();
+        const contacts: { phone: string; name?: string }[] = [];
+        let skipped = 0;
+
+        for (let i = startRow; i < lines.length; i++) {
+          const cols = splitRow(lines[i]);
+          const rawPhone = cols[phoneIdx] ?? '';
+          // Keep a leading + then strip everything non-digit.
+          const hasPlus = rawPhone.trim().startsWith('+');
+          const digits = rawPhone.replace(/[^\d]/g, '');
+          if (digits.length < 8 || digits.length > 15) {
+            skipped++;
+            continue;
+          }
+          const phone = hasPlus ? `+${digits}` : digits;
+          if (seen.has(phone)) continue;
+          seen.add(phone);
+          const name = nameIdx >= 0 ? (cols[nameIdx] || '').trim() : '';
+          contacts.push(name ? { phone, name } : { phone });
+        }
+
+        setCsvSkipped(skipped);
+        if (contacts.length === 0) {
+          setCsvError('No valid phone numbers found. Check the column has 8–15 digit numbers.');
+        }
+        onUpdate({ ...audience, type: 'csv', csvContacts: contacts });
+      } catch {
+        setCsvError('Could not parse that file. Make sure it is a plain CSV.');
+        onUpdate({ ...audience, csvContacts: [] });
+      }
+    };
+    reader.readAsText(file);
+  }
 
   // Tags are used both by the primary "Filter by Tags" audience type
   // AND by the exclude-list below — so always load once on mount.
@@ -384,6 +476,81 @@ export function Step2SelectAudience({
                 placeholder="Value"
                 className="h-9 rounded-lg border border-slate-700 bg-slate-800 px-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
               />
+            </div>
+          )}
+        </div>
+      )}
+
+      {audience.type === 'csv' && (
+        <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <p className="text-sm font-medium text-white">Upload contacts (CSV)</p>
+          <p className="text-xs text-slate-400">
+            CSV with a phone column (with country code, e.g. 919876543210). An
+            optional name column is used for personalization. First row can be a
+            header.
+          </p>
+
+          <label
+            htmlFor="csv-upload"
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 bg-slate-800/40 px-4 py-6 text-center transition-colors hover:border-violet-500/60"
+          >
+            <Upload className="h-6 w-6 text-slate-400" />
+            <span className="text-sm text-slate-300">
+              {csvFileName ? 'Choose a different file' : 'Click to upload a CSV file'}
+            </span>
+            <span className="text-xs text-slate-500">.csv or .txt · comma, semicolon, or tab</span>
+            <input
+              id="csv-upload"
+              type="file"
+              accept=".csv,.txt,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleCsvFile(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
+
+          {csvFileName && (
+            <div className="rounded-lg border border-slate-800 bg-slate-800/40 px-3 py-2 text-xs">
+              <p className="text-slate-300">
+                <span className="font-medium text-white">{csvFileName}</span>
+              </p>
+              {audience.csvContacts && audience.csvContacts.length > 0 && (
+                <p className="mt-1 text-emerald-400">
+                  {audience.csvContacts.length.toLocaleString()} valid contact
+                  {audience.csvContacts.length === 1 ? '' : 's'} loaded
+                  {csvSkipped > 0 && (
+                    <span className="text-slate-500"> · {csvSkipped} row{csvSkipped === 1 ? '' : 's'} skipped</span>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+
+          {csvError && (
+            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              {csvError}
+            </p>
+          )}
+
+          {audience.csvContacts && audience.csvContacts.length > 0 && (
+            <div className="rounded-lg border border-slate-800 bg-slate-800/30 p-2">
+              <p className="mb-1 px-1 text-[11px] uppercase tracking-wide text-slate-500">Preview</p>
+              <div className="max-h-32 overflow-y-auto">
+                {audience.csvContacts.slice(0, 5).map((c, i) => (
+                  <div key={i} className="flex justify-between px-1 py-0.5 text-xs text-slate-300">
+                    <span>{c.phone}</span>
+                    <span className="text-slate-500">{c.name || '—'}</span>
+                  </div>
+                ))}
+                {audience.csvContacts.length > 5 && (
+                  <p className="px-1 pt-1 text-[11px] text-slate-500">
+                    + {(audience.csvContacts.length - 5).toLocaleString()} more
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </div>

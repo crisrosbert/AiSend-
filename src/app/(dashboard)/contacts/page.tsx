@@ -1,529 +1,320 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { toast } from 'sonner';
-import type { Contact, Tag, ContactTag } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useCallback, useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import { loadMetrics, loadActivity } from "@/lib/dashboard/queries";
+import type { MetricsBundle, ActivityItem } from "@/lib/dashboard/types";
+import { WalletBalanceCard } from "@/components/dashboard/wallet-balance-card";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  Search, Plus, Upload, MoreHorizontal, Pencil, Trash2, Loader2,
-  Users, ChevronLeft, ChevronRight, Phone, Mail, Building2,
-  MessageSquare, Send, Filter, Download, UserCheck,
-} from 'lucide-react';
-import { ContactForm } from '@/components/contacts/contact-form';
-import { ContactDetailView } from '@/components/contacts/contact-detail-view';
-import { ImportModal } from '@/components/contacts/import-modal';
+  MessageSquare, Users, Send, TrendingUp, Zap, QrCode,
+  Crown, CheckCircle2, AlertCircle, Sparkles, ArrowRight,
+  BarChart3, Radio,
+} from "lucide-react";
 
-const PAGE_SIZE = 25;
-
-interface ContactWithTags extends Contact {
-  tags?: Tag[];
-}
-
-export default function ContactsPage() {
-  const supabase = createClient();
-
-  const [contacts, setContacts] = useState<ContactWithTags[]>([]);
+export default function DashboardPage() {
+  const { profile } = useAuth();
+  const [metrics, setMetrics] = useState<MetricsBundle | null>(null);
+  const [activity, setActivity] = useState<ActivityItem[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [editContact, setEditContact] = useState<Contact | null>(null);
-  const [editContactTags, setEditContactTags] = useState<ContactTag[]>([]);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailContactId, setDetailContactId] = useState<string | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const loadAll = useCallback(() => {
+    const db = createClient();
+    void loadMetrics(db).then(setMetrics).catch(console.error).finally(() => setLoading(false));
+    void loadActivity(db, 5).then(setActivity).catch(console.error);
+  }, []);
 
-  const [tagsMap, setTagsMap] = useState<Record<string, Tag>>({});
-  const [allTags, setAllTags] = useState<Tag[]>([]);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
-  const fetchTags = useCallback(async () => {
-    const { data } = await supabase.from('tags').select('*');
-    if (data) {
-      const map: Record<string, Tag> = {};
-      data.forEach((t) => { map[t.id] = t; });
-      setTagsMap(map);
-      setAllTags(data);
-    }
-  }, [supabase]);
-
-  const fetchContacts = useCallback(async () => {
-    setLoading(true);
-    const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
-    let query = supabase
-      .from('contacts')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
-
-    if (search.trim()) {
-      const term = `%${search.trim()}%`;
-      query = query.or(`name.ilike.${term},phone.ilike.${term},email.ilike.${term}`);
-    }
-
-    const { data, count, error } = await query;
-    if (error) { toast.error('Failed to load contacts'); setLoading(false); return; }
-
-    setTotalCount(count ?? 0);
-    if (!data || data.length === 0) { setContacts([]); setLoading(false); return; }
-
-    const contactIds = data.map((c) => c.id);
-    const { data: contactTags } = await supabase
-      .from('contact_tags').select('contact_id, tag_id').in('contact_id', contactIds);
-
-    const tagsByContact: Record<string, string[]> = {};
-    contactTags?.forEach((ct) => {
-      if (!tagsByContact[ct.contact_id]) tagsByContact[ct.contact_id] = [];
-      tagsByContact[ct.contact_id].push(ct.tag_id);
-    });
-
-    const enriched: ContactWithTags[] = data.map((c) => ({
-      ...c,
-      tags: (tagsByContact[c.id] ?? []).map((tid) => tagsMap[tid]).filter(Boolean),
-    }));
-
-    setContacts(enriched);
-    setLoading(false);
-  }, [supabase, page, search, tagsMap]);
-
-  useEffect(() => { fetchTags(); }, [fetchTags]);
-  useEffect(() => { fetchContacts(); }, [fetchContacts]);
-
-  // Filter contacts client-side by tag (in addition to server search)
-  const displayContacts = tagFilter
-    ? contacts.filter((c) => c.tags?.some((t) => t.id === tagFilter))
-    : contacts;
-
-  function openAddForm() {
-    setEditContact(null); setEditContactTags([]); setFormOpen(true);
-  }
-
-  async function openEditForm(contact: Contact) {
-    const { data: ct } = await supabase
-      .from('contact_tags').select('*').eq('contact_id', contact.id);
-    setEditContact(contact); setEditContactTags(ct ?? []); setFormOpen(true);
-  }
-
-  function openDetail(contactId: string) {
-    setDetailContactId(contactId); setDetailOpen(true);
-  }
-
-  function confirmDelete(contact: Contact) {
-    setDeleteTarget(contact); setDeleteConfirmOpen(true);
-  }
-
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    const { error } = await supabase.from('contacts').delete().eq('id', deleteTarget.id);
-    setDeleting(false);
-    if (error) { toast.error('Failed to delete contact'); return; }
-    toast.success('Contact deleted');
-    setDeleteConfirmOpen(false); setDeleteTarget(null); fetchContacts();
-  }
-
-  function toggleSelect(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    if (selectedIds.size === displayContacts.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(displayContacts.map((c) => c.id)));
-  }
-
-  function clearSelection() { setSelectedIds(new Set()); }
-
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  const hasPrev = page > 0;
-  const hasNext = (page + 1) * PAGE_SIZE < totalCount;
-  const allSelected = displayContacts.length > 0 && selectedIds.size === displayContacts.length;
-
-  // Real metrics from the data
-  const taggedCount = contacts.filter((c) => c.tags && c.tags.length > 0).length;
-  const withEmailCount = contacts.filter((c) => c.email).length;
+  const businessName = profile?.business_name || "Your Business";
+  const remainingQuota = metrics?.messagesSentToday
+    ? 250 - (metrics.messagesSentToday.current || 0)
+    : 250;
 
   return (
-    <div className="space-y-6">
-      {/* Header — clean and distinct */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="cwa-dash">
+      <style>{cssStyles}</style>
+
+      {/* Top banner */}
+      <div className="cwa-banner cwa-fade cwa-d1">
+        <span className="cwa-banner-emoji"><Sparkles size={30} /></span>
         <div>
-          <h1 className="text-2xl font-bold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>
-            Contacts
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Your customer list — segment, message, and grow.
-          </p>
+          <h3>You&apos;re on the new marketing API <span className="cwa-tag-up">PRO</span></h3>
+          <p>30% better delivery and deeper insights with the latest WhatsApp marketing APIs.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)}
-            className="border-[#e7ece9] bg-white text-slate-600 hover:bg-slate-50">
-            <Upload className="size-4" /> Import CSV
-          </Button>
-          <Button onClick={openAddForm} className="bg-emerald-500 hover:bg-emerald-600 text-white">
-            <Plus className="size-4" /> Add Contact
-          </Button>
-        </div>
+        <button className="cwa-btn cwa-btn-white"><Zap size={15} /> Upgrade for Free</button>
       </div>
 
-      {/* Stat strip — small, glanceable metrics */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard icon={<Users className="size-4" />} label="Total Contacts" value={totalCount} accent="emerald" />
-        <StatCard icon={<UserCheck className="size-4" />} label="Tagged" value={taggedCount} accent="blue" />
-        <StatCard icon={<Mail className="size-4" />} label="With Email" value={withEmailCount} accent="amber" />
-        <StatCard icon={<MessageSquare className="size-4" />} label="On This Page" value={displayContacts.length} accent="purple" />
-      </div>
-
-      {/* Search + tag filter row */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Search by name, phone, or email..."
-            className="border-[#e7ece9] bg-white pl-10 text-[#0c1f17] placeholder:text-slate-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-          />
-        </div>
-        {/* Tag chips */}
-        {allTags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Filter className="size-4 text-slate-400" />
-            <button
-              onClick={() => setTagFilter(null)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                tagFilter === null ? 'bg-emerald-500 text-white' : 'bg-white border border-[#e7ece9] text-slate-500 hover:border-emerald-400'
-              }`}
-            >
-              All
-            </button>
-            {allTags.slice(0, 5).map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTagFilter(tagFilter === t.id ? null : t.id)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors border ${
-                  tagFilter === t.id ? 'border-transparent text-white' : 'border-[#e7ece9] bg-white text-slate-500 hover:border-emerald-400'
-                }`}
-                style={tagFilter === t.id ? { backgroundColor: t.color } : {}}
-              >
-                {t.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Bulk-action bar (appears when contacts selected) */}
-      {selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <div className="flex items-center gap-3 text-sm font-semibold text-emerald-800">
-            <span className="flex size-6 items-center justify-center rounded-full bg-emerald-500 text-white text-xs">
-              {selectedIds.size}
-            </span>
-            {selectedIds.size === 1 ? 'contact selected' : 'contacts selected'}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white">
-              <Send className="size-3.5" /> Broadcast
-            </Button>
-            <Button size="sm" variant="outline" className="border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100">
-              <Download className="size-3.5" /> Export
-            </Button>
-            <Button size="sm" variant="ghost" onClick={clearSelection} className="text-slate-500 hover:text-slate-700">
-              Clear
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Card-row layout (not a dense table) */}
-      <div className="overflow-hidden rounded-2xl border border-[#e7ece9] bg-white shadow-sm">
-        {/* Column headers */}
-        <div className="grid grid-cols-[40px_1.5fr_1fr_1.4fr_1fr_120px_40px] gap-3 border-b border-[#e7ece9] bg-[#f8faf9] px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-          <div>
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={toggleSelectAll}
-              className="size-4 accent-emerald-500 cursor-pointer"
-            />
-          </div>
-          <div>Name</div>
-          <div>Phone</div>
-          <div className="hidden md:block">Email</div>
-          <div className="hidden md:block">Tags</div>
-          <div className="hidden lg:block">Added</div>
-          <div></div>
-        </div>
-
-        {/* Rows */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="size-6 animate-spin text-emerald-500" />
-            <p className="mt-2 text-sm text-slate-400">Loading contacts...</p>
-          </div>
-        ) : displayContacts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-500">
-              <Users className="size-7" />
+      <div className="cwa-grid">
+        {/* LEFT COLUMN */}
+        <div className="cwa-left">
+          {/* Stats */}
+          <div className="cwa-card cwa-stats cwa-fade cwa-d2">
+            <div className="cwa-stat">
+              <span className="cwa-stat-label">API Status</span>
+              <span className="cwa-badge cwa-badge-green">● LIVE</span>
             </div>
-            <p className="text-sm font-semibold text-slate-700">
-              {search || tagFilter ? 'No contacts match your filters' : 'No contacts yet'}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              {search || tagFilter ? 'Try clearing the filters.' : 'Add your first contact or import a CSV.'}
-            </p>
-            {!search && !tagFilter && (
-              <div className="mt-4 flex gap-2">
-                <Button onClick={openAddForm} className="bg-emerald-500 hover:bg-emerald-600 text-white">
-                  <Plus className="size-4" /> Add Contact
-                </Button>
-                <Button variant="outline" onClick={() => setImportOpen(true)}
-                  className="border-[#e7ece9] text-slate-600 hover:bg-slate-50">
-                  <Upload className="size-4" /> Import CSV
-                </Button>
-              </div>
-            )}
+            <div className="cwa-stat">
+              <span className="cwa-stat-label">Quality Rating</span>
+              <span className="cwa-badge cwa-badge-green">HIGH</span>
+            </div>
+            <div className="cwa-stat">
+              <span className="cwa-stat-label">Remaining Quota</span>
+              <span className="cwa-stat-big">{loading ? "—" : remainingQuota}</span>
+            </div>
           </div>
-        ) : (
-          <div>
-            {displayContacts.map((contact) => {
-              const selected = selectedIds.has(contact.id);
-              const initial = (contact.name || contact.phone || '?').charAt(0).toUpperCase();
-              return (
-                <div
-                  key={contact.id}
-                  onClick={() => openDetail(contact.id)}
-                  className={`group grid grid-cols-[40px_1.5fr_1fr_1.4fr_1fr_120px_40px] gap-3 items-center border-b border-[#e7ece9] px-5 py-3 cursor-pointer transition-colors last:border-b-0 ${
-                    selected ? 'bg-emerald-50/60' : 'hover:bg-[#f8faf9]'
-                  }`}
-                >
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() => toggleSelect(contact.id)}
-                      className="size-4 accent-emerald-500 cursor-pointer"
-                    />
-                  </div>
-                  {/* Name + avatar */}
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-200 to-emerald-500 text-white font-bold text-sm shrink-0">
-                      {initial}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-[#0c1f17]">
-                        {contact.name || <span className="italic text-slate-400">Unnamed</span>}
-                      </div>
-                      {contact.company && (
-                        <div className="truncate text-[11px] text-slate-400 flex items-center gap-1">
-                          <Building2 className="size-3" /> {contact.company}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {/* Phone */}
-                  <div className="flex items-center gap-1.5 text-xs text-slate-600 font-mono min-w-0">
-                    <Phone className="size-3 shrink-0 text-emerald-500" />
-                    <span className="truncate">{contact.phone}</span>
-                  </div>
-                  {/* Email */}
-                  <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 min-w-0">
-                    {contact.email ? (
-                      <>
-                        <Mail className="size-3 shrink-0 text-slate-400" />
-                        <span className="truncate">{contact.email}</span>
-                      </>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )}
-                  </div>
-                  {/* Tags */}
-                  <div className="hidden md:flex flex-wrap gap-1 min-w-0">
-                    {contact.tags && contact.tags.length > 0 ? (
-                      <>
-                        {contact.tags.slice(0, 2).map((tag) => (
-                          <span
-                            key={tag.id}
-                            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border"
-                            style={{ backgroundColor: tag.color + '15', color: tag.color, borderColor: tag.color + '40' }}
-                          >
-                            {tag.name}
-                          </span>
-                        ))}
-                        {contact.tags.length > 2 && (
-                          <span className="text-[10px] font-semibold text-slate-400">
-                            +{contact.tags.length - 2}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-slate-300 text-xs">—</span>
-                    )}
-                  </div>
-                  {/* Added date */}
-                  <div className="hidden lg:block text-xs text-slate-400">
-                    {new Date(contact.created_at).toLocaleDateString('en-IN', {
-                      month: 'short', day: 'numeric', year: 'numeric',
-                    })}
-                  </div>
-                  {/* Actions */}
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button variant="ghost" size="icon-sm"
-                            className="text-slate-400 hover:bg-slate-100 hover:text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        }
-                      >
-                        <MoreHorizontal className="size-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-white border-[#e7ece9]">
-                        <DropdownMenuItem
-                          onClick={(e) => { e.stopPropagation(); openDetail(contact.id); }}
-                          className="text-slate-700 focus:bg-slate-100"
-                        >
-                          <MessageSquare className="size-4" /> View Chat
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={(e) => { e.stopPropagation(); openEditForm(contact); }}
-                          className="text-slate-700 focus:bg-slate-100"
-                        >
-                          <Pencil className="size-4" /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-[#e7ece9]" />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onClick={(e) => { e.stopPropagation(); confirmDelete(contact); }}
-                        >
-                          <Trash2 className="size-4" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-slate-500">
-            Showing <span className="font-semibold text-slate-700">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)}</span> of{' '}
-            <span className="font-semibold text-slate-700">{totalCount}</span>
-          </p>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon-sm" disabled={!hasPrev}
-              onClick={() => setPage((p) => p - 1)}
-              className="border-[#e7ece9] text-slate-500 hover:bg-slate-50 disabled:opacity-30">
-              <ChevronLeft className="size-4" />
-            </Button>
-            <span className="px-3 text-xs font-semibold text-slate-600">
-              Page {page + 1} of {totalPages}
-            </span>
-            <Button variant="outline" size="icon-sm" disabled={!hasNext}
-              onClick={() => setPage((p) => p + 1)}
-              className="border-[#e7ece9] text-slate-500 hover:bg-slate-50 disabled:opacity-30">
-              <ChevronRight className="size-4" />
-            </Button>
+          {/* Real metrics row */}
+          <div className="cwa-metrics cwa-fade cwa-d2">
+            <MetricMini icon={<MessageSquare size={16} />} label="Active Chats" value={metrics?.activeConversations.current ?? 0} loading={loading} accent="emerald" />
+            <MetricMini icon={<Users size={16} />} label="New Contacts" value={metrics?.newContactsToday.current ?? 0} loading={loading} accent="blue" />
+            <MetricMini icon={<Send size={16} />} label="Sent Today" value={metrics?.messagesSentToday.current ?? 0} loading={loading} accent="amber" />
+            <MetricMini icon={<TrendingUp size={16} />} label="Open Deals" value={metrics?.openDealsCount ?? 0} loading={loading} accent="purple" />
+          </div>
+
+          {/* Progress steps */}
+          <div className="cwa-card cwa-steps-card cwa-fade cwa-d3">
+            <div className="cwa-steps-head">
+              <Crown size={24} className="cwa-bag" />
+              <h3>Complete the steps &amp; win 200 Conversation Credits</h3>
+            </div>
+            <div className="cwa-steps">
+              <div className="cwa-track"><div className="cwa-track-fill" /></div>
+              <Step state="done" title="Get API Live" />
+              <Step state="pending" title="Business Verified" desc="FBM / KYC" />
+              <Step state="pending" title="Recharge Credits" />
+              <Step state="pending" title="Spend 500" />
+              <Step state="reward" title="Reward Won" />
+            </div>
+          </div>
+
+          {/* Setup task */}
+          <div className="cwa-card cwa-setup cwa-fade cwa-d4">
+            <div className="cwa-setup-row">
+              <h3>🟢 Setup WhatsApp Business Account</h3>
+              <span className="cwa-meta">3 steps left</span>
+            </div>
+            <span className="cwa-next-pill">NEXT</span>
+            <div className="cwa-task">
+              <div className="cwa-task-ic"><AlertCircle size={20} /></div>
+              <div>
+                <h4>Increase messaging limit &amp; get display name approved</h4>
+                <p className="cwa-task-desc">Complete KYC to boost your messaging limit to 2000 and get name approval.</p>
+                <ul className="cwa-task-list">
+                  <li>Legal / Trade name on GST and Business Manager should match</li>
+                  <li>Ensure you have an active website before applying for KYC</li>
+                  <li>Use director&apos;s ID listed on your GST document</li>
+                </ul>
+                <button className="cwa-btn cwa-btn-primary">Start KYC</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent activity */}
+          {activity && activity.length > 0 && (
+            <div className="cwa-card cwa-activity cwa-fade cwa-d5">
+              <h4 style={{ marginBottom: 14 }}>Recent Activity</h4>
+              {activity.map((a) => (
+                <div key={a.id} className="cwa-activity-row">
+                  <div className="cwa-activity-ic"><Users size={15} /></div>
+                  <span className="cwa-activity-text">{a.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT COLUMN */}
+        <div className="cwa-right">
+          {/* QR card */}
+          <div className="cwa-card cwa-qr-wrap cwa-fade cwa-d2">
+            <h4 style={{ alignSelf: "flex-start" }}>Scan to get the mobile app</h4>
+            <div className="cwa-qr"><QrCode size={70} strokeWidth={1} /></div>
+            <div className="cwa-store">
+              <span>Google Play</span><span>App Store</span>
+            </div>
+            <div className="cwa-divider" style={{ width: "100%" }} />
+            <div style={{ alignSelf: "flex-start", fontSize: 12, color: "var(--cwa-muted)", fontWeight: 700, letterSpacing: ".04em" }}>
+              KEY FEATURES
+            </div>
+            <div className="cwa-feat">
+              <div><Radio size={13} /> Real-time alerts</div>
+              <div><MessageSquare size={13} /> Live Chat</div>
+              <div><BarChart3 size={13} /> Ads Management</div>
+              <div><TrendingUp size={13} /> Analytics</div>
+            </div>
+          </div>
+
+          {/* Profile / number */}
+          <div className="cwa-card cwa-profile cwa-fade cwa-d3">
+            <div className="cwa-profile-pic">{businessName.charAt(0).toUpperCase()}</div>
+            <div>
+              <div className="cwa-ptag">{businessName.toUpperCase()}</div>
+              <div className="cwa-num">{profile?.slug ? `+91 ••••• •••••` : "Not connected"}</div>
+              <small>wa.clickstream.com/{profile?.slug || "yourbiz"}</small>
+            </div>
+          </div>
+
+          {/* REAL wallet balance card — replaces hardcoded ₹50 */}
+          <div className="cwa-fade cwa-d4">
+            <WalletBalanceCard />
+          </div>
+
+          {/* Link card */}
+          <div className="cwa-card cwa-rc cwa-fade cwa-d5">
+            <h4>Customize WhatsApp Link</h4>
+            <p>Create shareable links &amp; QR codes for your WhatsApp business number.</p>
+            <div style={{ marginTop: 14 }}>
+              <a className="cwa-link" href="#">Create link <ArrowRight size={13} style={{ verticalAlign: -2 }} /></a>
+            </div>
           </div>
         </div>
-      )}
-
-      {/* Existing dialogs — unchanged */}
-      <ContactForm
-        open={formOpen} onOpenChange={setFormOpen}
-        contact={editContact} contactTags={editContactTags}
-        onSaved={() => { fetchContacts(); fetchTags(); }}
-      />
-      <ContactDetailView
-        open={detailOpen} onOpenChange={setDetailOpen}
-        contactId={detailContactId} onUpdated={fetchContacts}
-      />
-      <ImportModal
-        open={importOpen} onOpenChange={setImportOpen}
-        onImported={fetchContacts}
-      />
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="bg-white border-[#e7ece9] sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-[#0c1f17]">Delete Contact</DialogTitle>
-            <DialogDescription className="text-slate-500">
-              Are you sure you want to delete{' '}
-              <span className="font-semibold text-[#0c1f17]">
-                {deleteTarget?.name || deleteTarget?.phone}
-              </span>
-              ? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}
-              className="border-[#e7ece9] text-slate-600 hover:bg-slate-50">
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting && <Loader2 className="size-4 animate-spin" />}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </div>
     </div>
   );
 }
 
-function StatCard({ icon, label, value, accent }: {
-  icon: React.ReactNode; label: string; value: number;
-  accent: 'emerald' | 'blue' | 'amber' | 'purple';
+function MetricMini({ icon, label, value, loading, accent }: {
+  icon: React.ReactNode; label: string; value: number; loading: boolean;
+  accent?: "emerald" | "blue" | "amber" | "purple";
 }) {
-  const styles = {
-    emerald: 'bg-emerald-50 text-emerald-600',
-    blue: 'bg-blue-50 text-blue-600',
-    amber: 'bg-amber-50 text-amber-600',
-    purple: 'bg-purple-50 text-purple-600',
-  };
   return (
-    <div className="rounded-xl border border-[#e7ece9] bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className={`flex size-8 items-center justify-center rounded-lg ${styles[accent]}`}>
-          {icon}
-        </span>
+    <div className={`cwa-card cwa-metric-mini cwa-mm-${accent ?? "emerald"}`}>
+      <div className="cwa-metric-icon">{icon}</div>
+      <div>
+        <div className="cwa-metric-value">{loading ? "—" : value}</div>
+        <div className="cwa-metric-label">{label}</div>
       </div>
-      <div className="mt-3 text-2xl font-extrabold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>
-        {value.toLocaleString('en-IN')}
-      </div>
-      <div className="mt-0.5 text-xs font-medium text-slate-500">{label}</div>
     </div>
   );
 }
+
+function Step({ state, title, desc }: { state: "done" | "pending" | "reward"; title: string; desc?: string }) {
+  return (
+    <div className={`cwa-step cwa-step-${state}`}>
+      <div className="cwa-step-circle">
+        {state === "done" ? <CheckCircle2 size={16} /> : state === "reward" ? <Crown size={16} /> : "!"}
+      </div>
+      <div className="cwa-step-title">{title}</div>
+      {state !== "reward" && (
+        <div className="cwa-step-state" style={{ color: state === "done" ? "#34c77b" : "#e6a817" }}>
+          {state === "done" ? "DONE" : "PENDING"}
+        </div>
+      )}
+      {desc && <div className="cwa-step-desc">{desc}</div>}
+    </div>
+  );
+}
+
+const cssStyles = `
+.cwa-dash{--cwa-brand:#10b981;--cwa-brand-deep:#059669;--cwa-brand-50:#ecfdf5;--cwa-brand-100:#d1fae5;--cwa-ink:#0c1f17;--cwa-muted:#5b6b63;--cwa-line:#e7ece9;--cwa-card:#ffffff;--cwa-gold:#e6a817;--cwa-r:16px;--cwa-shadow:0 1px 2px rgba(12,31,23,.04),0 8px 24px rgba(12,31,23,.06);font-family:"Plus Jakarta Sans",system-ui,sans-serif;padding:24px;color:var(--cwa-ink)}
+.cwa-dash h1,.cwa-dash h2,.cwa-dash h3,.cwa-dash h4{font-family:"Sora","Plus Jakarta Sans",sans-serif;letter-spacing:-.02em}
+.cwa-grid{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start;margin-top:22px}
+@media(max-width:1100px){.cwa-grid{grid-template-columns:1fr}}
+.cwa-left,.cwa-right{display:flex;flex-direction:column;gap:22px}
+.cwa-card{background:var(--cwa-card);border:1px solid var(--cwa-line);border-radius:var(--cwa-r);box-shadow:var(--cwa-shadow)}
+.cwa-banner{border-radius:var(--cwa-r);padding:22px 26px;color:#fff;background:radial-gradient(120% 160% at 0% 0%,#13d188 0%,var(--cwa-brand-deep) 55%,#065f46 100%);display:flex;align-items:center;gap:20px;box-shadow:var(--cwa-shadow);overflow:hidden;position:relative}
+.cwa-banner::after{content:"";position:absolute;right:-40px;top:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.07)}
+.cwa-banner-emoji{display:grid;place-items:center}
+.cwa-banner h3{font-size:18px;margin-bottom:4px}
+.cwa-banner p{font-size:13.5px;opacity:.9}
+.cwa-tag-up{background:rgba(255,255,255,.2);font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;letter-spacing:.06em;margin-left:8px;vertical-align:middle}
+.cwa-btn{border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:13.5px;padding:10px 18px;border-radius:11px;display:inline-flex;align-items:center;gap:8px;transition:.18s}
+.cwa-btn-primary{background:var(--cwa-brand);color:#fff;box-shadow:0 6px 18px rgba(16,185,129,.32)}
+.cwa-btn-primary:hover{background:var(--cwa-brand-deep);transform:translateY(-1px)}
+.cwa-btn-white{margin-left:auto;background:#fff;color:var(--cwa-brand-deep);white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.cwa-stats{display:grid;grid-template-columns:repeat(3,1fr);padding:22px 26px}
+.cwa-stat{display:flex;flex-direction:column;gap:8px;padding-right:22px}
+.cwa-stat+.cwa-stat{border-left:1px solid var(--cwa-line);padding-left:22px}
+.cwa-stat-label{font-size:12.5px;color:var(--cwa-muted);font-weight:600}
+.cwa-badge{font-size:11px;font-weight:800;padding:5px 11px;border-radius:8px;width:max-content}
+.cwa-badge-green{background:var(--cwa-brand-50);color:var(--cwa-brand-deep)}
+.cwa-stat-big{font-family:"Sora";font-size:26px;font-weight:700}
+.cwa-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.cwa-metric-mini{display:flex;align-items:center;gap:12px;padding:18px;position:relative;overflow:hidden;transition:transform .25s cubic-bezier(.2,.7,.3,1),box-shadow .25s,border-color .25s;cursor:default}
+.cwa-metric-mini::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:4px 0 0 4px;transition:width .25s}
+.cwa-metric-mini::after{content:"";position:absolute;right:-30px;top:-30px;width:90px;height:90px;border-radius:50%;opacity:.08;transition:opacity .25s,transform .3s}
+.cwa-metric-mini:hover{transform:translateY(-3px)}
+.cwa-metric-mini:hover::before{width:6px}
+.cwa-metric-mini:hover::after{opacity:.15;transform:scale(1.15)}
+.cwa-metric-icon{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;position:relative;z-index:1;transition:transform .25s}
+.cwa-metric-mini:hover .cwa-metric-icon{transform:scale(1.08) rotate(-4deg)}
+.cwa-metric-value{font-family:"Sora";font-size:22px;font-weight:700;line-height:1;position:relative;z-index:1}
+.cwa-metric-label{font-size:11.5px;color:var(--cwa-muted);font-weight:600;margin-top:4px;position:relative;z-index:1}
+
+/* Emerald — Active Chats */
+.cwa-mm-emerald::before{background:linear-gradient(180deg,#10b981,#059669)}
+.cwa-mm-emerald::after{background:radial-gradient(circle,#10b981,transparent)}
+.cwa-mm-emerald .cwa-metric-icon{background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#047857;box-shadow:0 4px 12px rgba(16,185,129,.18)}
+.cwa-mm-emerald:hover{box-shadow:0 1px 2px rgba(12,31,23,.04),0 16px 36px rgba(16,185,129,.18);border-color:#a7f3d0}
+
+/* Blue — New Contacts */
+.cwa-mm-blue::before{background:linear-gradient(180deg,#3b82f6,#1d4ed8)}
+.cwa-mm-blue::after{background:radial-gradient(circle,#3b82f6,transparent)}
+.cwa-mm-blue .cwa-metric-icon{background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#1d4ed8;box-shadow:0 4px 12px rgba(59,130,246,.18)}
+.cwa-mm-blue:hover{box-shadow:0 1px 2px rgba(12,31,23,.04),0 16px 36px rgba(59,130,246,.18);border-color:#bfdbfe}
+
+/* Amber — Sent Today */
+.cwa-mm-amber::before{background:linear-gradient(180deg,#f59e0b,#d97706)}
+.cwa-mm-amber::after{background:radial-gradient(circle,#f59e0b,transparent)}
+.cwa-mm-amber .cwa-metric-icon{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#b45309;box-shadow:0 4px 12px rgba(245,158,11,.2)}
+.cwa-mm-amber:hover{box-shadow:0 1px 2px rgba(12,31,23,.04),0 16px 36px rgba(245,158,11,.2);border-color:#fde68a}
+
+/* Purple — Open Deals */
+.cwa-mm-purple::before{background:linear-gradient(180deg,#8b5cf6,#6d28d9)}
+.cwa-mm-purple::after{background:radial-gradient(circle,#8b5cf6,transparent)}
+.cwa-mm-purple .cwa-metric-icon{background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#6d28d9;box-shadow:0 4px 12px rgba(139,92,246,.18)}
+.cwa-mm-purple:hover{box-shadow:0 1px 2px rgba(12,31,23,.04),0 16px 36px rgba(139,92,246,.18);border-color:#ddd6fe}
+.cwa-steps-card{padding:24px 26px;background:linear-gradient(135deg,#059669,#065f46);color:#fff;border:none}
+.cwa-steps-head{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.cwa-bag{flex-shrink:0}
+.cwa-steps-head h3{font-size:16px}
+.cwa-steps{display:flex;align-items:flex-start;justify-content:space-between;position:relative}
+.cwa-step{display:flex;flex-direction:column;align-items:center;text-align:center;flex:1;position:relative;z-index:2;gap:8px}
+.cwa-step-circle{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px}
+.cwa-step-done .cwa-step-circle{background:#34c77b;color:#06351f}
+.cwa-step-pending .cwa-step-circle{background:var(--cwa-gold);color:#3a2900}
+.cwa-step-reward .cwa-step-circle{background:rgba(255,255,255,.2);color:#fff}
+.cwa-step-title{font-size:11px;font-weight:700;opacity:.9}
+.cwa-step-state{font-size:9px;font-weight:800;letter-spacing:.08em;opacity:.85;margin-top:-3px}
+.cwa-step-desc{font-size:11px;opacity:.7;line-height:1.3;max-width:110px}
+.cwa-track{position:absolute;top:17px;left:8%;right:8%;height:3px;background:rgba(255,255,255,.18);z-index:1}
+.cwa-track-fill{height:100%;width:18%;background:#34c77b;border-radius:3px}
+.cwa-setup{padding:24px 26px}
+.cwa-setup-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.cwa-setup h3{font-size:17px}
+.cwa-meta{font-size:12.5px;color:var(--cwa-muted);font-weight:600}
+.cwa-next-pill{background:var(--cwa-brand-50);color:var(--cwa-brand-deep);font-size:10px;font-weight:800;padding:4px 10px;border-radius:7px;letter-spacing:.05em;width:max-content;margin:16px 0 8px;display:inline-block}
+.cwa-task{background:var(--cwa-brand-50);border-radius:13px;padding:18px 20px;display:flex;gap:14px}
+.cwa-task-ic{width:38px;height:38px;border-radius:11px;background:var(--cwa-gold);display:grid;place-items:center;flex-shrink:0;color:#3a2900}
+.cwa-task h4{font-size:15px;margin-bottom:8px}
+.cwa-task-desc{font-size:12.5px;color:var(--cwa-muted)}
+.cwa-task-list{margin:8px 0 0 2px;list-style:none;display:flex;flex-direction:column;gap:6px}
+.cwa-task-list li{font-size:12.5px;color:var(--cwa-muted);padding-left:16px;position:relative}
+.cwa-task-list li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:var(--cwa-brand)}
+.cwa-task .cwa-btn{margin-top:16px}
+.cwa-activity{padding:20px 24px}
+.cwa-activity-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--cwa-line)}
+.cwa-activity-row:last-child{border-bottom:none}
+.cwa-activity-ic{width:32px;height:32px;border-radius:9px;background:var(--cwa-brand-50);color:var(--cwa-brand-deep);display:grid;place-items:center;flex-shrink:0}
+.cwa-activity-text{font-size:13px;color:var(--cwa-ink)}
+.cwa-qr-wrap{display:grid;place-items:center;gap:14px;padding:22px}
+.cwa-qr{width:140px;height:140px;border-radius:12px;display:grid;place-items:center;background:var(--cwa-brand-50);color:var(--cwa-brand-deep);border:6px solid #fff;box-shadow:var(--cwa-shadow)}
+.cwa-store{display:flex;gap:8px}
+.cwa-store span{background:var(--cwa-ink);color:#fff;font-size:11px;font-weight:600;padding:8px 12px;border-radius:9px}
+.cwa-feat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;width:100%}
+.cwa-feat div{font-size:12px;color:var(--cwa-muted);display:flex;align-items:center;gap:7px}
+.cwa-profile{display:flex;align-items:center;gap:14px;padding:20px}
+.cwa-profile-pic{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6ee7b7,#10b981);flex-shrink:0;display:grid;place-items:center;color:#053b2a;font-weight:800;font-family:"Sora"}
+.cwa-num{font-family:"Sora";font-weight:700;font-size:17px}
+.cwa-ptag{font-size:10px;font-weight:800;color:var(--cwa-muted);letter-spacing:.06em}
+.cwa-profile small{color:var(--cwa-muted);font-size:11.5px}
+.cwa-rc{padding:20px}
+.cwa-rc h4{font-size:15px;margin-bottom:4px}
+.cwa-rc p{font-size:12.5px;color:var(--cwa-muted);line-height:1.45}
+.cwa-link{color:var(--cwa-brand-deep);font-weight:700;font-size:13px;text-decoration:none}
+.cwa-divider{height:1px;background:var(--cwa-line);margin:16px 0}
+.cwa-fade{opacity:0;transform:translateY(14px);animation:cwaRise .6s cubic-bezier(.2,.7,.3,1) forwards}
+@keyframes cwaRise{to{opacity:1;transform:none}}
+.cwa-d1{animation-delay:.05s}.cwa-d2{animation-delay:.12s}.cwa-d3{animation-delay:.2s}.cwa-d4{animation-delay:.28s}.cwa-d5{animation-delay:.36s}
+`;

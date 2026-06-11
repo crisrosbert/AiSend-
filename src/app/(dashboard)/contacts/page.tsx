@@ -1,598 +1,529 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
-import {
-  Search, UserPlus, Upload, Download, Filter, MoreHorizontal,
-  Phone, Tag, Trash2, Send, X, ChevronLeft, ChevronRight,
-  Users, UserCheck, UserX, TrendingUp, Check, Loader2,
-  SlidersHorizontal, MessageSquare, RefreshCw,
-} from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useAuth } from '@/hooks/use-auth';
+import { toast } from 'sonner';
+import type { Contact, Tag, ContactTag } from '@/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Search, Plus, Upload, MoreHorizontal, Pencil, Trash2, Loader2,
+  Users, ChevronLeft, ChevronRight, Phone, Mail, Building2,
+  MessageSquare, Send, Filter, Download, UserCheck,
+} from 'lucide-react';
+import { ContactForm } from '@/components/contacts/contact-form';
+import { ContactDetailView } from '@/components/contacts/contact-detail-view';
+import { ImportModal } from '@/components/contacts/import-modal';
 
-interface Contact {
-  id: string;
-  name: string | null;
-  phone_number: string;
-  tags: string[] | null;
-  source: string | null;
-  opted_out: boolean | null;
-  created_at: string;
-  notes: string | null;
+const PAGE_SIZE = 25;
+
+interface ContactWithTags extends Contact {
+  tags?: Tag[];
 }
 
-const PAGE_SIZES = [25, 50, 100];
-
 export default function ContactsPage() {
-  const { user } = useAuth();
   const supabase = createClient();
 
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [total, setTotal] = useState(0);
+  const [contacts, setContacts] = useState<ContactWithTags[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
   const [search, setSearch] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [showAdd, setShowAdd] = useState(false);
-  const [showImport, setShowImport] = useState(false);
-  const [drawer, setDrawer] = useState<Contact | null>(null);
-  const [stats, setStats] = useState({ total: 0, active: 0, optedOut: 0, thisMonth: 0 });
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
-  // Add form state
-  const [addName, setAddName] = useState('');
-  const [addPhone, setAddPhone] = useState('');
-  const [addTags, setAddTags] = useState('');
-  const [addSource, setAddSource] = useState('');
-  const [addSaving, setAddSaving] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editContact, setEditContact] = useState<Contact | null>(null);
+  const [editContactTags, setEditContactTags] = useState<ContactTag[]>([]);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailContactId, setDetailContactId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  // Import state
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [importing, setImporting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const importInputRef = useRef<HTMLInputElement>(null);
+  const [tagsMap, setTagsMap] = useState<Record<string, Tag>>({});
+  const [allTags, setAllTags] = useState<Tag[]>([]);
 
-  const load = useCallback(async () => {
-    if (!user) return;
+  const fetchTags = useCallback(async () => {
+    const { data } = await supabase.from('tags').select('*');
+    if (data) {
+      const map: Record<string, Tag> = {};
+      data.forEach((t) => { map[t.id] = t; });
+      setTagsMap(map);
+      setAllTags(data);
+    }
+  }, [supabase]);
+
+  const fetchContacts = useCallback(async () => {
     setLoading(true);
-    try {
-      let q = supabase
-        .from('contacts')
-        .select('*', { count: 'exact' })
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
 
-      if (search.trim()) {
-        q = q.or(`name.ilike.%${search}%,phone_number.ilike.%${search}%`);
-      }
+    let query = supabase
+      .from('contacts')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
-      const { data, count, error } = await q;
-      if (error) throw error;
-      setContacts((data || []) as Contact[]);
-      setTotal(count ?? 0);
-    } catch (err) {
-      toast.error('Failed to load contacts');
-    } finally {
-      setLoading(false);
+    if (search.trim()) {
+      const term = `%${search.trim()}%`;
+      query = query.or(`name.ilike.${term},phone.ilike.${term},email.ilike.${term}`);
     }
-  }, [user, page, pageSize, search, supabase]);
 
-  const loadStats = useCallback(async () => {
-    if (!user) return;
-    try {
-      const [{ count: tot }, { count: opted }, { count: month }] = await Promise.all([
-        supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-        supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('opted_out', true),
-        supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
-          .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
-      ]);
-      setStats({ total: tot ?? 0, active: (tot ?? 0) - (opted ?? 0), optedOut: opted ?? 0, thisMonth: month ?? 0 });
-    } catch {}
-  }, [user, supabase]);
+    const { data, count, error } = await query;
+    if (error) { toast.error('Failed to load contacts'); setLoading(false); return; }
 
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => { loadStats(); }, [loadStats]);
+    setTotalCount(count ?? 0);
+    if (!data || data.length === 0) { setContacts([]); setLoading(false); return; }
 
-  const handleSearch = (v: string) => {
-    setSearchInput(v);
-    clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => { setSearch(v); setPage(0); }, 350);
-  };
+    const contactIds = data.map((c) => c.id);
+    const { data: contactTags } = await supabase
+      .from('contact_tags').select('contact_id, tag_id').in('contact_id', contactIds);
 
-  const toggleSelect = (id: string) => {
-    setSelected(prev => {
-      const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
+    const tagsByContact: Record<string, string[]> = {};
+    contactTags?.forEach((ct) => {
+      if (!tagsByContact[ct.contact_id]) tagsByContact[ct.contact_id] = [];
+      tagsByContact[ct.contact_id].push(ct.tag_id);
     });
-  };
 
-  const toggleAll = () => {
-    if (selected.size === contacts.length) setSelected(new Set());
-    else setSelected(new Set(contacts.map(c => c.id)));
-  };
+    const enriched: ContactWithTags[] = data.map((c) => ({
+      ...c,
+      tags: (tagsByContact[c.id] ?? []).map((tid) => tagsMap[tid]).filter(Boolean),
+    }));
 
-  const handleAdd = async () => {
-    if (!user || !addPhone.trim()) return;
-    setAddSaving(true);
-    try {
-      const tags = addTags.split(',').map(t => t.trim()).filter(Boolean);
-      const { error } = await supabase.from('contacts').insert({
-        user_id: user.id,
-        name: addName.trim() || null,
-        phone_number: addPhone.replace(/\D/g, ''),
-        tags: tags.length ? tags : null,
-        source: addSource.trim() || 'MANUAL',
-        opted_out: false,
-      });
-      if (error) throw error;
-      toast.success('Contact added');
-      setShowAdd(false);
-      setAddName(''); setAddPhone(''); setAddTags(''); setAddSource('');
-      load(); loadStats();
-    } catch (err) {
-      toast.error('Failed to add contact');
-    } finally {
-      setAddSaving(false);
-    }
-  };
+    setContacts(enriched);
+    setLoading(false);
+  }, [supabase, page, search, tagsMap]);
 
-  const handleDeleteSelected = async () => {
-    if (!selected.size || !confirm(`Delete ${selected.size} contact(s)?`)) return;
-    try {
-      const { error } = await supabase.from('contacts').delete().in('id', [...selected]);
-      if (error) throw error;
-      toast.success(`Deleted ${selected.size} contact(s)`);
-      setSelected(new Set());
-      load(); loadStats();
-    } catch { toast.error('Delete failed'); }
-  };
+  useEffect(() => { fetchTags(); }, [fetchTags]);
+  useEffect(() => { fetchContacts(); }, [fetchContacts]);
 
-  const handleExport = () => {
-    const rows = [['Name', 'Phone', 'Tags', 'Source', 'Opted Out', 'Added']];
-    contacts.forEach(c => rows.push([
-      c.name || '', c.phone_number, (c.tags || []).join(';'),
-      c.source || '', c.opted_out ? 'Yes' : 'No',
-      new Date(c.created_at).toLocaleDateString('en-IN'),
-    ]));
-    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = `contacts_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    toast.success('Export started');
-  };
+  // Filter contacts client-side by tag (in addition to server search)
+  const displayContacts = tagFilter
+    ? contacts.filter((c) => c.tags?.some((t) => t.id === tagFilter))
+    : contacts;
 
-  const handleImport = async () => {
-    if (!importFile || !user) return;
-    setImporting(true);
-    try {
-      const text = await importFile.text();
-      const lines = text.split('\n').filter(Boolean);
-      const header = lines[0].toLowerCase();
-      const hasHeader = header.includes('name') || header.includes('phone');
-      const rows = hasHeader ? lines.slice(1) : lines;
-      const batch: Record<string, unknown>[] = [];
-      for (const line of rows) {
-        const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
-        const phone = (cols[1] || cols[0] || '').replace(/\D/g, '');
-        if (phone.length < 10) continue;
-        batch.push({ user_id: user.id, name: cols[0] || null, phone_number: phone, source: 'IMPORTED', opted_out: false });
-      }
-      if (!batch.length) { toast.error('No valid contacts found in file'); setImporting(false); return; }
-      const { error } = await supabase.from('contacts').insert(batch);
-      if (error) throw error;
-      toast.success(`Imported ${batch.length} contacts`);
-      setShowImport(false);
-      setImportFile(null);
-      load(); loadStats();
-    } catch (err) {
-      toast.error('Import failed — check file format');
-    } finally {
-      setImporting(false);
-    }
-  };
+  function openAddForm() {
+    setEditContact(null); setEditContactTags([]); setFormOpen(true);
+  }
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const allSelected = contacts.length > 0 && selected.size === contacts.length;
+  async function openEditForm(contact: Contact) {
+    const { data: ct } = await supabase
+      .from('contact_tags').select('*').eq('contact_id', contact.id);
+    setEditContact(contact); setEditContactTags(ct ?? []); setFormOpen(true);
+  }
 
-  const initials = (name: string | null, phone: string) => {
-    if (name) return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-    return phone.slice(-2);
-  };
+  function openDetail(contactId: string) {
+    setDetailContactId(contactId); setDetailOpen(true);
+  }
 
-  const avatarColor = (str: string) => {
-    const colors = ['#059669','#0891b2','#7c3aed','#db2777','#d97706','#16a34a','#dc2626'];
-    let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) % colors.length;
-    return colors[h];
-  };
+  function confirmDelete(contact: Contact) {
+    setDeleteTarget(contact); setDeleteConfirmOpen(true);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const { error } = await supabase.from('contacts').delete().eq('id', deleteTarget.id);
+    setDeleting(false);
+    if (error) { toast.error('Failed to delete contact'); return; }
+    toast.success('Contact deleted');
+    setDeleteConfirmOpen(false); setDeleteTarget(null); fetchContacts();
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === displayContacts.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(displayContacts.map((c) => c.id)));
+  }
+
+  function clearSelection() { setSelectedIds(new Set()); }
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const hasPrev = page > 0;
+  const hasNext = (page + 1) * PAGE_SIZE < totalCount;
+  const allSelected = displayContacts.length > 0 && selectedIds.size === displayContacts.length;
+
+  // Real metrics from the data
+  const taggedCount = contacts.filter((c) => c.tags && c.tags.length > 0).length;
+  const withEmailCount = contacts.filter((c) => c.email).length;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[#f6faf8]">
-
-      {/* ── PAGE HEADER ── */}
-      <div className="shrink-0 border-b border-[#e7ece9] bg-white px-6 py-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>
-              Contacts
-            </h1>
-            <p className="mt-0.5 text-xs text-slate-400">Manage your WhatsApp contact list</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={handleExport}
-              className="flex items-center gap-1.5 rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
-              <Download className="h-3.5 w-3.5" /> Export
-            </button>
-            <button onClick={() => setShowImport(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
-              <Upload className="h-3.5 w-3.5" /> Import CSV
-            </button>
-            <button onClick={() => setShowAdd(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-600">
-              <UserPlus className="h-3.5 w-3.5" /> Add Contact
-            </button>
-          </div>
+    <div className="space-y-6">
+      {/* Header — clean and distinct */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>
+            Contacts
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Your customer list — segment, message, and grow.
+          </p>
         </div>
-
-        {/* ── STATS ROW ── */}
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { icon: Users, label: 'Total Contacts', value: stats.total.toLocaleString('en-IN'), color: 'text-emerald-600', bg: 'bg-emerald-50' },
-            { icon: UserCheck, label: 'Active', value: stats.active.toLocaleString('en-IN'), color: 'text-blue-600', bg: 'bg-blue-50' },
-            { icon: UserX, label: 'Opted Out', value: stats.optedOut.toLocaleString('en-IN'), color: 'text-red-500', bg: 'bg-red-50' },
-            { icon: TrendingUp, label: 'Added This Month', value: stats.thisMonth.toLocaleString('en-IN'), color: 'text-violet-600', bg: 'bg-violet-50' },
-          ].map(s => (
-            <div key={s.label} className="flex items-center gap-3 rounded-xl border border-[#e7ece9] bg-white px-4 py-3">
-              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${s.bg} ${s.color}`}>
-                <s.icon className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-lg font-bold leading-tight text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>{s.value}</p>
-                <p className="text-[11px] text-slate-400">{s.label}</p>
-              </div>
-            </div>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}
+            className="border-[#e7ece9] bg-white text-slate-600 hover:bg-slate-50">
+            <Upload className="size-4" /> Import CSV
+          </Button>
+          <Button onClick={openAddForm} className="bg-emerald-500 hover:bg-emerald-600 text-white">
+            <Plus className="size-4" /> Add Contact
+          </Button>
         </div>
       </div>
 
-      {/* ── TOOLBAR ── */}
-      <div className="shrink-0 border-b border-[#e7ece9] bg-white px-6 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            {/* Search */}
-            <div className="flex items-center gap-2 rounded-lg border border-[#e7ece9] bg-white px-3 py-2 focus-within:border-emerald-400 w-64">
-              <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <input value={searchInput} onChange={e => handleSearch(e.target.value)}
-                placeholder="Search name or phone…"
-                className="flex-1 border-0 bg-transparent text-xs outline-none placeholder:text-slate-400" />
-              {searchInput && (
-                <button onClick={() => { handleSearch(''); setSearchInput(''); }}>
-                  <X className="h-3.5 w-3.5 text-slate-400 hover:text-slate-700" />
-                </button>
-              )}
-            </div>
-            <button className="flex items-center gap-1.5 rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50">
-              <SlidersHorizontal className="h-3.5 w-3.5" /> Filter
-            </button>
-          </div>
-
-          {/* Bulk actions */}
-          <div className="flex items-center gap-2">
-            {selected.size > 0 && (
-              <>
-                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                  {selected.size} selected
-                </span>
-                <button className="flex items-center gap-1.5 rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
-                  <Send className="h-3.5 w-3.5" /> Broadcast
-                </button>
-                <button className="flex items-center gap-1.5 rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
-                  <Tag className="h-3.5 w-3.5" /> Tag
-                </button>
-                <button onClick={handleDeleteSelected}
-                  className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-50">
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-              </>
-            )}
-            <button onClick={() => load()}
-              className="flex items-center gap-1.5 rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50">
-              <RefreshCw className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
+      {/* Stat strip — small, glanceable metrics */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard icon={<Users className="size-4" />} label="Total Contacts" value={totalCount} accent="emerald" />
+        <StatCard icon={<UserCheck className="size-4" />} label="Tagged" value={taggedCount} accent="blue" />
+        <StatCard icon={<Mail className="size-4" />} label="With Email" value={withEmailCount} accent="amber" />
+        <StatCard icon={<MessageSquare className="size-4" />} label="On This Page" value={displayContacts.length} accent="purple" />
       </div>
 
-      {/* ── TABLE ── */}
-      <div className="flex-1 overflow-auto">
-        {loading ? (
-          <div className="flex h-64 items-center justify-center gap-2 text-sm text-slate-400">
-            <Loader2 className="h-5 w-5 animate-spin text-emerald-500" /> Loading contacts…
-          </div>
-        ) : contacts.length === 0 ? (
-          <div className="flex h-64 flex-col items-center justify-center gap-3">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50">
-              <Users className="h-8 w-8 text-emerald-400" />
-            </div>
-            <p className="text-base font-bold text-[#0c1f17]">
-              {search ? 'No contacts match your search' : 'No contacts yet'}
-            </p>
-            <p className="text-sm text-slate-400">
-              {search ? 'Try a different name or number' : 'Add your first contact or import a CSV to get started.'}
-            </p>
-            {!search && (
-              <button onClick={() => setShowAdd(true)}
-                className="mt-2 flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-600">
-                <UserPlus className="h-4 w-4" /> Add Contact
+      {/* Search + tag filter row */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            placeholder="Search by name, phone, or email..."
+            className="border-[#e7ece9] bg-white pl-10 text-[#0c1f17] placeholder:text-slate-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+          />
+        </div>
+        {/* Tag chips */}
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Filter className="size-4 text-slate-400" />
+            <button
+              onClick={() => setTagFilter(null)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                tagFilter === null ? 'bg-emerald-500 text-white' : 'bg-white border border-[#e7ece9] text-slate-500 hover:border-emerald-400'
+              }`}
+            >
+              All
+            </button>
+            {allTags.slice(0, 5).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTagFilter(tagFilter === t.id ? null : t.id)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors border ${
+                  tagFilter === t.id ? 'border-transparent text-white' : 'border-[#e7ece9] bg-white text-slate-500 hover:border-emerald-400'
+                }`}
+                style={tagFilter === t.id ? { backgroundColor: t.color } : {}}
+              >
+                {t.name}
               </button>
-            )}
+            ))}
           </div>
-        ) : (
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-[#e7ece9] bg-white">
-                <th className="w-10 px-4 py-3 text-left">
-                  <input type="checkbox" checked={allSelected} onChange={toggleAll}
-                    className="h-3.5 w-3.5 accent-emerald-500" />
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-700 uppercase tracking-wider text-slate-400">Contact</th>
-                <th className="px-4 py-3 text-left text-[11px] font-700 uppercase tracking-wider text-slate-400">Phone</th>
-                <th className="px-4 py-3 text-left text-[11px] font-700 uppercase tracking-wider text-slate-400">Tags</th>
-                <th className="px-4 py-3 text-left text-[11px] font-700 uppercase tracking-wider text-slate-400">Source</th>
-                <th className="px-4 py-3 text-left text-[11px] font-700 uppercase tracking-wider text-slate-400">Status</th>
-                <th className="px-4 py-3 text-left text-[11px] font-700 uppercase tracking-wider text-slate-400">Added</th>
-                <th className="w-10 px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {contacts.map((c, i) => {
-                const sel = selected.has(c.id);
-                const color = avatarColor(c.id);
-                return (
-                  <tr key={c.id}
-                    className={`border-b border-[#e7ece9] transition-colors ${sel ? 'bg-emerald-50' : i % 2 === 0 ? 'bg-white' : 'bg-[#fafcfb]'} hover:bg-emerald-50/60 cursor-pointer`}
-                    onClick={() => setDrawer(c)}
-                  >
-                    <td className="px-4 py-3" onClick={e => { e.stopPropagation(); toggleSelect(c.id); }}>
-                      <input type="checkbox" checked={sel} onChange={() => toggleSelect(c.id)}
-                        className="h-3.5 w-3.5 accent-emerald-500" />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                          style={{ background: color }}>
-                          {initials(c.name, c.phone_number)}
-                        </div>
-                        <span className="font-semibold text-[#0c1f17]">
-                          {c.name || <span className="text-slate-400 font-normal">—</span>}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600">+{c.phone_number}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {(c.tags || []).slice(0, 2).map(t => (
-                          <span key={t} className="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                            {t}
-                          </span>
-                        ))}
-                        {(c.tags || []).length > 2 && (
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
-                            +{(c.tags || []).length - 2}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {c.source ? (
-                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                          {c.source}
-                        </span>
-                      ) : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      {c.opted_out ? (
-                        <span className="flex items-center gap-1 text-[11px] font-semibold text-red-500">
-                          <span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block" /> Opted out
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" /> Active
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-400">
-                      {new Date(c.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    </td>
-                    <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                      <button className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
         )}
       </div>
 
-      {/* ── PAGINATION ── */}
-      {!loading && total > 0 && (
-        <div className="shrink-0 border-t border-[#e7ece9] bg-white px-6 py-3">
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <div className="flex items-center gap-2">
-              <span>Rows per page:</span>
-              <select value={pageSize} onChange={e => { setPageSize(+e.target.value); setPage(0); }}
-                className="rounded-lg border border-[#e7ece9] bg-white px-2 py-1 text-xs focus:border-emerald-500 focus:outline-none">
-                {PAGE_SIZES.map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <span className="text-xs text-slate-400">
-              {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total.toLocaleString('en-IN')}
+      {/* Bulk-action bar (appears when contacts selected) */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <div className="flex items-center gap-3 text-sm font-semibold text-emerald-800">
+            <span className="flex size-6 items-center justify-center rounded-full bg-emerald-500 text-white text-xs">
+              {selectedIds.size}
             </span>
-            <div className="flex items-center gap-1">
-              <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e7ece9] bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <span className="px-3 font-semibold text-[#0c1f17]">{page + 1} / {totalPages}</span>
-              <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e7ece9] bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            {selectedIds.size === 1 ? 'contact selected' : 'contacts selected'}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white">
+              <Send className="size-3.5" /> Broadcast
+            </Button>
+            <Button size="sm" variant="outline" className="border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100">
+              <Download className="size-3.5" /> Export
+            </Button>
+            <Button size="sm" variant="ghost" onClick={clearSelection} className="text-slate-500 hover:text-slate-700">
+              Clear
+            </Button>
           </div>
         </div>
       )}
 
-      {/* ── CONTACT DRAWER ── */}
-      {drawer && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm" onClick={() => setDrawer(null)} />
-          <div className="fixed inset-y-0 right-0 z-50 flex w-80 flex-col border-l border-[#e7ece9] bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#e7ece9] px-5 py-4">
-              <h2 className="text-sm font-bold text-[#0c1f17]">Contact Details</h2>
-              <button onClick={() => setDrawer(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-5">
-              <div className="mb-5 flex flex-col items-center gap-3 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl text-xl font-bold text-white"
-                  style={{ background: avatarColor(drawer.id) }}>
-                  {initials(drawer.name, drawer.phone_number)}
-                </div>
-                <div>
-                  <p className="text-base font-bold text-[#0c1f17]">{drawer.name || 'Unknown'}</p>
-                  <p className="text-xs text-slate-400 font-mono">+{drawer.phone_number}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button className="flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-600">
-                    <MessageSquare className="h-3.5 w-3.5" /> Message
-                  </button>
-                  <button className="flex items-center gap-1.5 rounded-xl border border-[#e7ece9] px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
-                    <Send className="h-3.5 w-3.5" /> Broadcast
-                  </button>
-                </div>
-              </div>
+      {/* Card-row layout (not a dense table) */}
+      <div className="overflow-hidden rounded-2xl border border-[#e7ece9] bg-white shadow-sm">
+        {/* Column headers */}
+        <div className="grid grid-cols-[40px_1.5fr_1fr_1.4fr_1fr_120px_40px] gap-3 border-b border-[#e7ece9] bg-[#f8faf9] px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <div>
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              className="size-4 accent-emerald-500 cursor-pointer"
+            />
+          </div>
+          <div>Name</div>
+          <div>Phone</div>
+          <div className="hidden md:block">Email</div>
+          <div className="hidden md:block">Tags</div>
+          <div className="hidden lg:block">Added</div>
+          <div></div>
+        </div>
 
-              <div className="space-y-3 text-sm">
-                {[
-                  { label: 'Phone', value: `+${drawer.phone_number}`, mono: true },
-                  { label: 'Source', value: drawer.source || '—' },
-                  { label: 'Status', value: drawer.opted_out ? 'Opted Out' : 'Active' },
-                  { label: 'Added', value: new Date(drawer.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) },
-                ].map(f => (
-                  <div key={f.label} className="flex justify-between rounded-lg bg-[#f6faf8] px-3 py-2.5">
-                    <span className="text-xs text-slate-400">{f.label}</span>
-                    <span className={`text-xs font-semibold text-[#0c1f17] ${f.mono ? 'font-mono' : ''}`}>{f.value}</span>
+        {/* Rows */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="size-6 animate-spin text-emerald-500" />
+            <p className="mt-2 text-sm text-slate-400">Loading contacts...</p>
+          </div>
+        ) : displayContacts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-500">
+              <Users className="size-7" />
+            </div>
+            <p className="text-sm font-semibold text-slate-700">
+              {search || tagFilter ? 'No contacts match your filters' : 'No contacts yet'}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              {search || tagFilter ? 'Try clearing the filters.' : 'Add your first contact or import a CSV.'}
+            </p>
+            {!search && !tagFilter && (
+              <div className="mt-4 flex gap-2">
+                <Button onClick={openAddForm} className="bg-emerald-500 hover:bg-emerald-600 text-white">
+                  <Plus className="size-4" /> Add Contact
+                </Button>
+                <Button variant="outline" onClick={() => setImportOpen(true)}
+                  className="border-[#e7ece9] text-slate-600 hover:bg-slate-50">
+                  <Upload className="size-4" /> Import CSV
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            {displayContacts.map((contact) => {
+              const selected = selectedIds.has(contact.id);
+              const initial = (contact.name || contact.phone || '?').charAt(0).toUpperCase();
+              return (
+                <div
+                  key={contact.id}
+                  onClick={() => openDetail(contact.id)}
+                  className={`group grid grid-cols-[40px_1.5fr_1fr_1.4fr_1fr_120px_40px] gap-3 items-center border-b border-[#e7ece9] px-5 py-3 cursor-pointer transition-colors last:border-b-0 ${
+                    selected ? 'bg-emerald-50/60' : 'hover:bg-[#f8faf9]'
+                  }`}
+                >
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleSelect(contact.id)}
+                      className="size-4 accent-emerald-500 cursor-pointer"
+                    />
                   </div>
-                ))}
-                {(drawer.tags || []).length > 0 && (
-                  <div className="rounded-lg bg-[#f6faf8] px-3 py-2.5">
-                    <p className="mb-2 text-xs text-slate-400">Tags</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(drawer.tags || []).map(t => (
-                        <span key={t} className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">{t}</span>
-                      ))}
+                  {/* Name + avatar */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-200 to-emerald-500 text-white font-bold text-sm shrink-0">
+                      {initial}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-[#0c1f17]">
+                        {contact.name || <span className="italic text-slate-400">Unnamed</span>}
+                      </div>
+                      {contact.company && (
+                        <div className="truncate text-[11px] text-slate-400 flex items-center gap-1">
+                          <Building2 className="size-3" /> {contact.company}
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
-                {drawer.notes && (
-                  <div className="rounded-lg bg-[#f6faf8] px-3 py-2.5">
-                    <p className="mb-1 text-xs text-slate-400">Notes</p>
-                    <p className="text-xs text-slate-600">{drawer.notes}</p>
+                  {/* Phone */}
+                  <div className="flex items-center gap-1.5 text-xs text-slate-600 font-mono min-w-0">
+                    <Phone className="size-3 shrink-0 text-emerald-500" />
+                    <span className="truncate">{contact.phone}</span>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ── ADD CONTACT MODAL ── */}
-      {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <div className="w-[420px] max-w-[92vw] rounded-2xl border border-[#e7ece9] bg-white p-6 shadow-2xl">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>Add Contact</h2>
-              <button onClick={() => setShowAdd(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              {[
-                { label: 'Full Name', placeholder: 'Rahul Sharma', value: addName, set: setAddName, req: false },
-                { label: 'WhatsApp Number', placeholder: '91xxxxxxxxxx', value: addPhone, set: setAddPhone, req: true },
-                { label: 'Tags (comma-separated)', placeholder: 'Lead, Customer', value: addTags, set: setAddTags, req: false },
-                { label: 'Source', placeholder: 'MANUAL', value: addSource, set: setAddSource, req: false },
-              ].map(f => (
-                <div key={f.label}>
-                  <label className="mb-1.5 block text-xs font-semibold text-slate-700">
-                    {f.label} {f.req && <span className="text-red-500">*</span>}
-                  </label>
-                  <input value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.placeholder}
-                    className="w-full rounded-xl border border-[#e7ece9] px-3 py-2.5 text-sm text-[#0c1f17] placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none" />
+                  {/* Email */}
+                  <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 min-w-0">
+                    {contact.email ? (
+                      <>
+                        <Mail className="size-3 shrink-0 text-slate-400" />
+                        <span className="truncate">{contact.email}</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </div>
+                  {/* Tags */}
+                  <div className="hidden md:flex flex-wrap gap-1 min-w-0">
+                    {contact.tags && contact.tags.length > 0 ? (
+                      <>
+                        {contact.tags.slice(0, 2).map((tag) => (
+                          <span
+                            key={tag.id}
+                            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border"
+                            style={{ backgroundColor: tag.color + '15', color: tag.color, borderColor: tag.color + '40' }}
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                        {contact.tags.length > 2 && (
+                          <span className="text-[10px] font-semibold text-slate-400">
+                            +{contact.tags.length - 2}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-slate-300 text-xs">—</span>
+                    )}
+                  </div>
+                  {/* Added date */}
+                  <div className="hidden lg:block text-xs text-slate-400">
+                    {new Date(contact.created_at).toLocaleDateString('en-IN', {
+                      month: 'short', day: 'numeric', year: 'numeric',
+                    })}
+                  </div>
+                  {/* Actions */}
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button variant="ghost" size="icon-sm"
+                            className="text-slate-400 hover:bg-slate-100 hover:text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        }
+                      >
+                        <MoreHorizontal className="size-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-white border-[#e7ece9]">
+                        <DropdownMenuItem
+                          onClick={(e) => { e.stopPropagation(); openDetail(contact.id); }}
+                          className="text-slate-700 focus:bg-slate-100"
+                        >
+                          <MessageSquare className="size-4" /> View Chat
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => { e.stopPropagation(); openEditForm(contact); }}
+                          className="text-slate-700 focus:bg-slate-100"
+                        >
+                          <Pencil className="size-4" /> Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-[#e7ece9]" />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={(e) => { e.stopPropagation(); confirmDelete(contact); }}
+                        >
+                          <Trash2 className="size-4" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
-              ))}
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setShowAdd(false)}
-                className="rounded-xl border border-[#e7ece9] px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
-                Cancel
-              </button>
-              <button onClick={handleAdd} disabled={!addPhone.trim() || addSaving}
-                className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:opacity-50">
-                {addSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                {addSaving ? 'Adding…' : 'Add Contact'}
-              </button>
-            </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-500">
+            Showing <span className="font-semibold text-slate-700">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)}</span> of{' '}
+            <span className="font-semibold text-slate-700">{totalCount}</span>
+          </p>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon-sm" disabled={!hasPrev}
+              onClick={() => setPage((p) => p - 1)}
+              className="border-[#e7ece9] text-slate-500 hover:bg-slate-50 disabled:opacity-30">
+              <ChevronLeft className="size-4" />
+            </Button>
+            <span className="px-3 text-xs font-semibold text-slate-600">
+              Page {page + 1} of {totalPages}
+            </span>
+            <Button variant="outline" size="icon-sm" disabled={!hasNext}
+              onClick={() => setPage((p) => p + 1)}
+              className="border-[#e7ece9] text-slate-500 hover:bg-slate-50 disabled:opacity-30">
+              <ChevronRight className="size-4" />
+            </Button>
           </div>
         </div>
       )}
 
-      {/* ── IMPORT MODAL ── */}
-      {showImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <div className="w-[440px] max-w-[92vw] rounded-2xl border border-[#e7ece9] bg-white p-6 shadow-2xl">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>Import Contacts</h2>
-              <button onClick={() => { setShowImport(false); setImportFile(null); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="mb-4 rounded-xl border border-[#e7ece9] bg-[#f6faf8] p-4 text-xs text-slate-500">
-              <p className="mb-1 font-semibold text-slate-700">CSV format expected:</p>
-              <p className="font-mono">Name, Phone Number (with country code)</p>
-              <p className="mt-1 text-slate-400">Example: Rahul Sharma, 919876543210</p>
-            </div>
-            <input ref={importInputRef} type="file" accept=".csv" className="hidden"
-              onChange={e => setImportFile(e.target.files?.[0] || null)} />
-            <button onClick={() => importInputRef.current?.click()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#e7ece9] bg-white py-8 text-sm font-semibold text-slate-500 transition hover:border-emerald-400 hover:text-emerald-700">
-              <Upload className="h-5 w-5" />
-              {importFile ? importFile.name : 'Click to select CSV file'}
-            </button>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => { setShowImport(false); setImportFile(null); }}
-                className="rounded-xl border border-[#e7ece9] px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
-                Cancel
-              </button>
-              <button onClick={handleImport} disabled={!importFile || importing}
-                className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:opacity-50">
-                {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {importing ? 'Importing…' : 'Import Now'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Existing dialogs — unchanged */}
+      <ContactForm
+        open={formOpen} onOpenChange={setFormOpen}
+        contact={editContact} contactTags={editContactTags}
+        onSaved={() => { fetchContacts(); fetchTags(); }}
+      />
+      <ContactDetailView
+        open={detailOpen} onOpenChange={setDetailOpen}
+        contactId={detailContactId} onUpdated={fetchContacts}
+      />
+      <ImportModal
+        open={importOpen} onOpenChange={setImportOpen}
+        onImported={fetchContacts}
+      />
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="bg-white border-[#e7ece9] sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-[#0c1f17]">Delete Contact</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Are you sure you want to delete{' '}
+              <span className="font-semibold text-[#0c1f17]">
+                {deleteTarget?.name || deleteTarget?.phone}
+              </span>
+              ? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}
+              className="border-[#e7ece9] text-slate-600 hover:bg-slate-50">
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting && <Loader2 className="size-4 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value, accent }: {
+  icon: React.ReactNode; label: string; value: number;
+  accent: 'emerald' | 'blue' | 'amber' | 'purple';
+}) {
+  const styles = {
+    emerald: 'bg-emerald-50 text-emerald-600',
+    blue: 'bg-blue-50 text-blue-600',
+    amber: 'bg-amber-50 text-amber-600',
+    purple: 'bg-purple-50 text-purple-600',
+  };
+  return (
+    <div className="rounded-xl border border-[#e7ece9] bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className={`flex size-8 items-center justify-center rounded-lg ${styles[accent]}`}>
+          {icon}
+        </span>
+      </div>
+      <div className="mt-3 text-2xl font-extrabold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>
+        {value.toLocaleString('en-IN')}
+      </div>
+      <div className="mt-0.5 text-xs font-medium text-slate-500">{label}</div>
     </div>
   );
 }

@@ -40,7 +40,7 @@ export default function ContactsPage() {
   const [showImport, setShowImport] = useState(false);
   const [drawer, setDrawer] = useState<Contact | null>(null);
   const [stats, setStats] = useState({ total: 0, active: 0, optedOut: 0, thisMonth: 0 });
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Add form state
   const [addName, setAddName] = useState('');

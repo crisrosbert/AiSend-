@@ -4,17 +4,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus } from "@/types";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ArrowDownUp } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -23,18 +14,13 @@ interface ConversationListProps {
   onConversationsLoaded: (conversations: Conversation[]) => void;
 }
 
-const STATUS_COLORS: Record<ConversationStatus, string> = {
-  open: "bg-violet-500",
-  pending: "bg-amber-500",
-  closed: "bg-slate-500",
-};
+type TabValue = "open" | "pending" | "resolved";
 
-const FILTER_OPTIONS: { label: string; value: ConversationStatus | "all" }[] = [
-  { label: "All", value: "all" },
-  { label: "Open", value: "open" },
-  { label: "Pending", value: "pending" },
-  { label: "Closed", value: "closed" },
-];
+const STATUS_DOT: Record<ConversationStatus, string> = {
+  open: "bg-emerald-500",
+  pending: "bg-amber-500",
+  closed: "bg-slate-400",
+};
 
 export function ConversationList({
   activeConversationId,
@@ -43,66 +29,49 @@ export function ConversationList({
   onConversationsLoaded,
 }: ConversationListProps) {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<ConversationStatus | "all">("all");
+  const [activeTab, setActiveTab] = useState<TabValue>("open");
   const [loading, setLoading] = useState(true);
 
-  // Keep the latest callback in a ref so the fetch effect below can
-  // have a stable, empty-dep identity. Previously the fetch useCallback
-  // depended on `onConversationsLoaded`, which depends on the parent's
-  // `deepLinkConvId` — so every URL change (including one the parent
-  // triggered via router.replace after a click) caused a fresh
-  // conversations fetch. That extra refetch was the trigger for the
-  // deep-link auto-select running a second time and wiping the active
-  // thread's messages.
-  // Mutation lives in an effect (not render) per React 19's refs rule;
-  // the fetch runs once on mount so it's fine to read the slightly
-  // older value — the very next render updates the ref for any
-  // subsequent async completion.
-  const onConversationsLoadedRef = useRef(onConversationsLoaded);
+  const onLoadedRef = useRef(onConversationsLoaded);
   useEffect(() => {
-    onConversationsLoadedRef.current = onConversationsLoaded;
+    onLoadedRef.current = onConversationsLoaded;
   });
 
+  // Fetch conversations on mount
   useEffect(() => {
-    const supabase = createClient();
-    let cancelled = false;
+    const fetchConversations = async () => {
+      try {
+        setLoading(true);
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("conversations")
+          .select(`
+            *,
+            contact:contacts(*)
+          `)
+          .order("last_message_at", { ascending: false });
 
-    (async () => {
-      const { data, error } = await supabase
-        .from("conversations")
-        .select("*, contact:contacts(*)")
-        .order("last_message_at", { ascending: false });
-
-      if (cancelled) return;
-
-      if (error) {
-        // Supabase errors have non-enumerable properties — log fields explicitly
-        console.error("Failed to fetch conversations:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
+        if (error) {
+          console.error("Failed to fetch conversations:", error);
+          onLoadedRef.current([]);
+          return;
+        }
+        onLoadedRef.current((data ?? []) as Conversation[]);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      onConversationsLoadedRef.current(data ?? []);
-      setLoading(false);
-    })();
-
-    return () => {
-      cancelled = true;
     };
+    fetchConversations();
   }, []);
 
+  // Map tab → status filter ("resolved" maps to "closed" in DB)
   const filtered = useMemo(() => {
-    let result = conversations;
-
-    if (filter !== "all") {
-      result = result.filter((c) => c.status === filter);
-    }
-
+    const statusFor: Record<TabValue, ConversationStatus> = {
+      open: "open",
+      pending: "pending",
+      resolved: "closed",
+    };
+    let result = conversations.filter((c) => c.status === statusFor[activeTab]);
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter((c) => {
@@ -112,79 +81,83 @@ export function ConversationList({
         return name.includes(q) || phone.includes(q) || lastMsg.includes(q);
       });
     }
-
     return result;
-  }, [conversations, filter, search]);
+  }, [conversations, activeTab, search]);
 
-  const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setSearch(e.target.value);
-    },
-    []
-  );
-
-  const handleSelect = useCallback(
-    (conv: Conversation) => {
-      onSelect(conv);
-    },
-    [onSelect]
-  );
-
-  const activeFilter = FILTER_OPTIONS.find((o) => o.value === filter);
+  // Counts per tab
+  const counts = useMemo(() => ({
+    open: conversations.filter((c) => c.status === "open").length,
+    pending: conversations.filter((c) => c.status === "pending").length,
+    resolved: conversations.filter((c) => c.status === "closed").length,
+  }), [conversations]);
 
   return (
-    // w-full on mobile so the list occupies the whole viewport when it's
-    // the single pane showing; fixed 320px on desktop where it shares the
-    // row with the thread + contact sidebar.
-    <div className="flex h-full w-full flex-col border-r border-slate-800 bg-slate-900 lg:w-80">
-      {/* Search + Filter */}
-      <div className="space-y-2 border-b border-slate-800 p-3">
+    <div className="flex h-full w-full flex-col bg-white lg:w-[340px]">
+      {/* Search */}
+      <div className="border-b border-[#e7ece9] p-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <Input
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
             value={search}
-            onChange={handleSearchChange}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search conversations..."
-            className="border-slate-700 bg-slate-800 pl-9 text-sm text-white placeholder-slate-500 focus:border-violet-500/50"
+            className="w-full rounded-lg border border-[#e7ece9] bg-[#f8faf9] py-2 pl-9 pr-3 text-sm text-[#0c1f17] placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
           />
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-slate-400 hover:text-white rounded-md hover:bg-slate-800">
-              {activeFilter?.label ?? "All"}
-              <ChevronDown className="h-3 w-3" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="border-slate-700 bg-slate-800"
+        {/* Segmented pill tabs with count chips */}
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 rounded-xl border border-[#e7ece9] bg-[#f8faf9] p-1">
+            <TabButton
+              active={activeTab === "open"}
+              onClick={() => setActiveTab("open")}
+              label="Open"
+              count={counts.open}
+            />
+            <TabButton
+              active={activeTab === "pending"}
+              onClick={() => setActiveTab("pending")}
+              label="Pending"
+              count={counts.pending}
+            />
+            <TabButton
+              active={activeTab === "resolved"}
+              onClick={() => setActiveTab("resolved")}
+              label="Resolved"
+              count={counts.resolved}
+            />
+          </div>
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            title="Sort"
           >
-            {FILTER_OPTIONS.map((opt) => (
-              <DropdownMenuItem
-                key={opt.value}
-                onClick={() => setFilter(opt.value)}
-                className={cn(
-                  "text-sm",
-                  filter === opt.value
-                    ? "text-violet-400"
-                    : "text-slate-300"
-                )}
-              >
-                {opt.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <ArrowDownUp className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Conversation Items */}
-      <ScrollArea className="flex-1">
+      {/* Conversation list */}
+      <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+          <div className="flex items-center justify-center py-16">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="px-4 py-12 text-center">
-            <p className="text-sm text-slate-500">No conversations found</p>
+          <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-500">
+              <Search className="h-5 w-5" />
+            </div>
+            <p className="text-sm font-semibold text-slate-700">
+              {search ? "No matches" : `No ${activeTab} chats`}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              {search
+                ? "Try a different search term."
+                : activeTab === "open"
+                ? "New chats from customers will appear here."
+                : `Mark conversations as ${activeTab} to see them here.`}
+            </p>
           </div>
         ) : (
           <div className="flex flex-col">
@@ -193,13 +166,52 @@ export function ConversationList({
                 key={conv.id}
                 conversation={conv}
                 isActive={conv.id === activeConversationId}
-                onSelect={handleSelect}
+                onSelect={onSelect}
               />
             ))}
           </div>
         )}
-      </ScrollArea>
+      </div>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
+        active
+          ? "bg-white text-emerald-700 shadow-sm"
+          : "text-slate-500 hover:text-slate-700"
+      )}
+    >
+      {label}
+      <span
+        className={cn(
+          "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold",
+          active
+            ? "bg-emerald-500 text-white"
+            : count === 0
+            ? "bg-slate-200 text-slate-400"
+            : "bg-emerald-100 text-emerald-700"
+        )}
+      >
+        {count}
+      </span>
+    </button>
   );
 }
 
@@ -209,72 +221,82 @@ interface ConversationItemProps {
   onSelect: (conversation: Conversation) => void;
 }
 
-function ConversationItem({
-  conversation,
-  isActive,
-  onSelect,
-}: ConversationItemProps) {
+function ConversationItem({ conversation, isActive, onSelect }: ConversationItemProps) {
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || "Unknown";
   const initials = displayName.charAt(0).toUpperCase();
-
-  const handleClick = useCallback(() => {
-    onSelect(conversation);
-  }, [onSelect, conversation]);
-
   const timeAgo = conversation.last_message_at
-    ? formatDistanceToNow(new Date(conversation.last_message_at), {
-        addSuffix: false,
-      })
+    ? formatDistanceToNow(new Date(conversation.last_message_at), { addSuffix: false })
     : "";
 
   return (
     <button
-      onClick={handleClick}
+      onClick={() => onSelect(conversation)}
       className={cn(
-        "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-slate-800/50",
-        isActive && "border-l-2 border-violet-500 bg-slate-800/70"
+        "group relative flex w-full items-start gap-3 border-b border-[#e7ece9] px-4 py-3 text-left transition-colors",
+        isActive
+          ? "bg-emerald-50/70"
+          : "hover:bg-[#f8faf9]"
       )}
     >
-      {/* Avatar */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white">
-        {contact?.avatar_url ? (
-          <img
-            src={contact.avatar_url}
-            alt={displayName}
-            className="h-10 w-10 rounded-full object-cover"
-          />
-        ) : (
-          initials
-        )}
+      {/* Left accent stripe when active */}
+      {isActive && (
+        <span className="absolute inset-y-0 left-0 w-[3px] bg-emerald-500" />
+      )}
+
+      {/* Avatar with status dot */}
+      <div className="relative shrink-0">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-emerald-200 to-emerald-500 text-sm font-bold text-white shadow-sm">
+          {contact?.avatar_url ? (
+            <img
+              src={contact.avatar_url}
+              alt={displayName}
+              className="h-11 w-11 rounded-full object-cover"
+            />
+          ) : (
+            initials
+          )}
+        </div>
+        <span
+          className={cn(
+            "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white",
+            STATUS_DOT[conversation.status]
+          )}
+        />
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-white">
+          <span
+            className={cn(
+              "truncate text-sm",
+              conversation.unread_count > 0
+                ? "font-bold text-[#0c1f17]"
+                : "font-semibold text-slate-700"
+            )}
+          >
             {displayName}
           </span>
-          <span className="shrink-0 text-[10px] text-slate-500">{timeAgo}</span>
+          <span className="shrink-0 text-[10px] font-medium text-slate-400">{timeAgo}</span>
         </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-slate-400">
+
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <p
+            className={cn(
+              "truncate text-xs",
+              conversation.unread_count > 0
+                ? "font-semibold text-slate-700"
+                : "text-slate-500"
+            )}
+          >
             {conversation.last_message_text || "No messages yet"}
           </p>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {conversation.unread_count > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-500 px-1 text-[10px] font-bold text-white">
-                {conversation.unread_count}
-              </span>
-            )}
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                STATUS_COLORS[conversation.status]
-              )}
-              title={conversation.status}
-            />
-          </div>
+          {conversation.unread_count > 0 && (
+            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-white">
+              {conversation.unread_count > 99 ? "99+" : conversation.unread_count}
+            </span>
+          )}
         </div>
       </div>
     </button>

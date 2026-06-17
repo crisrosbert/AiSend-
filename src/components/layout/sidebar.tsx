@@ -35,6 +35,7 @@ import {
 const navItems = [
   { path: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { path: "inbox",     label: "Live Chat",  icon: MessageSquare },
+  { path: "recent",    label: "Recent",     icon: History }, // <-- ADDED RECENT NAVIGATION ITEM
   { path: "contacts",  label: "Contacts",   icon: Users },
   { path: "pipelines", label: "Pipelines",  icon: GitBranch },
   { path: "broadcasts",label: "Campaigns",  icon: Radio },
@@ -118,7 +119,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             className="flex items-center justify-center"
             title="Clickstream WA"
           >
-            {/* AiSensy-style lightning bolt logo mark */}
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl"
               style={{ background: "linear-gradient(135deg,#22c55e,#059669)" }}
@@ -307,7 +307,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                   />
                 }
               >
-                <Settings className="size-4 text-white/40" />
+                <Wallet className="size-4 text-white/40" />
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-white/5" />

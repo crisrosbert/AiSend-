@@ -97,7 +97,7 @@ function groupMessagesByDate(messages: Message[]) {
 }
 
 const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string }[] = [
-  { label: "Open", value: "open", color: "text-violet-400" },
+  { label: "Open", value: "open", color: "text-emerald-600" },
   { label: "Pending", value: "pending", color: "text-amber-400" },
   { label: "Closed", value: "closed", color: "text-slate-400" },
 ];
@@ -608,14 +608,14 @@ export function MessageThread({
   // Empty state
   if (!conversation || !contact) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center bg-slate-950">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-800">
-          <MessageSquare className="h-8 w-8 text-slate-600" />
+      <div className="flex flex-1 flex-col items-center justify-center bg-white">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#f8faf9]">
+          <MessageSquare className="h-8 w-8 text-slate-400" />
         </div>
         <h3 className="mt-4 text-sm font-medium text-slate-400">
           Select a conversation
         </h3>
-        <p className="mt-1 text-xs text-slate-600">
+        <p className="mt-1 text-xs text-slate-400">
           Choose a conversation from the left to start messaging
         </p>
       </div>
@@ -634,9 +634,9 @@ export function MessageThread({
     : "Assign";
 
   return (
-    <div className="flex flex-1 flex-col bg-slate-950">
+    <div className="flex flex-1 flex-col bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-900 px-3 py-3 sm:px-4">
+      <div className="flex items-center justify-between gap-2 border-b border-[#e7ece9] bg-white px-3 py-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
               conversation list is always visible next to the thread. */}
@@ -645,16 +645,16 @@ export function MessageThread({
               type="button"
               onClick={onBack}
               aria-label="Back to conversations"
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-slate-300 hover:bg-slate-800 hover:text-white lg:hidden"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-[#f8faf9] hover:text-[#0c1f17] lg:hidden"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#e8f4ee] text-sm font-medium text-[#0c1f17]">
             {displayName.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-white">{displayName}</h2>
+            <h2 className="truncate text-sm font-semibold text-[#0c1f17]">{displayName}</h2>
             <p className="truncate text-xs text-slate-400">{contact.phone}</p>
           </div>
           {/* Session timer badge — hidden on the narrowest phones so
@@ -662,8 +662,8 @@ export function MessageThread({
           <Badge
             variant="outline"
             className={cn(
-              "ml-1 hidden gap-1 border-slate-700 text-[10px] sm:inline-flex sm:ml-2",
-              sessionInfo.expired ? "text-red-400" : "text-violet-400"
+              "ml-1 hidden gap-1 border-[#e7ece9] text-[10px] sm:inline-flex sm:ml-2",
+              sessionInfo.expired ? "text-red-400" : "text-emerald-600"
             )}
           >
             <Clock className="h-3 w-3" />
@@ -675,7 +675,7 @@ export function MessageThread({
           {/* Status dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
-                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-slate-800",
+                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-[#f8faf9]",
                   currentStatus?.color ?? "text-slate-400"
                 )}>
                 {currentStatus?.label ?? "Status"}
@@ -683,7 +683,7 @@ export function MessageThread({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="border-slate-700 bg-slate-800"
+              className="border-[#e7ece9] bg-[#f8faf9]"
             >
               {STATUS_OPTIONS.map((opt) => (
                 <DropdownMenuItem
@@ -701,8 +701,8 @@ export function MessageThread({
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-slate-800",
-                assignedAgentId ? "text-violet-400" : "text-slate-400"
+                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-[#f8faf9]",
+                assignedAgentId ? "text-emerald-600" : "text-slate-400"
               )}
             >
               <UserPlus className="h-3 w-3" />
@@ -711,10 +711,10 @@ export function MessageThread({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="border-slate-700 bg-slate-800"
+              className="border-[#e7ece9] bg-[#f8faf9]"
             >
               {profiles.length === 0 ? (
-                <DropdownMenuItem disabled className="text-sm text-slate-500">
+                <DropdownMenuItem disabled className="text-sm text-slate-400">
                   No teammates available
                 </DropdownMenuItem>
               ) : (
@@ -726,7 +726,7 @@ export function MessageThread({
                       onClick={() => handleAssignChange(p.user_id)}
                       className={cn(
                         "text-sm",
-                        isSelected ? "text-violet-400" : "text-slate-300"
+                        isSelected ? "text-emerald-600" : "text-slate-400"
                       )}
                     >
                       <span className="flex-1">
@@ -740,7 +740,7 @@ export function MessageThread({
               )}
               {assignedAgentId && (
                 <>
-                  <DropdownMenuSeparator className="bg-slate-700" />
+                  <DropdownMenuSeparator className="bg-[#e8f4ee]" />
                   <DropdownMenuItem
                     onClick={() => handleAssignChange(null)}
                     className="text-sm text-slate-400"
@@ -762,8 +762,8 @@ export function MessageThread({
           </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <p className="text-sm text-slate-500">No messages yet</p>
-            <p className="text-xs text-slate-600">
+            <p className="text-sm text-slate-400">No messages yet</p>
+            <p className="text-xs text-slate-400">
               Send a template to start the conversation
             </p>
           </div>
@@ -773,7 +773,7 @@ export function MessageThread({
               <div key={group.date}>
                 {/* Date separator */}
                 <div className="mb-4 flex items-center justify-center">
-                  <span className="rounded-full bg-slate-800 px-3 py-1 text-[10px] font-medium text-slate-400">
+                  <span className="rounded-full bg-[#f8faf9] px-3 py-1 text-[10px] font-medium text-slate-400">
                     {formatDateSeparator(group.date)}
                   </span>
                 </div>

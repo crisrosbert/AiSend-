@@ -82,10 +82,12 @@ export default function InboxPage() {
             return c;
           });
 
-          // Sort dynamically: Push the conversation with the newest text message right to the absolute top
-          return [...updatedList].sort(
-            (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-          );
+          // Sort dynamically with safe TypeScript fallback boundaries
+          return [...updatedList].sort((a, b) => {
+            const timeB = new Date(b.last_message_at ?? b.created_at ?? 0).getTime();
+            const timeA = new Date(a.last_message_at ?? a.created_at ?? 0).getTime();
+            return timeB - timeA;
+          });
         });
       } else if (event.eventType === "UPDATE") {
         if (activeConversation && newMsg.conversation_id === activeConversation.id) {
@@ -96,7 +98,7 @@ export default function InboxPage() {
     [activeConversation]
   );
 
-  // ── FIXED REAL-TIME CONVERSATION DEDUPLICATION ──
+  // ── FIXED REAL-TIME CONVERSATION Deduplication ──
   const handleConversationEvent = useCallback(
     (event: { eventType: string; new: Conversation; old: Partial<Conversation> }) => {
       const conv = event.new;
@@ -110,9 +112,11 @@ export default function InboxPage() {
         setConversations((prev) => {
           const updated = prev.map((c) => (c.id === conv.id ? { ...c, ...conv } : c));
           // Keep list sorting perfectly chronological when conversation record changes
-          return [...updated].sort(
-            (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-          );
+          return [...updated].sort((a, b) => {
+            const timeB = new Date(b.last_message_at ?? b.created_at ?? 0).getTime();
+            const timeA = new Date(a.last_message_at ?? a.created_at ?? 0).getTime();
+            return timeB - timeA;
+          });
         });
         if (activeConversation?.id === conv.id) {
           setActiveConversation((prev) => (prev ? { ...prev, ...conv } : prev));
@@ -132,9 +136,11 @@ export default function InboxPage() {
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
       // Ensure initial mount load lists are cleanly sorted by timeline activity out of the box
-      const sortedLoaded = [...loaded].sort(
-        (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-      );
+      const sortedLoaded = [...loaded].sort((a, b) => {
+        const timeB = new Date(b.last_message_at ?? b.created_at ?? 0).getTime();
+        const timeA = new Date(a.last_message_at ?? a.created_at ?? 0).getTime();
+        return timeB - timeA;
+      });
       setConversations(sortedLoaded);
       
       if (

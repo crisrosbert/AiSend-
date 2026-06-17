@@ -9,15 +9,16 @@ import { useTotalUnread } from "@/hooks/use-total-unread";
 import {
   LayoutDashboard,
   MessageSquare,
-  History,
+  Clock,
   Users,
+  GitBranch,
   Radio,
   Zap,
   Settings,
   Wallet,
   LogOut,
   X,
-  GitBranch,
+  ChevronRight,
 } from "lucide-react";
 import {
   Avatar,
@@ -34,15 +35,16 @@ import {
 
 const navItems = [
   { path: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { path: "inbox",     label: "Live Chat",  icon: MessageSquare },
-  { path: "contacts",  label: "Contacts",   icon: Users },
-  { path: "pipelines", label: "Pipelines",  icon: GitBranch },
-  { path: "broadcasts",label: "Campaigns",  icon: Radio },
-  { path: "automations",label: "Flows",     icon: Zap },
+  { path: "inbox", label: "Live Chat", icon: MessageSquare },
+  { path: "recent", label: "Recent", icon: Clock },
+  { path: "contacts", label: "Contacts", icon: Users },
+  { path: "pipelines", label: "Pipelines", icon: GitBranch },
+  { path: "broadcasts", label: "Campaigns", icon: Radio },
+  { path: "automations", label: "Automations", icon: Zap },
 ];
 
 const bottomNavItems = [
-  { path: "billing",  label: "Billing",  icon: Wallet, absolute: true },
+  { path: "billing", label: "Billing", icon: Wallet },
   { path: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -80,11 +82,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     };
   }, [open, onClose]);
 
-  const initial =
-    profile?.full_name?.charAt(0)?.toUpperCase() ??
-    profile?.email?.charAt(0)?.toUpperCase() ??
-    "U";
-
   return (
     <>
       {/* Mobile backdrop */}
@@ -100,150 +97,89 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex h-full flex-col",
+          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col",
+          "bg-[#0d0d18] border-r border-white/5",
           "transition-transform duration-200 ease-out will-change-transform",
-          /* mobile: full-width drawer that slides in */
-          "w-64",
           open ? "translate-x-0" : "-translate-x-full",
-          /* desktop: always-visible narrow icon+label column */
-          "lg:static lg:z-0 lg:w-[72px] lg:translate-x-0 lg:transition-none",
+          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
         )}
-        style={{ background: "#112118" }}
-        aria-label="Primary navigation"
+        aria-label="Primary"
       >
-        {/* ── Logo / Brand ── */}
-        <div className="flex h-14 shrink-0 items-center justify-center border-b border-white/5 px-2">
-          <Link
-            href={href("dashboard")}
-            className="flex items-center justify-center"
-            title="Clickstream WA"
-          >
-            {/* AiSensy-style lightning bolt logo mark */}
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-xl"
-              style={{ background: "linear-gradient(135deg,#22c55e,#059669)" }}
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path
-                  d="M10.5 2L4 10.5H9L7.5 16L14 7.5H9L10.5 2Z"
-                  fill="white"
-                  strokeLinejoin="round"
-                />
-              </svg>
+        {/* Logo */}
+        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-white/5 px-4">
+          <Link href={href("dashboard")} className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500">
+              <MessageSquare className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-display text-sm font-700 text-white leading-tight tracking-tight">
+                Clickstream <span className="text-emerald-400">WA</span>
+              </span>
+              {profile?.business_name && (
+                <span className="text-[10px] text-slate-500 leading-tight truncate max-w-[120px]">
+                  {profile.business_name}
+                </span>
+              )}
             </div>
           </Link>
-
-          {/* Mobile close button */}
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-white/40 hover:bg-white/5 hover:text-white lg:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white/5 hover:text-white lg:hidden"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* ── Main Nav ── */}
-        <nav className="flex flex-1 flex-col overflow-y-auto py-3">
-          <ul className="flex flex-col items-center gap-0.5 px-2">
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          <ul className="flex flex-col gap-0.5">
             {navItems.map((item) => {
               const active = isActive(item.path);
-              const showBadge = item.path === "inbox" && totalUnread > 0;
+              const showBadge = item.path === "inbox" && totalUnread > 0 && !active;
               return (
-                <li key={item.path} className="w-full">
+                <li key={item.path}>
                   <Link
                     href={href(item.path)}
-                    title={item.label}
                     className={cn(
-                      "group relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 transition-all duration-150",
-                      /* mobile: show as horizontal row */
-                      "lg:flex-col",
+                      "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                       active
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "text-white/40 hover:bg-white/5 hover:text-white/80",
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : "text-slate-500 hover:bg-white/5 hover:text-slate-200",
                     )}
                   >
-                    {/* Active left-bar indicator */}
-                    {active && (
-                      <span
-                        className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full"
-                        style={{ background: "#22c55e" }}
-                      />
+                    <item.icon className={cn("h-4 w-4 shrink-0", active ? "text-emerald-400" : "text-slate-600 group-hover:text-slate-400")} />
+                    <span className="flex-1">{item.label}</span>
+                    {showBadge && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-600 text-white">
+                        {totalUnread > 99 ? "99+" : totalUnread}
+                      </span>
                     )}
-
-                    <div className="relative">
-                      <item.icon
-                        className={cn(
-                          "h-[18px] w-[18px] shrink-0 transition-colors",
-                          active ? "text-emerald-400" : "group-hover:text-white/80",
-                        )}
-                        strokeWidth={active ? 2.2 : 1.8}
-                      />
-                      {showBadge && (
-                        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-0.5 text-[9px] font-bold text-white">
-                          {totalUnread > 99 ? "99+" : totalUnread}
-                        </span>
-                      )}
-                    </div>
-
-                    <span
-                      className={cn(
-                        "text-center font-medium leading-none",
-                        /* on mobile (inside drawer) show label inline */
-                        "hidden lg:block",
-                        "text-[9.5px] tracking-wide",
-                        active ? "text-emerald-400" : "text-white/40 group-hover:text-white/70",
-                      )}
-                    >
-                      {item.label}
-                    </span>
-
-                    {/* Mobile drawer label */}
-                    <span className="ml-3 flex-1 text-sm font-medium lg:hidden">
-                      {item.label}
-                    </span>
+                    {active && <ChevronRight className="h-3.5 w-3.5 text-emerald-500/50" />}
                   </Link>
                 </li>
               );
             })}
           </ul>
 
-          {/* Divider */}
-          <div className="my-2 mx-3 border-t border-white/5" />
+          <div className="my-3 border-t border-white/5" />
 
-          {/* Bottom nav items */}
-          <ul className="flex flex-col items-center gap-0.5 px-2">
+          <ul className="flex flex-col gap-0.5">
             {bottomNavItems.map((item) => {
               const active = isActive(item.path);
               return (
-                <li key={item.path} className="w-full">
+                <li key={item.path}>
                   <Link
-                    href={(item as { absolute?: boolean }).absolute ? `/${item.path}` : href(item.path)}
-                    title={item.label}
+                    href={href(item.path)}
                     className={cn(
-                      "group relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 transition-all duration-150",
+                      "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
                       active
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "text-white/40 hover:bg-white/5 hover:text-white/80",
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : "text-slate-500 hover:bg-white/5 hover:text-slate-200",
                     )}
                   >
-                    {active && (
-                      <span
-                        className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full"
-                        style={{ background: "#22c55e" }}
-                      />
-                    )}
-                    <item.icon
-                      className={cn(
-                        "h-[18px] w-[18px] shrink-0 transition-colors",
-                        active ? "text-emerald-400" : "group-hover:text-white/80",
-                      )}
-                      strokeWidth={active ? 2.2 : 1.8}
-                    />
-                    <span className="hidden text-[9.5px] font-medium tracking-wide text-white/40 group-hover:text-white/70 lg:block">
-                      {item.label}
-                    </span>
-                    <span className="ml-3 flex-1 text-sm font-medium lg:hidden">{item.label}</span>
+                    <item.icon className={cn("h-4 w-4 shrink-0", active ? "text-emerald-400" : "text-slate-600 group-hover:text-slate-400")} />
+                    {item.label}
                   </Link>
                 </li>
               );
@@ -251,70 +187,33 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           </ul>
         </nav>
 
-        {/* ── User Avatar (bottom) ── */}
-        <div className="shrink-0 border-t border-white/5 py-3 flex justify-center">
+        {/* User section */}
+        <div className="shrink-0 border-t border-white/5 p-3">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex flex-col items-center gap-1 rounded-xl px-1 py-2 transition-colors hover:bg-white/5 focus:outline-none w-full mx-2">
-              <Avatar className="size-8 ring-1 ring-white/10">
-                {profile?.avatar_url && (
-                  <AvatarImage src={profile.avatar_url} alt={profile.full_name ?? ""} />
-                )}
-                <AvatarFallback
-                  className="text-xs font-bold"
-                  style={{ background: "#059669", color: "#fff" }}
-                >
-                  {initial}
+            <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/5 focus:outline-none">
+              <Avatar className="size-8 shrink-0 ring-1 ring-white/10">
+                {profile?.avatar_url && <AvatarImage src={profile.avatar_url} alt={profile.full_name ?? ""} />}
+                <AvatarFallback className="bg-emerald-500/10 text-xs font-600 text-emerald-400">
+                  {profile?.full_name?.charAt(0)?.toUpperCase() ?? profile?.email?.charAt(0)?.toUpperCase() ?? "U"}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden text-[9.5px] font-medium tracking-wide text-white/40 lg:block">
-                Account
-              </span>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              align="end"
-              side="right"
-              sideOffset={8}
-              className="min-w-52 border-white/10 text-slate-200"
-              style={{ background: "#112118" }}
-            >
-              {/* User info */}
-              <div className="px-3 py-2 border-b border-white/5">
-                <p className="text-sm font-semibold text-white truncate">
-                  {profile?.full_name ?? "User"}
-                </p>
-                <p className="text-[11px] text-white/40 truncate">{profile?.email ?? ""}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-600 text-white">{profile?.full_name ?? "User"}</p>
+                <p className="truncate text-[10px] text-slate-500">{profile?.email ?? ""}</p>
               </div>
-
-              <DropdownMenuItem
-                render={
-                  <Link
-                    href={`${slugPrefix}/billing`}
-                    onClick={onClose}
-                    className="focus:bg-white/5"
-                  />
-                }
-              >
-                <Wallet className="size-4 text-white/40" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" sideOffset={6}
+              className="min-w-52 border-white/10 bg-[#0d0d18] text-slate-200">
+              <DropdownMenuItem render={<Link href={`${slugPrefix}/billing`} onClick={onClose} className="focus:bg-white/5" />}>
+                <Wallet className="size-4 text-slate-500" />
                 Billing
               </DropdownMenuItem>
-              <DropdownMenuItem
-                render={
-                  <Link
-                    href={`${slugPrefix}/settings?tab=profile`}
-                    onClick={onClose}
-                    className="focus:bg-white/5"
-                  />
-                }
-              >
-                <Settings className="size-4 text-white/40" />
+              <DropdownMenuItem render={<Link href={`${slugPrefix}/settings?tab=profile`} onClick={onClose} className="focus:bg-white/5" />}>
+                <Settings className="size-4 text-slate-500" />
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-white/5" />
-              <DropdownMenuItem
-                onClick={signOut}
-                className="focus:bg-white/5 text-red-400 focus:text-red-400"
-              >
+              <DropdownMenuItem onClick={signOut} className="focus:bg-white/5 text-red-400 focus:text-red-400">
                 <LogOut className="size-4" />
                 Sign out
               </DropdownMenuItem>

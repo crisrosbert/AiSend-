@@ -863,19 +863,24 @@ async function findOrCreateContact(
 }
 
 async function findOrCreateConversation(userId: string, contactId: string) {
-  // Look for existing conversation
+  // Look for ALL existing conversations (not just one) — using .single()
+  // was the original bug: it errors if duplicates already exist, which
+  // caused the webhook to create yet ANOTHER conversation each time,
+  // multiplying duplicates over time.
   const { data: existing, error: findError } = await supabaseAdmin()
     .from('conversations')
     .select('*')
     .eq('user_id', userId)
     .eq('contact_id', contactId)
-    .single()
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
 
   if (!findError && existing) {
     return existing
   }
 
-  // Create new conversation
+  // Create new conversation only if none exists
   const { data: newConv, error: createError } = await supabaseAdmin()
     .from('conversations')
     .insert({

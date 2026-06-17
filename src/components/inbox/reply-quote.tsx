@@ -27,7 +27,7 @@ export function ReplyQuote({
       className={cn(
         "flex items-start gap-2 border-l-2 border-violet-400 px-2 py-1",
         isChip
-          ? "rounded-md bg-slate-800/80"
+          ? "rounded-md bg-[#f2f4f7]/80"
           : "mb-1.5 rounded-md bg-black/20",
       )}
     >
@@ -42,7 +42,7 @@ export function ReplyQuote({
           type="button"
           onClick={onDismiss}
           aria-label="Cancel reply"
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-700 hover:text-white"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-700 hover:text-[#0c1f17]"
         >
           <X className="h-3.5 w-3.5" />
         </button>

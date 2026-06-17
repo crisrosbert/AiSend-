@@ -43,10 +43,12 @@ export default function InboxPage() {
     checkConnection();
   }, []);
 
+  // ── FIXED REAL-TIME MESSAGE ROUTING ──
   const handleMessageEvent = useCallback(
     (event: { eventType: string; new: Message; old: Partial<Message> }) => {
       const newMsg = event.new;
       if (event.eventType === "INSERT") {
+        // 1. Append message to the thread view only if it belongs to the active conversation panel
         if (activeConversation && newMsg.conversation_id === activeConversation.id) {
           setMessages((prev) => {
             if (prev.some((m) => m.id === newMsg.id)) return prev;
@@ -54,21 +56,37 @@ export default function InboxPage() {
             return [...withoutOptimistic, newMsg];
           });
         }
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === newMsg.conversation_id
-              ? {
-                  ...c,
-                  last_message_text: newMsg.content_text ?? "",
-                  last_message_at: newMsg.created_at,
-                  unread_count:
-                    activeConversation?.id === newMsg.conversation_id
-                      ? 0
-                      : c.unread_count + 1,
-                }
-              : c
-          )
-        );
+
+        // 2. Update side rail metadata AND reorganize list order dynamically (WhatsApp Style)
+        setConversations((prev) => {
+          const targetExists = prev.some((c) => c.id === newMsg.conversation_id);
+
+          if (!targetExists) {
+            // If the conversation object doesn't exist in our state sidebar array yet, 
+            // wait for handleConversationEvent to insert it or ignore orphan logs.
+            return prev;
+          }
+
+          const updatedList = prev.map((c) => {
+            if (c.id === newMsg.conversation_id) {
+              return {
+                ...c,
+                last_message_text: newMsg.content_text ?? "[Media/Template]",
+                last_message_at: newMsg.created_at,
+                unread_count:
+                  activeConversation?.id === newMsg.conversation_id
+                    ? 0
+                    : c.unread_count + 1,
+              };
+            }
+            return c;
+          });
+
+          // Sort dynamically: Push the conversation with the newest text message right to the absolute top
+          return [...updatedList].sort(
+            (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+          );
+        });
       } else if (event.eventType === "UPDATE") {
         if (activeConversation && newMsg.conversation_id === activeConversation.id) {
           setMessages((prev) => prev.map((m) => (m.id === newMsg.id ? newMsg : m)));
@@ -78,15 +96,24 @@ export default function InboxPage() {
     [activeConversation]
   );
 
+  // ── FIXED REAL-TIME CONVERSATION DEDUPLICATION ──
   const handleConversationEvent = useCallback(
     (event: { eventType: string; new: Conversation; old: Partial<Conversation> }) => {
       const conv = event.new;
       if (event.eventType === "INSERT") {
-        setConversations((prev) => [conv, ...prev]);
+        setConversations((prev) => {
+          // Strict Guard: If the conversation is already sitting inside our sidebar array, completely block duplication rows!
+          if (prev.some((c) => c.id === conv.id)) return prev;
+          return [conv, ...prev];
+        });
       } else if (event.eventType === "UPDATE") {
-        setConversations((prev) =>
-          prev.map((c) => (c.id === conv.id ? { ...c, ...conv } : c))
-        );
+        setConversations((prev) => {
+          const updated = prev.map((c) => (c.id === conv.id ? { ...c, ...conv } : c));
+          // Keep list sorting perfectly chronological when conversation record changes
+          return [...updated].sort(
+            (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+          );
+        });
         if (activeConversation?.id === conv.id) {
           setActiveConversation((prev) => (prev ? { ...prev, ...conv } : prev));
         }
@@ -104,15 +131,20 @@ export default function InboxPage() {
 
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
-      setConversations(loaded);
+      // Ensure initial mount load lists are cleanly sorted by timeline activity out of the box
+      const sortedLoaded = [...loaded].sort(
+        (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+      );
+      setConversations(sortedLoaded);
+      
       if (
         deepLinkConvId &&
         autoSelectedForDeepLinkRef.current !== deepLinkConvId &&
-        loaded.length > 0
+        sortedLoaded.length > 0
       ) {
         autoSelectedForDeepLinkRef.current = deepLinkConvId;
         if (activeConversation?.id === deepLinkConvId) return;
-        const match = loaded.find((c) => c.id === deepLinkConvId);
+        const match = sortedLoaded.find((c) => c.id === deepLinkConvId);
         if (match) {
           setActiveConversation(match);
           setActiveContact(match.contact ?? null);
@@ -198,8 +230,7 @@ export default function InboxPage() {
 
   return (
     <div className="-m-4 sm:-m-6 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-[#f8faf9]">
-
-      {/* ── Page header ── */}
+      {/* Page header */}
       <div className="flex shrink-0 items-center justify-between border-b border-[#e7ece9] bg-white px-5 py-2.5">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-white">
@@ -225,7 +256,7 @@ export default function InboxPage() {
         </div>
       </div>
 
-      {/* ── WhatsApp not-connected banner ── */}
+      {/* WhatsApp not-connected banner */}
       {whatsappConnected === false && (
         <div className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2">
           <WifiOff className="h-3.5 w-3.5 text-amber-600" />
@@ -239,9 +270,8 @@ export default function InboxPage() {
         </div>
       )}
 
-      {/* ── 3-pane body ── */}
+      {/* 3-pane body */}
       <div className="flex flex-1 overflow-hidden">
-
         {/* LEFT — conversation list */}
         <div
           className={cn(
@@ -293,7 +323,6 @@ export default function InboxPage() {
 function EmptyState({ whatsappConnected }: { whatsappConnected: boolean | null }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center bg-[#f8faf9]">
-      {/* Icon */}
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white border border-[#e7ece9] shadow-sm">
         <Inbox className="h-7 w-7 text-slate-300" />
       </div>

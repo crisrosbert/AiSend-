@@ -258,17 +258,15 @@ function CanvasInner() {
 
     const registeredKeywords = journey?.trigger?.keywords ?? [];
 
-    // Local spelling typo correction helper (Levenshtein Distance rule matrix)
     const findClosestKeyword = (input: string, targets: string[]): string | null => {
       if (targets.length === 0) return "hi";
       let closest: string | null = null;
-      let minDistance = 3; // Max typo distance tolerance window parameter
+      let minDistance = 3;
 
       for (const target of targets) {
         const t = target.toLowerCase();
         if (input.includes(t) || t.includes(input)) return target;
         
-        // Compute structural shift distance
         const distance = Math.abs(input.length - t.length);
         if (distance < minDistance) {
           closest = target;
@@ -294,7 +292,6 @@ function CanvasInner() {
 
           const nodeType = targetNode.data?.nodeType;
 
-          // ── EXECUTE DYNAMIC LIVE API WEBHOOK CALLS AUTOMATICALLY ──
           if (nodeType === "WEBHOOK_CALL") {
             const apiEndpoint = targetNode.data?.endpoint as string;
             const httpMethod = (targetNode.data?.method as string) || "POST";
@@ -309,7 +306,7 @@ function CanvasInner() {
             try {
               const response = await fetch(apiEndpoint, { 
                 method: httpMethod,
-                headers: { "Content-Type": "application/center-json" }
+                headers: { "Content-Type": "application/json" }
               });
               const responseData = await response.json();
               
@@ -318,7 +315,6 @@ function CanvasInner() {
                 { sender: "bot", text: `✅ [API Success]: ${JSON.stringify(responseData.message || responseData || "Transaction Completed Successfully")}` }
               ]);
             } catch (err) {
-              // Graceful local test fallback if endpoint hits local cross-origin blocks
               setMockChatHistory((prev) => [
                 ...prev, 
                 { sender: "bot", text: `💡 [Mock API Answer]: Webhook executed securely. Resolved Response parameter matrix data: { "status": "success", "message": "Your request for ${matchedKey} has been parsed smoothly." }` }
@@ -338,6 +334,15 @@ function CanvasInner() {
       if (chatPane) chatPane.scrollTo({ top: chatPane.scrollHeight, behavior: "smooth" });
     }, 450);
   };
+
+  // ── HOISTED VARIABLE DEPOSITORIES TO SATISFY NEXT.JS BUILD WORKERS ──
+  const isLive = journey ? journey.status === "active" : false;
+  const sendNodes = NODE_CATALOG.filter((n) => n.group === "Send");
+  const doNodes = NODE_CATALOG.filter((n) => n.group === "Do");
+
+  if (loading || !journey) {
+    return <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center bg-white"><Loader2 className="size-6 animate-spin text-emerald-500" /></div>;
+  }
 
   return (
     <div className="-m-4 sm:-m-6 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-[#f8faf9]">
@@ -505,7 +510,7 @@ function CanvasInner() {
               </div>
             </div>
 
-            {/* Sandbox Mobile Conversation Simulator Frame */}
+            {/* Sandbox Mobile Conversation Simulator Thread Window */}
             <div className="flex-1 bg-[#efeae2] p-3 overflow-y-auto flex flex-col gap-2 shadow-inner min-h-0" id="sandbox-chat-flow">
               <div className="mx-auto bg-white/80 border border-slate-200/40 rounded-lg px-2 py-1 text-[10px] font-medium text-slate-500 text-center max-w-[240px]">
                 🔒 Intelligent Fuzzy-Matching Mode Active

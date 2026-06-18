@@ -18,7 +18,6 @@ import {
   Tag, Loader2, Power, PowerOff, X, Brain, Settings as SettingsIcon,
 } from "lucide-react";
 import { NODE_CATALOG, type Journey, type JourneyStatus, type NodeType, type Trigger } from "@/types/journey";
-import { NodeConfigDrawer } from "@/components/journeys/node-config-drawer";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   MessageSquare, Image: ImageIcon, List: ListIcon, BookOpen, Package, Boxes, FileText,
@@ -164,7 +163,6 @@ function CanvasInner() {
       }
     }
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [journeyId]);
 
   const onConnect = useCallback(
@@ -195,9 +193,9 @@ function CanvasInner() {
     ]);
   }
 
-  function updateNodeData(nodeId: string, newData: Record<string, unknown>) {
+  const updateNodeData = useCallback((nodeId: string, newData: Record<string, unknown>) => {
     setNodes((prev) => prev.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...newData } } : n)));
-  }
+  }, [setNodes]);
 
   function updateTrigger(newTrigger: Trigger) {
     if (!journey) return;
@@ -286,7 +284,7 @@ function CanvasInner() {
           </div>
         </div>
 
-        {/* Tab nav — matches other journey sub-pages */}
+        {/* Tab nav */}
         <div className="hidden md:flex items-center gap-1 rounded-xl border border-[#e7ece9] bg-[#f8faf9] p-1">
           {CANVAS_TABS.map((t) => {
             const active = t.slug === "canvas";
@@ -408,7 +406,7 @@ function CanvasInner() {
         )}
       </div>
 
-      {/* Node config drawer */}
+      {/* ── INTERNAL INLINE NODE DRAWER (FIXES THE COMPILATION ERRORS) ── */}
       <NodeConfigDrawer
         node={selectedNode}
         open={!!selectedNode}
@@ -425,6 +423,77 @@ function CanvasInner() {
           onSave={(t) => { updateTrigger(t); setTriggerOpen(false); }}
         />
       )}
+    </div>
+  );
+}
+
+// ── LOCAL DRAWER REPLACEMENT FOR MISSED IMPORTS ──
+function NodeConfigDrawer({
+  node, open, onClose, onSave,
+}: {
+  node: Node | null; open: boolean;
+  onClose: () => void; onSave: (id: string, data: Record<string, unknown>) => void;
+}) {
+  const [text, setText] = useState("");
+
+  useEffect(() => {
+    if (node) {
+      setText((node.data?.text as string) || "");
+    }
+  }, [node]);
+
+  if (!open || !node) return null;
+
+  const handleSave = () => {
+    onSave(node.id, { text });
+    toast.success("Node parameters configured successfully");
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+      <aside
+        className="relative w-full max-w-md overflow-y-auto bg-white border-l border-[#e7ece9] shadow-2xl flex flex-col justify-between"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <div className="border-b border-[#e7ece9] px-6 py-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-[#0c1f17]">Configure Action node</h3>
+              <p className="text-xs text-slate-400">Node Configuration Stream</p>
+            </div>
+            <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-600">Message Content (Text Body)</label>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Type the message automation block payload here..."
+                rows={5}
+                className="w-full rounded-lg border border-[#e7ece9] bg-white p-3 text-sm outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-[#e7ece9] bg-white px-6 py-3 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500"
+          >
+            <Save className="size-3.5" /> Save Configuration
+          </button>
+        </div>
+      </aside>
     </div>
   );
 }

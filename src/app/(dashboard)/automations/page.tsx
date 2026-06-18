@@ -17,7 +17,7 @@ import {
   PhoneCall,
   Loader2,
 } from "lucide-react"
-
+import { BotTemplates } from "@/components/automations/bot-templates"
 import { createClient } from "@/lib/supabase/client"
 import type { Automation } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -249,8 +249,11 @@ export default function AutomationsPage() {
               Delete
             </Button>
           </DialogFooter>
-        </DialogContent>
+       </DialogContent>
       </Dialog>
+
+      <BotTemplates onCreated={load} />
+
     </div>
   )
 }

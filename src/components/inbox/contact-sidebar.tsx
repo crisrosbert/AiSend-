@@ -113,8 +113,8 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
   if (!contact) {
     return (
-      <div className="flex h-full w-70 items-center justify-center border-l border-slate-800 bg-slate-900">
-        <p className="text-sm text-slate-500">Select a conversation</p>
+      <div className="flex h-full w-[280px] items-center justify-center border-l border-[#e7ece9] bg-white">
+        <p className="text-sm text-slate-400">Select a conversation</p>
       </div>
     );
   }
@@ -123,12 +123,12 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
-    <div className="flex h-full w-70 flex-col border-l border-slate-800 bg-slate-900">
+    <div className="flex h-full w-[280px] flex-col border-l border-[#e7ece9] bg-white">
       <ScrollArea className="flex-1">
         <div className="p-4">
           {/* Contact Info */}
           <div className="flex flex-col items-center text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-700 text-lg font-semibold text-white">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#e8f4ee] text-lg font-semibold text-[#0c1f17]">
               {contact.avatar_url ? (
                 <img
                   src={contact.avatar_url}
@@ -139,7 +139,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 initials
               )}
             </div>
-            <h3 className="mt-3 text-sm font-semibold text-white">
+            <h3 className="mt-3 text-sm font-semibold text-[#0c1f17]">
               {displayName}
             </h3>
             {contact.company && (
@@ -151,37 +151,37 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           <div className="mt-4 space-y-2">
             <button
               onClick={handleCopyPhone}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-[#f2f4f7]"
             >
-              <Phone className="h-4 w-4 text-slate-500" />
+              <Phone className="h-4 w-4 text-slate-400" />
               <span className="flex-1 text-left">{contact.phone}</span>
               {copied ? (
-                <Check className="h-3 w-3 text-violet-400" />
+                <Check className="h-3 w-3 text-emerald-600" />
               ) : (
-                <Copy className="h-3 w-3 text-slate-600" />
+                <Copy className="h-3 w-3 text-slate-400" />
               )}
             </button>
 
             {contact.email && (
-              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300">
-                <Mail className="h-4 w-4 text-slate-500" />
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400">
+                <Mail className="h-4 w-4 text-slate-400" />
                 <span className="truncate">{contact.email}</span>
               </div>
             )}
           </div>
 
           {/* Divider */}
-          <div className="my-4 border-t border-slate-800" />
+          <div className="my-4 border-t border-[#e7ece9]" />
 
           {/* Tags */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-slate-500">
+            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-slate-400">
               <TagIcon className="h-3 w-3" />
               Tags
             </div>
             <div className="mt-2 flex flex-wrap gap-1">
               {tags.length === 0 ? (
-                <p className="px-1 text-xs text-slate-600">No tags</p>
+                <p className="px-1 text-xs text-slate-400">No tags</p>
               ) : (
                 tags.map((tag) => (
                   <span
@@ -200,24 +200,24 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           </div>
 
           {/* Divider */}
-          <div className="my-4 border-t border-slate-800" />
+          <div className="my-4 border-t border-[#e7ece9]" />
 
           {/* Active Deals */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-slate-500">
+            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-slate-400">
               <DollarSign className="h-3 w-3" />
               Active Deals
             </div>
             <div className="mt-2 space-y-2">
               {deals.length === 0 ? (
-                <p className="px-1 text-xs text-slate-600">No deals</p>
+                <p className="px-1 text-xs text-slate-400">No deals</p>
               ) : (
                 deals.map((deal) => (
                   <div
                     key={deal.id}
-                    className="rounded-lg bg-slate-800 px-3 py-2"
+                    className="rounded-lg bg-[#f2f4f7] px-3 py-2"
                   >
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-sm font-medium text-[#0c1f17]">
                       {deal.title}
                     </p>
                     <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
@@ -244,11 +244,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           </div>
 
           {/* Divider */}
-          <div className="my-4 border-t border-slate-800" />
+          <div className="my-4 border-t border-[#e7ece9]" />
 
           {/* Notes */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-slate-500">
+            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-slate-400">
               <StickyNote className="h-3 w-3" />
               Notes
             </div>
@@ -259,11 +259,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                   onChange={(e) => setNewNote(e.target.value)}
                   placeholder="Add a note..."
                   rows={2}
-                  className="flex-1 resize-none rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-violet-500/50"
+                  className="flex-1 resize-none rounded-lg border border-[#e7ece9] bg-[#f2f4f7] px-3 py-2 text-xs text-[#0c1f17] placeholder-slate-500 outline-none focus:border-emerald-500/50"
                 />
                 <Button
                   size="sm"
-                  className="h-auto bg-violet-600 px-2 hover:bg-violet-500"
+                  className="h-auto bg-emerald-600 px-2 hover:bg-emerald-500"
                   onClick={handleAddNote}
                   disabled={!newNote.trim() || addingNote}
                 >
@@ -275,12 +275,12 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 {notes.map((note) => (
                   <div
                     key={note.id}
-                    className="rounded-lg bg-slate-800 px-3 py-2"
+                    className="rounded-lg bg-[#f2f4f7] px-3 py-2"
                   >
-                    <p className="whitespace-pre-wrap text-xs text-slate-300">
+                    <p className="whitespace-pre-wrap text-xs text-slate-400">
                       {note.note_text}
                     </p>
-                    <p className="mt-1 text-[10px] text-slate-600">
+                    <p className="mt-1 text-[10px] text-slate-400">
                       {format(new Date(note.created_at), "MMM d, yyyy HH:mm")}
                     </p>
                   </div>

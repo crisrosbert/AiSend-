@@ -40,8 +40,8 @@ interface WhatsAppWebhookEntry {
   id: string
   changes: Array<{
     value: {
-      messaging_product: string
-      metadata: {
+      messaging_product?: string
+      metadata?: {
         display_phone_number: string
         phone_number_id: string
       }
@@ -56,6 +56,14 @@ interface WhatsAppWebhookEntry {
         timestamp: string
         recipient_id: string
       }>
+      // message_template_status_update events carry these instead of
+      // messages/statuses. Meta pushes them when a submitted template is
+      // approved, rejected, paused, etc.
+      message_template_id?: number | string
+      message_template_name?: string
+      message_template_language?: string
+      event?: string
+      reason?: string | null
     }
     field: string
   }>
@@ -180,6 +188,17 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
     for (const change of entry.changes) {
       const value = change.value
 
+      // Template approval/rejection events — Meta pushes these on the
+      // `message_template_status_update` field when a submitted template
+      // changes state. Handle and continue (no messages/contacts here).
+      if (
+        change.field === 'message_template_status_update' ||
+        value.message_template_name
+      ) {
+        await handleTemplateStatusUpdate(value)
+        continue
+      }
+
       // Handle status updates
       if (value.statuses) {
         for (const status of value.statuses) {
@@ -190,7 +209,7 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       // Handle incoming messages
       if (!value.messages || !value.contacts) continue
 
-      const phoneNumberId = value.metadata.phone_number_id
+      const phoneNumberId = value.metadata!.phone_number_id
 
       // Find user's config by phone_number_id
       const { data: config, error: configError } = await supabaseAdmin()
@@ -261,6 +280,79 @@ function isValidStatusTransition(current: string, incoming: string): boolean {
   if (ii < 0) return false // unknown incoming status
   if (ci < 0) return true // unknown current — accept anything on the ladder
   return ii > ci
+}
+
+/**
+ * Handle Meta's message_template_status_update webhook. Fired when a
+ * submitted template is approved, rejected, paused, etc. We flip the
+ * local message_templates row so the UI reflects Meta's decision
+ * automatically — no manual "Sync from Meta" needed (the AiSensy UX).
+ *
+ * Match strategy: prefer meta_template_id (exact), fall back to
+ * (name + language) which Meta always includes.
+ */
+async function handleTemplateStatusUpdate(value: {
+  message_template_id?: number | string
+  message_template_name?: string
+  message_template_language?: string
+  event?: string
+  reason?: string | null
+}) {
+  const metaId =
+    value.message_template_id != null
+      ? String(value.message_template_id)
+      : null
+  const name = value.message_template_name
+  const language = value.message_template_language
+  const event = (value.event || '').toUpperCase()
+
+  if (!metaId && !name) {
+    console.warn('[webhook] template status update with no id or name')
+    return
+  }
+
+  // Map Meta's event to our TitleCase status CHECK values.
+  let status: 'Approved' | 'Rejected' | 'Pending'
+  switch (event) {
+    case 'APPROVED':
+      status = 'Approved'
+      break
+    case 'REJECTED':
+    case 'DISABLED':
+    case 'PAUSED':
+    case 'FLAGGED':
+      status = 'Rejected'
+      break
+    default:
+      status = 'Pending'
+  }
+
+  const patch: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  }
+
+  // Try id match first (most precise), then name+language.
+  if (metaId) {
+    const { data, error } = await supabaseAdmin()
+      .from('message_templates')
+      .update(patch)
+      .eq('meta_template_id', metaId)
+      .select('id')
+    if (!error && data && data.length > 0) return
+  }
+
+  if (name) {
+    let q = supabaseAdmin()
+      .from('message_templates')
+      .update(patch)
+      .eq('name', name)
+    if (language) q = q.eq('language', language)
+    const { error } = await q
+    if (error) {
+      console.error('[webhook] template status update failed:', error.message)
+    }
+  }
 }
 
 async function handleStatusUpdate(status: {
@@ -771,19 +863,24 @@ async function findOrCreateContact(
 }
 
 async function findOrCreateConversation(userId: string, contactId: string) {
-  // Look for existing conversation
+  // Look for ALL existing conversations (not just one) — using .single()
+  // was the original bug: it errors if duplicates already exist, which
+  // caused the webhook to create yet ANOTHER conversation each time,
+  // multiplying duplicates over time.
   const { data: existing, error: findError } = await supabaseAdmin()
     .from('conversations')
     .select('*')
     .eq('user_id', userId)
     .eq('contact_id', contactId)
-    .single()
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
 
   if (!findError && existing) {
     return existing
   }
 
-  // Create new conversation
+  // Create new conversation only if none exists
   const { data: newConv, error: createError } = await supabaseAdmin()
     .from('conversations')
     .insert({

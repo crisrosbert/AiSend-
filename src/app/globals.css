@@ -1,96 +1,348 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-}
+/* ============================================================
+   CLICKSTREAM WA — AISENSY-STYLE LIGHT THEME
+   This file overrides the original dark theme globally.
+   No need to edit individual component files.
+   ============================================================ */
 
 :root {
-  --background: oklch(0.13 0.01 260);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.18 0.01 260);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.18 0.01 260);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.526 0.247 293);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.22 0.01 260);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.22 0.01 260);
-  --muted-foreground: oklch(0.65 0.01 260);
-  --accent: oklch(0.22 0.01 260);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.28 0.01 260);
-  --input: oklch(0.28 0.01 260);
-  --ring: oklch(0.526 0.247 293);
-  --chart-1: oklch(0.526 0.247 293);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.16 0.01 260);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.526 0.247 293);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.22 0.01 260);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.28 0.01 260);
-  --sidebar-ring: oklch(0.526 0.247 293);
+  --brand:#10b981;
+  --brand-deep:#059669;
+  --brand-50:#ecfdf5;
+  --brand-100:#d1fae5;
+  --radius:0.75rem;
+  --font-display: var(--font-display, 'Sora', sans-serif);
+  --font-sans: var(--font-sans, 'Plus Jakarta Sans', sans-serif);
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
+@theme inline {
+  --color-background: #f4f7f5;
+  --color-foreground: #0c1f17;
+  --font-sans: var(--font-sans);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+* { box-sizing: border-box; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: #f4f7f5;
+  color: #0c1f17;
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* ============================================================
+   DARK → LIGHT CLASS REMAPPING
+   Every slate-dark class from the original theme is remapped
+   to AiSensy-style light equivalents using !important so it
+   wins against the inline Tailwind utilities.
+   ============================================================ */
+
+/* --- BACKGROUNDS --- */
+.bg-slate-950 { background-color: #f4f7f5 !important; }   /* app shell bg */
+.bg-slate-900 { background-color: #ffffff !important; }   /* cards / sidebar */
+.bg-slate-800 { background-color: #ffffff !important; }   /* inputs / surfaces */
+.bg-slate-700 { background-color: #f1f5f4 !important; }
+.bg-slate-600 { background-color: #e7ece9 !important; }
+.bg-slate-500 { background-color: #d8e0dc !important; }
+
+/* --- ALL opacity variants (the /40 /50 /60 etc that were invisible) --- */
+.bg-slate-950\/50,
+.bg-slate-950\/70 { background-color: rgba(12,31,23,.45) !important; }
+.bg-slate-900\/40,
+.bg-slate-900\/50,
+.bg-slate-900\/60,
+.bg-slate-900\/80,
+.bg-slate-900\/95 { background-color: #ffffff !important; }
+.bg-slate-800\/40,
+.bg-slate-800\/70,
+.bg-slate-800\/80 { background-color: #f8faf9 !important; }
+.bg-slate-800\/30,
+.bg-slate-800\/50,
+.bg-slate-800\/60 { background-color: #f8faf9 !important; }
+.bg-slate-700\/40,
+.bg-slate-700\/50 { background-color: #f1f5f4 !important; }
+.bg-slate-600\/20 { background-color: #eef2f0 !important; }
+.bg-slate-500\/10 { background-color: #f4f7f5 !important; }
+
+/* --- TEXT --- */
+.text-white   { color: #0c1f17 !important; }
+.text-slate-100 { color: #0c1f17 !important; }
+.text-slate-200 { color: #1a2b23 !important; }
+.text-slate-300 { color: #334155 !important; }
+.text-slate-400 { color: #5b6b63 !important; }
+.text-slate-500 { color: #6b7c73 !important; }
+.text-slate-600 { color: #8a978f !important; }
+
+/* --- BORDERS --- */
+.border-slate-500 { border-color: #cfd8d3 !important; }
+.border-slate-600 { border-color: #dde4e0 !important; }
+.border-slate-700 { border-color: #e7ece9 !important; }
+.border-slate-800 { border-color: #eef2f0 !important; }
+
+/* --- BRAND COLOR REMAP (violet → emerald) --- */
+.bg-violet-500 { background-color: #10b981 !important; }
+.bg-violet-600 { background-color: #059669 !important; }
+.bg-violet-400 { background-color: #34d399 !important; }
+.hover\:bg-violet-500:hover { background-color: #10b981 !important; }
+.hover\:bg-violet-400:hover { background-color: #34d399 !important; }
+.hover\:bg-violet-500\/10:hover { background-color: #ecfdf5 !important; }
+.text-violet-500 { color: #059669 !important; }
+.text-violet-400 { color: #059669 !important; }
+.hover\:text-violet-400:hover { color: #047857 !important; }
+.bg-violet-500\/10 { background-color: #ecfdf5 !important; }
+.bg-violet-500\/20 { background-color: #d1fae5 !important; }
+.border-violet-500 { border-color: #10b981 !important; }
+.focus-visible\:border-violet-500:focus-visible { border-color: #10b981 !important; }
+.ring-violet-500\/20 { --tw-ring-color: rgba(16,185,129,.2) !important; }
+.focus-visible\:ring-violet-500\/20:focus-visible { --tw-ring-color: rgba(16,185,129,.2) !important; }
+
+/* --- ALL remaining violet shades (50,200,300,700) --- */
+.bg-violet-700 { background-color: #047857 !important; }
+.hover\:bg-violet-700:hover { background-color: #047857 !important; }
+.bg-violet-50 { background-color: #ecfdf5 !important; }
+.bg-violet-200 { background-color: #a7f3d0 !important; }
+.bg-violet-300 { background-color: #6ee7b7 !important; }
+.text-violet-200 { color: #047857 !important; }
+.text-violet-300 { color: #059669 !important; }
+.text-violet-600 { color: #047857 !important; }
+.border-violet-400 { border-color: #34d399 !important; }
+.border-violet-600 { border-color: #059669 !important; }
+.outline-violet-400 { outline-color: #34d399 !important; }
+.bg-violet-500\/5 { background-color: #f0fdf9 !important; }
+.text-violet-50 { color: #ecfdf5 !important; }
+.ring-violet-500 { --tw-ring-color: #10b981 !important; }
+
+/* --- HOVER STATES --- */
+.hover\:bg-slate-800:hover { background-color: #f1f5f4 !important; }
+.hover\:bg-slate-800\/30:hover { background-color: #f8faf9 !important; }
+.hover\:bg-slate-800\/60:hover { background-color: #f1f5f4 !important; }
+.hover\:bg-slate-700:hover { background-color: #e7ece9 !important; }
+.hover\:text-white:hover { color: #0c1f17 !important; }
+.focus\:bg-slate-800:focus { background-color: #f1f5f4 !important; }
+.focus\:bg-slate-800\/60:focus { background-color: #f1f5f4 !important; }
+
+/* --- PLACEHOLDERS --- */
+.placeholder\:text-slate-500::placeholder { color: #9aa8a0 !important; }
+.placeholder\:text-slate-600::placeholder { color: #9aa8a0 !important; }
+
+/* --- RINGS / DIVIDERS --- */
+.divide-slate-800 > * + * { border-color: #eef2f0 !important; }
+.ring-slate-700 { --tw-ring-color: #e7ece9 !important; }
+.ring-slate-800 { --tw-ring-color: #eef2f0 !important; }
+.ring-white\/10 { --tw-ring-color: rgba(12,31,23,.08) !important; }
+
+/* --- SIDEBAR special: only the main nav aside, scoped tightly --- */
+aside[aria-label="Primary"] {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e7ece9 !important;
+}
+
+/* ============================================================
+   GLOBAL POLISH
+   ============================================================ */
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d8e0dc; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #c2cdc7; }
+
+::selection { background: rgba(16,185,129,.2); color: #053b2a; }
+
+:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
+
+/* Buttons get emerald primary treatment */
+button.bg-violet-600,
+button.bg-violet-500 {
+  box-shadow: 0 6px 18px rgba(16,185,129,.28);
+}
+
+/* Loading spinner color */
+.border-violet-500 { border-color: #10b981 !important; }
+.border-t-transparent { border-top-color: transparent !important; }
+
+/* Animations */
+@keyframes fade-in { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:none; } }
+.animate-fade-in { animation: fade-in .3s ease forwards; }
+
+/* ============================================================
+   DESIGN SYSTEM UPGRADE — v2 (professional / AiSensy-grade)
+   Appended below the legacy remaps so it wins by source order
+   without removing anything that already works. Refines the
+   palette, depth, typography, and mobile behavior.
+   ============================================================ */
+
+:root {
+  /* AiSensy-grade green: a confident forest/emerald, not neon.
+     Primary actions use --brand; deep variant for hover/press. */
+  --brand:        #1aa260;   /* primary */
+  --brand-deep:   #14834e;   /* hover */
+  --brand-press:  #0f6b40;   /* active */
+  --brand-50:     #effaf4;
+  --brand-100:    #d6f1e2;
+  --brand-200:    #aee3c6;
+  --ink:          #0b231a;   /* near-black green text */
+  --ink-soft:     #46584f;   /* secondary text */
+  --ink-muted:    #7c8a83;   /* tertiary / placeholder */
+  --line:         #e6ece9;   /* hairline borders */
+  --surface:      #ffffff;   /* cards */
+  --canvas:       #f5f8f6;   /* app background */
+
+  /* Elevation tokens — soft, layered, never harsh */
+  --shadow-xs: 0 1px 2px rgba(11,35,26,.05);
+  --shadow-sm: 0 1px 3px rgba(11,35,26,.06), 0 1px 2px rgba(11,35,26,.04);
+  --shadow-md: 0 4px 12px rgba(11,35,26,.07), 0 2px 4px rgba(11,35,26,.04);
+  --shadow-lg: 0 12px 32px rgba(11,35,26,.10), 0 4px 8px rgba(11,35,26,.05);
+  --shadow-brand: 0 8px 20px rgba(26,162,96,.22);
+}
+
+/* App canvas + base type rhythm */
+body { background: var(--canvas); color: var(--ink); letter-spacing: -0.005em; }
+
+/* ---- Brand remap to the refined green (overrides the neon emerald) ---- */
+.bg-violet-500,
+.bg-emerald-500 { background-color: var(--brand) !important; }
+.bg-violet-600,
+.bg-emerald-600 { background-color: var(--brand-deep) !important; }
+.hover\:bg-violet-600:hover,
+.hover\:bg-emerald-600:hover { background-color: var(--brand-deep) !important; }
+.hover\:bg-violet-500:hover,
+.hover\:bg-emerald-500:hover { background-color: var(--brand) !important; }
+.text-violet-500,
+.text-violet-400,
+.text-emerald-500,
+.text-emerald-600 { color: var(--brand-deep) !important; }
+.border-emerald-500,
+.border-violet-500 { border-color: var(--brand) !important; }
+.ring-emerald-500 { --tw-ring-color: var(--brand) !important; }
+
+/* ---- Cards: soft elevation + hairline, gentle hover lift ---- */
+.bg-white {
+  background-color: var(--surface) !important;
+}
+[class*="rounded-"][class*="border"].bg-white,
+.card, [data-slot="card"] {
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+[data-slot="card"]:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* ---- Primary buttons: weighty, confident, tactile ---- */
+button.bg-violet-600, button.bg-violet-500,
+button.bg-emerald-600, button.bg-emerald-500,
+.btn-primary {
+  background: linear-gradient(180deg, var(--brand) 0%, var(--brand-deep) 100%) !important;
+  color: #fff !important;
+  box-shadow: var(--shadow-brand) !important;
+  font-weight: 600;
+  transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
+}
+button.bg-violet-600:hover, button.bg-violet-500:hover,
+button.bg-emerald-600:hover, button.bg-emerald-500:hover {
+  filter: brightness(1.03);
+  box-shadow: 0 10px 26px rgba(26,162,96,.30) !important;
+}
+button.bg-violet-600:active, button.bg-violet-500:active,
+button.bg-emerald-600:active, button.bg-emerald-500:active {
+  transform: translateY(1px);
+  filter: brightness(.97);
+}
+
+/* ---- Inputs: clean, calm focus ring in brand green ---- */
+input, textarea, select {
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px rgba(26,162,96,.15) !important;
+  outline: none !important;
+}
+:focus-visible { outline-color: var(--brand); }
+::selection { background: rgba(26,162,96,.18); color: var(--brand-press); }
+
+/* ---- Typography scale: tighter, more editorial headings ---- */
+h1 { font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem); font-weight: 700; }
+h2 { font-weight: 700; }
+h1, h2, h3, h4, .font-display { letter-spacing: -0.022em; color: var(--ink); }
+
+/* ---- Sidebar: subtle depth, active item gets a brand rail ---- */
+aside[aria-label="Primary"] {
+  background: var(--surface) !important;
+  border-right: 1px solid var(--line) !important;
+  box-shadow: var(--shadow-xs);
+}
+
+/* ---- Badges/pills get rounded, soft-tinted look (status colors) ---- */
+[class*="rounded-full"][class*="border"] {
+  font-weight: 600;
+}
+
+/* ---- Scrollbar refinement ---- */
+::-webkit-scrollbar-thumb { background: #d3ddd7; }
+::-webkit-scrollbar-thumb:hover { background: #b9c7c0; }
+
+/* ============================================================
+   MOBILE RESPONSIVENESS HARDENING
+   Generic safeguards so dense desktop layouts don't overflow
+   on phones. Page components keep their own responsive classes;
+   these are the safety net.
+   ============================================================ */
+
+@media (max-width: 640px) {
+  /* Prevent horizontal scroll from wide fixed-width children */
+  html, body { overflow-x: hidden; }
+
+  /* Tables become horizontally scrollable instead of breaking layout */
+  table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Multi-column grids collapse to single column on phones unless a
+     component explicitly opts into a mobile grid via sm:/grid-cols. */
+  .grid.grid-cols-2:not([class*="sm:"]):not([class*="xs:"]),
+  .grid.grid-cols-3:not([class*="sm:"]),
+  .grid.grid-cols-4:not([class*="sm:"]) {
+    grid-template-columns: 1fr !important;
   }
-  body {
-    @apply bg-background text-foreground;
+
+  /* Dialogs/sheets: full-width with comfortable insets on phones */
+  [role="dialog"] {
+    max-width: calc(100vw - 1.5rem) !important;
   }
-  html {
-    @apply font-sans;
+
+  /* Tighter heading sizes on phones */
+  h1 { font-size: 1.375rem; }
+
+  /* Big stat numbers shouldn't overflow cards */
+  .text-3xl, .text-4xl { font-size: 1.5rem !important; }
+}
+
+/* Tap targets: ensure buttons/links are finger-friendly on touch */
+@media (pointer: coarse) {
+  button, a[role="button"], .btn { min-height: 40px; }
+}
+
+/* Respect reduced-motion preferences (accessibility / pro polish) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
   }
 }

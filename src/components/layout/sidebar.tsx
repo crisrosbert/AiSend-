@@ -9,14 +9,15 @@ import { useTotalUnread } from "@/hooks/use-total-unread";
 import {
   LayoutDashboard,
   MessageSquare,
+  History,
   Users,
-  GitBranch,
   Radio,
   Zap,
   Settings,
+  Wallet,
   LogOut,
-  User,
   X,
+  GitBranch,
 } from "lucide-react";
 import {
   Avatar,
@@ -31,17 +32,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Nav items — slug prefix added dynamically below
 const navItems = [
   { path: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { path: "inbox", label: "Inbox", icon: MessageSquare },
-  { path: "contacts", label: "Contacts", icon: Users },
-  { path: "pipelines", label: "Pipelines", icon: GitBranch },
-  { path: "broadcasts", label: "Broadcasts", icon: Radio },
-  { path: "automations", label: "Automations", icon: Zap },
+  { path: "inbox",     label: "Live Chat",  icon: MessageSquare },
+  { path: "recent",    label: "Recent",     icon: History },
+  { path: "contacts",  label: "Contacts",   icon: Users },
+  { path: "pipelines", label: "Pipelines",  icon: GitBranch },
+  { path: "broadcasts",label: "Campaigns",  icon: Radio },
+  { path: "automations",label: "Flows",     icon: Zap },
 ];
 
 const bottomNavItems = [
+  { path: "billing",  label: "Billing",  icon: Wallet, absolute: true },
   { path: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -55,43 +57,34 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { profile, signOut } = useAuth();
   const totalUnread = useTotalUnread();
 
-  // Build base URL prefix using slug if available
-  // e.g. /we3media or "" for legacy accounts
   const slugPrefix = profile?.slug ? `/${profile.slug}` : "";
-
-  // Helper — build full href for a nav path
   const href = (path: string) => `${slugPrefix}/${path}`;
 
-  // Active check — works for both /we3media/dashboard and /dashboard
   const isActive = (path: string) => {
     const full = href(path);
     const legacy = `/${path}`;
-    if (path === "dashboard") {
-      return pathname === full || pathname === legacy;
-    }
+    if (path === "dashboard") return pathname === full || pathname === legacy;
     return pathname.startsWith(full) || pathname.startsWith(legacy);
   };
 
-  // Close drawer on route change
-  useEffect(() => {
-    onClose?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  useEffect(() => { onClose?.(); }, [pathname]);
 
-  // Lock body scroll on mobile when drawer open
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose?.();
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose?.(); };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);
+
+  const initial =
+    profile?.full_name?.charAt(0)?.toUpperCase() ??
+    profile?.email?.charAt(0)?.toUpperCase() ??
+    "U";
 
   return (
     <>
@@ -101,96 +94,157 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         aria-label="Close menu"
         onClick={onClose}
         className={cn(
-          "fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm transition-opacity lg:hidden",
-          open
-            ? "pointer-events-auto opacity-100"
-            : "pointer-events-none opacity-0",
+          "fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden",
+          open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
         )}
       />
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-slate-800 bg-slate-900",
+          "fixed inset-y-0 left-0 z-40 flex h-full flex-col",
           "transition-transform duration-200 ease-out will-change-transform",
+          /* mobile: full-width drawer that slides in */
+          "w-64",
           open ? "translate-x-0" : "-translate-x-full",
-          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
+          /* desktop: always-visible narrow icon+label column */
+          "lg:static lg:z-0 lg:w-[72px] lg:translate-x-0 lg:transition-none",
         )}
-        aria-label="Primary"
+        style={{ background: "#112118" }}
+        aria-label="Primary navigation"
       >
-        {/* Logo */}
-        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-4">
-          <Link href={href("dashboard")} className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500">
-              <MessageSquare className="h-4 w-4 text-white" />
+        {/* ── Logo / Brand ── */}
+        <div className="flex h-14 shrink-0 items-center justify-center border-b border-white/5 px-2">
+          <Link
+            href={href("dashboard")}
+            className="flex items-center justify-center"
+            title="Clickstream WA"
+          >
+            {/* AiSensy-style lightning bolt logo mark */}
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-xl"
+              style={{ background: "linear-gradient(135deg,#22c55e,#059669)" }}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path
+                  d="M10.5 2L4 10.5H9L7.5 16L14 7.5H9L10.5 2Z"
+                  fill="white"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </div>
-            <span className="text-sm font-semibold text-white">
-              {profile?.business_name ?? "WhatsApp CRM"}
-            </span>
           </Link>
+
+          {/* Mobile close button */}
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close menu"
-            className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-white/40 hover:bg-white/5 hover:text-white lg:hidden"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Main navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <ul className="flex flex-col gap-1">
+        {/* ── Main Nav ── */}
+        <nav className="flex flex-1 flex-col overflow-y-auto py-3">
+          <ul className="flex flex-col items-center gap-0.5 px-2">
             {navItems.map((item) => {
               const active = isActive(item.path);
-              const showUnreadDot =
-                item.path === "inbox" && totalUnread > 0 && !active;
-
+              const showBadge = item.path === "inbox" && totalUnread > 0;
               return (
-                <li key={item.path}>
+                <li key={item.path} className="w-full">
                   <Link
                     href={href(item.path)}
+                    title={item.label}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                      "group relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 transition-all duration-150",
+                      /* mobile: show as horizontal row */
+                      "lg:flex-col",
                       active
-                        ? "bg-violet-500/10 text-violet-500"
-                        : "text-slate-400 hover:bg-slate-800 hover:text-white",
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "text-white/40 hover:bg-white/5 hover:text-white/80",
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
-                    <span className="flex-1">{item.label}</span>
-                    {showUnreadDot && (
+                    {/* Active left-bar indicator */}
+                    {active && (
                       <span
-                        aria-label={`${totalUnread} unread`}
-                        className="relative flex h-2 w-2"
-                      >
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
-                      </span>
+                        className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full"
+                        style={{ background: "#22c55e" }}
+                      />
                     )}
+
+                    <div className="relative">
+                      <item.icon
+                        className={cn(
+                          "h-[18px] w-[18px] shrink-0 transition-colors",
+                          active ? "text-emerald-400" : "group-hover:text-white/80",
+                        )}
+                        strokeWidth={active ? 2.2 : 1.8}
+                      />
+                      {showBadge && (
+                        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-0.5 text-[9px] font-bold text-white">
+                          {totalUnread > 99 ? "99+" : totalUnread}
+                        </span>
+                      )}
+                    </div>
+
+                    <span
+                      className={cn(
+                        "text-center font-medium leading-none",
+                        /* on mobile (inside drawer) show label inline */
+                        "hidden lg:block",
+                        "text-[9.5px] tracking-wide",
+                        active ? "text-emerald-400" : "text-white/40 group-hover:text-white/70",
+                      )}
+                    >
+                      {item.label}
+                    </span>
+
+                    {/* Mobile drawer label */}
+                    <span className="ml-3 flex-1 text-sm font-medium lg:hidden">
+                      {item.label}
+                    </span>
                   </Link>
                 </li>
               );
             })}
           </ul>
 
-          <div className="my-4 border-t border-slate-800" />
+          {/* Divider */}
+          <div className="my-2 mx-3 border-t border-white/5" />
 
-          <ul className="flex flex-col gap-1">
+          {/* Bottom nav items */}
+          <ul className="flex flex-col items-center gap-0.5 px-2">
             {bottomNavItems.map((item) => {
               const active = isActive(item.path);
               return (
-                <li key={item.path}>
+                <li key={item.path} className="w-full">
                   <Link
-                    href={href(item.path)}
+                    href={(item as { absolute?: boolean }).absolute ? `/${item.path}` : href(item.path)}
+                    title={item.label}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                      "group relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 transition-all duration-150",
                       active
-                        ? "bg-violet-500/10 text-violet-500"
-                        : "text-slate-400 hover:bg-slate-800 hover:text-white",
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "text-white/40 hover:bg-white/5 hover:text-white/80",
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
+                    {active && (
+                      <span
+                        className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full"
+                        style={{ background: "#22c55e" }}
+                      />
+                    )}
+                    <item.icon
+                      className={cn(
+                        "h-[18px] w-[18px] shrink-0 transition-colors",
+                        active ? "text-emerald-400" : "group-hover:text-white/80",
+                      )}
+                      strokeWidth={active ? 2.2 : 1.8}
+                    />
+                    <span className="hidden text-[9.5px] font-medium tracking-wide text-white/40 group-hover:text-white/70 lg:block">
+                      {item.label}
+                    </span>
+                    <span className="ml-3 flex-1 text-sm font-medium lg:hidden">{item.label}</span>
                   </Link>
                 </li>
               );
@@ -198,66 +252,69 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           </ul>
         </nav>
 
-        {/* User section */}
-        <div className="shrink-0 border-t border-slate-800 p-3">
+        {/* ── User Avatar (bottom) ── */}
+        <div className="shrink-0 border-t border-white/5 py-3 flex justify-center">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-slate-800/60 focus:bg-slate-800/60 focus:outline-none data-popup-open:bg-slate-800/60">
-              <Avatar className="size-8 shrink-0">
-                {profile?.avatar_url ? (
-                  <AvatarImage
-                    src={profile.avatar_url}
-                    alt={profile.full_name ?? "Avatar"}
-                  />
-                ) : null}
-                <AvatarFallback className="bg-violet-500/10 text-sm font-medium text-violet-500">
-                  {profile?.full_name?.charAt(0)?.toUpperCase() ??
-                    profile?.email?.charAt(0)?.toUpperCase() ??
-                    "U"}
+            <DropdownMenuTrigger className="flex flex-col items-center gap-1 rounded-xl px-1 py-2 transition-colors hover:bg-white/5 focus:outline-none w-full mx-2">
+              <Avatar className="size-8 ring-1 ring-white/10">
+                {profile?.avatar_url && (
+                  <AvatarImage src={profile.avatar_url} alt={profile.full_name ?? ""} />
+                )}
+                <AvatarFallback
+                  className="text-xs font-bold"
+                  style={{ background: "#059669", color: "#fff" }}
+                >
+                  {initial}
                 </AvatarFallback>
               </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-white">
-                  {profile?.full_name ?? "User"}
-                </p>
-                <p className="truncate text-xs text-slate-400">
-                  {profile?.email ?? ""}
-                </p>
-              </div>
+              <span className="hidden text-[9.5px] font-medium tracking-wide text-white/40 lg:block">
+                Account
+              </span>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent
               align="end"
-              side="top"
-              sideOffset={6}
-              className="min-w-56 bg-slate-900 text-slate-100 ring-slate-700"
+              side="right"
+              sideOffset={8}
+              className="min-w-52 border-white/10 text-slate-200"
+              style={{ background: "#112118" }}
             >
+              {/* User info */}
+              <div className="px-3 py-2 border-b border-white/5">
+                <p className="text-sm font-semibold text-white truncate">
+                  {profile?.full_name ?? "User"}
+                </p>
+                <p className="text-[11px] text-white/40 truncate">{profile?.email ?? ""}</p>
+              </div>
+
+              <DropdownMenuItem
+                render={
+                  <Link
+                    href={`${slugPrefix}/billing`}
+                    onClick={onClose}
+                    className="focus:bg-white/5"
+                  />
+                }
+              >
+                <Wallet className="size-4 text-white/40" />
+                Billing
+              </DropdownMenuItem>
               <DropdownMenuItem
                 render={
                   <Link
                     href={`${slugPrefix}/settings?tab=profile`}
                     onClick={onClose}
-                    className="text-slate-200 focus:bg-slate-800 focus:text-white"
+                    className="focus:bg-white/5"
                   />
                 }
               >
-                <User className="size-4" />
-                Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                render={
-                  <Link
-                    href={`${slugPrefix}/settings?tab=whatsapp`}
-                    onClick={onClose}
-                    className="text-slate-200 focus:bg-slate-800 focus:text-white"
-                  />
-                }
-              >
-                <Settings className="size-4" />
+                <Settings className="size-4 text-white/40" />
                 Settings
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-slate-800" />
+              <DropdownMenuSeparator className="bg-white/5" />
               <DropdownMenuItem
                 onClick={signOut}
-                className="text-slate-200 focus:bg-slate-800 focus:text-white"
+                className="focus:bg-white/5 text-red-400 focus:text-red-400"
               >
                 <LogOut className="size-4" />
                 Sign out

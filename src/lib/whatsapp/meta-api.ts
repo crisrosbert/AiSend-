@@ -278,3 +278,271 @@ export async function downloadMedia(
   const buffer = Buffer.from(await response.arrayBuffer())
   return { buffer, contentType }
 }
+
+// ============================================================
+// Message templates — create / submit for approval
+// ============================================================
+
+export interface CreateTemplateArgs {
+  wabaId: string
+  accessToken: string
+  name: string
+  /** Meta category: MARKETING | UTILITY | AUTHENTICATION */
+  category: string
+  /** Meta language code, e.g. en_US, hi */
+  language: string
+  bodyText: string
+  /** Optional plain-text header. Media headers aren't supported here yet. */
+  headerText?: string
+  footerText?: string
+}
+
+export interface CreateTemplateResult {
+  id: string
+  status: string
+  category: string
+}
+
+/**
+ * Count {{1}}, {{2}} … placeholders in a string and return the highest
+ * index used. Meta requires example values for every placeholder in a
+ * template body at submit time, or it rejects with a 2388xxx error.
+ */
+function maxPlaceholder(text: string): number {
+  let max = 0
+  const re = /\{\{\s*(\d+)\s*\}\}/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const n = parseInt(m[1], 10)
+    if (n > max) max = n
+  }
+  return max
+}
+
+/**
+ * Submit a new message template to Meta for approval. Mirrors the manual
+ * Graph API call (POST /{waba_id}/message_templates) so clients never
+ * touch the Meta dashboard — the AiSensy "create template" experience.
+ *
+ * Returns Meta's template id + status (usually PENDING; library-derived
+ * or trivially-safe templates may come back APPROVED immediately).
+ */
+export async function createTemplate(
+  args: CreateTemplateArgs
+): Promise<CreateTemplateResult> {
+  const {
+    wabaId,
+    accessToken,
+    name,
+    category,
+    language,
+    bodyText,
+    headerText,
+    footerText,
+  } = args
+
+  const url = `${META_API_BASE}/${wabaId}/message_templates`
+
+  const components: Record<string, unknown>[] = []
+
+  if (headerText && headerText.trim()) {
+    components.push({
+      type: 'HEADER',
+      format: 'TEXT',
+      text: headerText.trim(),
+    })
+  }
+
+  // Body is required. If it has {{n}} placeholders, Meta wants an
+  // example array with one sample value per placeholder.
+  const bodyComponent: Record<string, unknown> = {
+    type: 'BODY',
+    text: bodyText,
+  }
+  const placeholderCount = maxPlaceholder(bodyText)
+  if (placeholderCount > 0) {
+    bodyComponent.example = {
+      body_text: [
+        Array.from({ length: placeholderCount }, (_, i) => `Sample${i + 1}`),
+      ],
+    }
+  }
+  components.push(bodyComponent)
+
+  if (footerText && footerText.trim()) {
+    components.push({
+      type: 'FOOTER',
+      text: footerText.trim(),
+    })
+  }
+
+  const payload = {
+    name: name.trim().toLowerCase().replace(/\s+/g, '_'),
+    category: category.toUpperCase(),
+    language,
+    components,
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  return {
+    id: data.id,
+    status: data.status ?? 'PENDING',
+    category: data.category ?? category.toUpperCase(),
+  }
+}
+
+// ============================================================
+// Business profile — read / update (logo, about, website, etc.)
+// ============================================================
+
+export interface BusinessProfile {
+  about?: string
+  address?: string
+  description?: string
+  email?: string
+  vertical?: string            // Meta's business category
+  websites?: string[]
+  profile_picture_url?: string
+}
+
+export interface GetBusinessProfileArgs {
+  phoneNumberId: string
+  accessToken: string
+}
+
+/**
+ * Read the WhatsApp Business Profile for a phone number (about, address,
+ * description, email, category/vertical, websites, profile picture URL).
+ */
+export async function getBusinessProfile(
+  args: GetBusinessProfileArgs,
+): Promise<BusinessProfile> {
+  const { phoneNumberId, accessToken } = args
+  const fields =
+    'about,address,description,email,vertical,websites,profile_picture_url'
+  const url = `${META_API_BASE}/${phoneNumberId}/whatsapp_business_profile?fields=${fields}`
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const data = await response.json()
+  // Meta returns { data: [ { ...profile } ] }
+  const profile = Array.isArray(data?.data) ? data.data[0] ?? {} : {}
+  return profile as BusinessProfile
+}
+
+export interface UpdateBusinessProfileArgs {
+  phoneNumberId: string
+  accessToken: string
+  about?: string
+  address?: string
+  description?: string
+  email?: string
+  vertical?: string
+  websites?: string[]
+  /** A media handle returned by uploadProfilePhoto(), to set the avatar. */
+  profilePictureHandle?: string
+}
+
+/**
+ * Update text fields of the business profile (and optionally the photo,
+ * via a pre-uploaded media handle). All fields optional — only provided
+ * keys are sent.
+ */
+export async function updateBusinessProfile(
+  args: UpdateBusinessProfileArgs,
+): Promise<{ success: boolean }> {
+  const { phoneNumberId, accessToken, profilePictureHandle, ...fields } = args
+
+  const body: Record<string, unknown> = { messaging_product: 'whatsapp' }
+  for (const [k, v] of Object.entries(fields)) {
+    if (v !== undefined && v !== null && v !== '') body[k] = v
+  }
+  if (profilePictureHandle) {
+    body.profile_picture_handle = profilePictureHandle
+  }
+
+  const url = `${META_API_BASE}/${phoneNumberId}/whatsapp_business_profile`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  return { success: true }
+}
+
+export interface UploadProfilePhotoArgs {
+  appId: string
+  accessToken: string
+  fileBytes: ArrayBuffer
+  mimeType: string
+  fileName?: string
+}
+
+/**
+ * Upload an image to Meta's resumable upload API and return a media
+ * handle that updateBusinessProfile() can use as profile_picture_handle.
+ *
+ * Two-step: (1) create an upload session on the APP, (2) POST the bytes;
+ * Meta returns { h: "<handle>" }.
+ */
+export async function uploadProfilePhoto(
+  args: UploadProfilePhotoArgs,
+): Promise<string> {
+  const { appId, accessToken, fileBytes, mimeType, fileName = 'logo.jpg' } = args
+
+  // 1) Create the upload session.
+  const sessionUrl =
+    `${META_API_BASE}/${appId}/uploads` +
+    `?file_name=${encodeURIComponent(fileName)}` +
+    `&file_length=${fileBytes.byteLength}` +
+    `&file_type=${encodeURIComponent(mimeType)}`
+
+  const sessionRes = await fetch(sessionUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!sessionRes.ok) {
+    await throwMetaError(sessionRes, `Upload session failed: ${sessionRes.status}`)
+  }
+  const session = await sessionRes.json()
+  const sessionId: string = session.id // like "upload:XXXX"
+
+  // 2) Upload the bytes to that session.
+  const uploadRes = await fetch(`${META_API_BASE}/${sessionId}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `OAuth ${accessToken}`,
+      file_offset: '0',
+      'Content-Type': mimeType,
+    },
+    body: fileBytes,
+  })
+  if (!uploadRes.ok) {
+    await throwMetaError(uploadRes, `Photo upload failed: ${uploadRes.status}`)
+  }
+  const uploaded = await uploadRes.json()
+  return uploaded.h as string // the media handle
+}

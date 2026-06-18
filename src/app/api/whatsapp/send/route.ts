@@ -13,6 +13,13 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit'
+import {
+  getOrgIdForUser,
+  getTemplateCategory,
+  getOrgBalance,
+  priceForCategory,
+  deductCredits,
+} from '@/lib/billing/credits'
 
 export async function POST(request: Request) {
   try {
@@ -135,6 +142,45 @@ export async function POST(request: Request) {
             )
           }
         })
+    }
+
+    // ── Wallet pre-flight (template sends only) ────────────────────
+    // Free-form text replies inside the 24h window are service
+    // messages → free, so we don't bill them here. Template messages
+    // (marketing / utility / auth) cost credits; block if the wallet
+    // can't cover one. Actual debit happens after the send succeeds.
+    let billOrgId: string | null = null
+    let billCategory = 'service'
+    let billUnitPrice = 0
+    if (message_type === 'template') {
+      billOrgId = await getOrgIdForUser(supabase, user.id)
+      billCategory = await getTemplateCategory(
+        supabase,
+        user.id,
+        template_name,
+        body.template_language || undefined,
+      )
+      billUnitPrice = priceForCategory(billCategory)
+      if (billUnitPrice > 0) {
+        if (!billOrgId) {
+          return NextResponse.json(
+            { error: 'No organization linked to this account — cannot bill messages.' },
+            { status: 400 }
+          )
+        }
+        const balance = await getOrgBalance(supabase, billOrgId)
+        if (balance < billUnitPrice) {
+          return NextResponse.json(
+            {
+              error: 'INSUFFICIENT_CREDITS',
+              message: `Wallet balance ₹${balance.toFixed(2)} is too low. Top up to send.`,
+              balance,
+              unit_price: billUnitPrice,
+            },
+            { status: 402 }
+          )
+        }
+      }
     }
 
     // Resolve the reply target (if any) to its Meta message_id, which is
@@ -282,10 +328,38 @@ export async function POST(request: Request) {
       })
       .eq('id', conversation_id)
 
+    // Bill the wallet for template sends (after Meta accepted + DB
+    // saved). Service/text messages were priced at 0 above, so this is
+    // a no-op for them.
+    let charged = 0
+    let newBalance: number | undefined
+    if (message_type === 'template' && billUnitPrice > 0 && billOrgId) {
+      const deb = await deductCredits(supabase, {
+        orgId: billOrgId,
+        userId: user.id,
+        amount: billUnitPrice,
+        description: `WhatsApp ${billCategory} message`,
+        reference: waMessageId,
+      })
+      if (deb.ok) {
+        charged = billUnitPrice
+        newBalance = deb.newBalance
+      } else {
+        // Message already delivered; log the billing miss but don't
+        // fail the request — we honor the sent message.
+        console.warn('[whatsapp/send] post-send debit failed:', deb.message)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message_id: messageRecord.id,
       whatsapp_message_id: waMessageId,
+      billing: {
+        category: billCategory,
+        charged: Number(charged.toFixed(4)),
+        new_balance: newBalance,
+      },
     })
   } catch (error) {
     console.error('Error in WhatsApp send POST:', error)

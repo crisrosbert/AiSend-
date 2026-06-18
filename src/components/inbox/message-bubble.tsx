@@ -45,8 +45,8 @@ function StatusIcon({ status }: { status: Message["status"] }) {
 
 function MediaUnavailable({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-slate-700/40 px-3 py-2 text-xs text-slate-300">
-      <ImageOff className="h-4 w-4 shrink-0 text-slate-500" />
+    <div className="flex items-center gap-2 rounded-lg bg-[#e8f4ee]/40 px-3 py-2 text-xs text-slate-400">
+      <ImageOff className="h-4 w-4 shrink-0 text-slate-400" />
       <span>{label} unavailable</span>
     </div>
   );
@@ -91,15 +91,15 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
 
   if (error) {
     return (
-      <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-slate-700">
-        <ImageOff className="h-8 w-8 text-slate-500" />
+      <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-[#e8f4ee]">
+        <ImageOff className="h-8 w-8 text-slate-400" />
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-slate-700">
+      <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-[#e8f4ee]">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
       </div>
     );
@@ -180,7 +180,7 @@ function MessageContent({ message }: { message: Message }) {
           href={message.media_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 rounded-lg bg-slate-700/50 px-3 py-2 text-sm hover:bg-slate-700"
+          className="flex items-center gap-2 rounded-lg bg-[#e8f4ee]/50 px-3 py-2 text-sm hover:bg-[#e8f4ee]"
         >
           <FileText className="h-5 w-5 shrink-0 text-slate-400" />
           <span className="truncate">
@@ -244,8 +244,8 @@ export function MessageBubble({
         className={cn(
           "relative rounded-2xl px-3 py-2",
           isAgent
-            ? "rounded-br-md bg-violet-600 text-white"
-            : "rounded-bl-md bg-slate-800 text-slate-100",
+            ? "rounded-br-md bg-violet-600 text-[#0c1f17]"
+            : "rounded-bl-md bg-[#f2f4f7] text-slate-100",
         )}
       >
         {reply && (
@@ -258,7 +258,7 @@ export function MessageBubble({
             isAgent ? "justify-end" : "justify-start",
           )}
         >
-          <span className="text-[10px] text-white/60">{time}</span>
+          <span className="text-[10px] text-[#0c1f17]/60">{time}</span>
           {isAgent && <StatusIcon status={message.status} />}
         </div>
       </div>

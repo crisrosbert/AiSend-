@@ -13,6 +13,13 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit'
+import {
+  getOrgIdForUser,
+  getTemplateCategory,
+  getOrgBalance,
+  priceForCategory,
+  deductCredits,
+} from '@/lib/billing/credits'
 
 interface BroadcastResult {
   phone: string
@@ -125,11 +132,69 @@ export async function POST(request: Request) {
 
     const accessToken = decrypt(config.access_token)
 
+    // ── Wallet pre-flight ──────────────────────────────────────────
+    // Resolve the org + price per message (by template category) up
+    // front. We block the whole broadcast if the wallet can't cover at
+    // least one message — partial sends with a drained wallet are worse
+    // UX than a clean "top up" error. Per-message deduction still
+    // happens inside the loop (so a mid-broadcast failure doesn't
+    // charge for messages Meta rejected).
+    //
+    // service messages (price 0) skip all of this — nothing to charge.
+    const orgId = await getOrgIdForUser(supabase, user.id)
+    const category = await getTemplateCategory(
+      supabase,
+      user.id,
+      template_name,
+      template_language || undefined,
+    )
+    const unitPrice = priceForCategory(category)
+
+    if (unitPrice > 0) {
+      if (!orgId) {
+        return NextResponse.json(
+          {
+            error:
+              'No organization linked to this account — cannot bill messages. Contact support.',
+          },
+          { status: 400 }
+        )
+      }
+      const balance = await getOrgBalance(supabase, orgId)
+      const estimatedTotal = unitPrice * recipients.length
+      if (balance < unitPrice) {
+        return NextResponse.json(
+          {
+            error: 'INSUFFICIENT_CREDITS',
+            message: `Wallet balance ₹${balance.toFixed(2)} is too low to send. Top up to continue.`,
+            balance,
+            unit_price: unitPrice,
+            estimated_total: estimatedTotal,
+          },
+          { status: 402 }
+        )
+      }
+    }
+
     const results: BroadcastResult[] = []
     let sentCount = 0
     let failedCount = 0
+    let totalCharged = 0
+    let stoppedForCredits = false
 
     for (const recipient of recipients) {
+      // If a prior iteration drained the wallet, stop sending and mark
+      // the rest as failed rather than firing messages we can't bill.
+      if (stoppedForCredits) {
+        results.push({
+          phone: recipient.phone,
+          status: 'failed',
+          error: 'Insufficient wallet balance',
+        })
+        failedCount++
+        continue
+      }
+
       const sanitized = sanitizePhoneForMeta(recipient.phone)
 
       if (!isValidE164(sanitized)) {
@@ -174,6 +239,25 @@ export async function POST(request: Request) {
       }
 
       if (sentMessageId) {
+        // Bill the wallet for this delivered message. We charge AFTER
+        // Meta accepted it, so rejected sends are never billed. If the
+        // debit fails for insufficient funds, the message already went
+        // out (we honor it) but we stop the rest of the broadcast.
+        if (unitPrice > 0 && orgId) {
+          const deb = await deductCredits(supabase, {
+            orgId,
+            userId: user.id,
+            amount: unitPrice,
+            description: `WhatsApp ${category} message to ${recipient.phone}`,
+            reference: sentMessageId,
+          })
+          if (deb.ok) {
+            totalCharged += unitPrice
+          } else if (deb.reason === 'insufficient') {
+            stoppedForCredits = true
+          }
+        }
+
         results.push({
           phone: recipient.phone,
           status: 'sent',
@@ -200,6 +284,12 @@ export async function POST(request: Request) {
       sent: sentCount,
       failed: failedCount,
       results,
+      billing: {
+        category,
+        unit_price: unitPrice,
+        total_charged: Number(totalCharged.toFixed(4)),
+        stopped_for_credits: stoppedForCredits,
+      },
     })
   } catch (error) {
     console.error('Error in WhatsApp broadcast POST:', error)

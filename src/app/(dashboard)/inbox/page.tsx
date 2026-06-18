@@ -9,139 +9,123 @@ import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { toast } from "sonner";
-import { WifiOff } from "lucide-react";
+import { WifiOff, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function InboxPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  /**
-   * `?c=<id>` deep-link support. Used when landing here from the
-   * dashboard's recent-conversations list so the right thread opens
-   * automatically instead of showing the empty center panel.
-   */
   const deepLinkConvId = searchParams.get("c");
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversation, setActiveConversation] =
-    useState<Conversation | null>(null);
+  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
-    null
-  );
-
-  // Fire the deep-link auto-select exactly once per URL — subsequent
-  // list refreshes (realtime, manual refetch) must not snap the user
-  // back to the deep-linked conversation if they've already clicked
-  // elsewhere.
+  const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null);
   const autoSelectedForDeepLinkRef = useRef<string | null>(null);
 
-  // Check WhatsApp connection status on mount
   useEffect(() => {
     const checkConnection = async () => {
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
-
       if (!user) return;
-
-      // Table is `whatsapp_config` (singular) — the previous "whatsapp_configs"
-      // query always returned no rows, so the banner always showed "not connected".
       const { data } = await supabase
         .from("whatsapp_config")
-        .select("status")
+        .select("status, phone_number_id, access_token")
         .eq("user_id", user.id)
         .maybeSingle();
-
-      setWhatsappConnected(data?.status === "connected");
+      const isConnected =
+        data?.status === "connected" ||
+        (!!data?.phone_number_id && !!data?.access_token);
+      setWhatsappConnected(isConnected);
     };
-
     checkConnection();
   }, []);
 
-  // Handle realtime message events
+  // ── FIXED REAL-TIME MESSAGE ROUTING ──
   const handleMessageEvent = useCallback(
     (event: { eventType: string; new: Message; old: Partial<Message> }) => {
       const newMsg = event.new;
-
       if (event.eventType === "INSERT") {
-        // Add to messages if it belongs to active conversation
-        if (
-          activeConversation &&
-          newMsg.conversation_id === activeConversation.id
-        ) {
+        // 1. Append message to the thread view only if it belongs to the active conversation panel
+        if (activeConversation && newMsg.conversation_id === activeConversation.id) {
           setMessages((prev) => {
-            // Avoid duplicates
             if (prev.some((m) => m.id === newMsg.id)) return prev;
-            // Replace optimistic message if it exists
-            const withoutOptimistic = prev.filter(
-              (m) => !m.id.startsWith("temp-")
-            );
+            const withoutOptimistic = prev.filter((m) => !m.id.startsWith("temp-"));
             return [...withoutOptimistic, newMsg];
           });
         }
 
-        // Update conversation list preview
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === newMsg.conversation_id
-              ? {
-                  ...c,
-                  last_message_text: newMsg.content_text ?? "",
-                  last_message_at: newMsg.created_at,
-                  unread_count:
-                    activeConversation?.id === newMsg.conversation_id
-                      ? 0
-                      : c.unread_count + 1,
-                }
-              : c
-          )
-        );
-      }
+        // 2. Update side rail metadata AND reorganize list order dynamically (WhatsApp Style)
+        setConversations((prev) => {
+          const targetExists = prev.some((c) => c.id === newMsg.conversation_id);
 
-      if (event.eventType === "UPDATE") {
-        // Update message status
-        setMessages((prev) =>
-          prev.map((m) => (m.id === newMsg.id ? { ...m, ...newMsg } : m))
-        );
-      }
-    },
-    [activeConversation]
-  );
+          if (!targetExists) {
+            // If the conversation object doesn't exist in our state sidebar array yet, 
+            // wait for handleConversationEvent to insert it or ignore orphan logs.
+            return prev;
+          }
 
-  // Handle realtime conversation events
-  const handleConversationEvent = useCallback(
-    (event: {
-      eventType: string;
-      new: Conversation;
-      old: Partial<Conversation>;
-    }) => {
-      const conv = event.new;
+          const updatedList = prev.map((c) => {
+            if (c.id === newMsg.conversation_id) {
+              return {
+                ...c,
+                last_message_text: newMsg.content_text ?? "[Media/Template]",
+                last_message_at: newMsg.created_at,
+                unread_count:
+                  activeConversation?.id === newMsg.conversation_id
+                    ? 0
+                    : c.unread_count + 1,
+              };
+            }
+            return c;
+          });
 
-      if (event.eventType === "INSERT") {
-        setConversations((prev) => [conv, ...prev]);
-      }
-
-      if (event.eventType === "UPDATE") {
-        setConversations((prev) =>
-          prev.map((c) => (c.id === conv.id ? { ...c, ...conv } : c))
-        );
-
-        // Update active conversation if it changed
-        if (activeConversation && conv.id === activeConversation.id) {
-          setActiveConversation((prev) =>
-            prev ? { ...prev, ...conv } : prev
-          );
+          // Sort dynamically with safe TypeScript fallback boundaries
+          return [...updatedList].sort((a, b) => {
+            const timeB = new Date(b.last_message_at ?? b.created_at ?? 0).getTime();
+            const timeA = new Date(a.last_message_at ?? a.created_at ?? 0).getTime();
+            return timeB - timeA;
+          });
+        });
+      } else if (event.eventType === "UPDATE") {
+        if (activeConversation && newMsg.conversation_id === activeConversation.id) {
+          setMessages((prev) => prev.map((m) => (m.id === newMsg.id ? newMsg : m)));
         }
       }
     },
     [activeConversation]
   );
 
-  // Subscribe to realtime
+  // ── FIXED REAL-TIME CONVERSATION Deduplication ──
+  const handleConversationEvent = useCallback(
+    (event: { eventType: string; new: Conversation; old: Partial<Conversation> }) => {
+      const conv = event.new;
+      if (event.eventType === "INSERT") {
+        setConversations((prev) => {
+          // Strict Guard: If the conversation is already sitting inside our sidebar array, completely block duplication rows!
+          if (prev.some((c) => c.id === conv.id)) return prev;
+          return [conv, ...prev];
+        });
+      } else if (event.eventType === "UPDATE") {
+        setConversations((prev) => {
+          const updated = prev.map((c) => (c.id === conv.id ? { ...c, ...conv } : c));
+          // Keep list sorting perfectly chronological when conversation record changes
+          return [...updated].sort((a, b) => {
+            const timeB = new Date(b.last_message_at ?? b.created_at ?? 0).getTime();
+            const timeA = new Date(a.last_message_at ?? a.created_at ?? 0).getTime();
+            return timeB - timeA;
+          });
+        });
+        if (activeConversation?.id === conv.id) {
+          setActiveConversation((prev) => (prev ? { ...prev, ...conv } : prev));
+        }
+      }
+    },
+    [activeConversation]
+  );
+
   useRealtime({
     channelName: "inbox-realtime",
     onMessageEvent: handleMessageEvent,
@@ -151,29 +135,22 @@ export default function InboxPage() {
 
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
-      setConversations(loaded);
-      // Resolve a pending deep-link here rather than in an effect — this
-      // is an event handler, so the setState calls below are allowed by
-      // react-hooks/set-state-in-effect. Runs once per ?c=<id> URL value
-      // via the ref, so realtime refreshes of the list can't snap the
-      // user back to the deep-linked thread after they've navigated.
+      // Ensure initial mount load lists are cleanly sorted by timeline activity out of the box
+      const sortedLoaded = [...loaded].sort((a, b) => {
+        const timeB = new Date(b.last_message_at ?? b.created_at ?? 0).getTime();
+        const timeA = new Date(a.last_message_at ?? a.created_at ?? 0).getTime();
+        return timeB - timeA;
+      });
+      setConversations(sortedLoaded);
+      
       if (
         deepLinkConvId &&
         autoSelectedForDeepLinkRef.current !== deepLinkConvId &&
-        loaded.length > 0
+        sortedLoaded.length > 0
       ) {
         autoSelectedForDeepLinkRef.current = deepLinkConvId;
-        // If the deep-linked conversation is already the active one
-        // (e.g. because the user clicked it in the list and we
-        // router.replace()'d the URL, which made the ConversationList
-        // refetch and land us back here), do NOT re-apply it. Doing so
-        // would setMessages([]) on a thread whose messages have
-        // already been loaded by MessageThread — and because
-        // conversationId didn't change, MessageThread wouldn't
-        // refetch. The thread would read "No messages yet" until a
-        // full page reload rehydrated state from scratch.
         if (activeConversation?.id === deepLinkConvId) return;
-        const match = loaded.find((c) => c.id === deepLinkConvId);
+        const match = sortedLoaded.find((c) => c.id === deepLinkConvId);
         if (match) {
           setActiveConversation(match);
           setActiveContact(match.contact ?? null);
@@ -181,68 +158,46 @@ export default function InboxPage() {
         }
       }
     },
-    [deepLinkConvId, activeConversation?.id]
+    [deepLinkConvId, activeConversation]
   );
 
   const handleSelectConversation = useCallback(
     (conv: Conversation) => {
-      // Re-clicking the already-active conversation would clear the
-      // messages array, but the fetch effect in MessageThread only re-runs
-      // when conversationId changes — so messages would stay empty until
-      // the user navigated away and back. Bail out early instead.
-      if (activeConversation?.id === conv.id) return;
       setActiveConversation(conv);
       setActiveContact(conv.contact ?? null);
       setMessages([]);
-      // Record the selection on the deep-link ref BEFORE we change the
-      // URL. The router.replace below flips `deepLinkConvId`, which can
-      // in turn cause ConversationList to refetch and eventually call
-      // handleConversationsLoaded again. Without this line, the ref
-      // still points at the previous value, the auto-select block
-      // sees `ref !== deepLinkConvId`, fires a second time, and
-      // clobbers the messages MessageThread just fetched.
-      autoSelectedForDeepLinkRef.current = conv.id;
-      // Reflect the selection in the URL so a refresh lands the user
-      // back in the same thread, and so copy-paste links work. Use
-      // replace() to avoid polluting browser history with every click.
-      router.replace(`/inbox?c=${conv.id}`, { scroll: false });
+      if (deepLinkConvId && deepLinkConvId !== conv.id) {
+        router.replace("/inbox", { scroll: false });
+      }
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
+      );
     },
-    [activeConversation?.id, router]
+    [deepLinkConvId, router]
   );
-
-  // Mobile "back" — deselect the conversation so the list pane comes
-  // back. Also clears the ?c= param so a refresh lands on the list
-  // instead of re-opening the thread the user just backed out of.
-  const handleCloseConversation = useCallback(() => {
-    setActiveConversation(null);
-    setActiveContact(null);
-    setMessages([]);
-    // Clearing the ref lets the deep-link auto-selector fire again if
-    // the user later visits /inbox?c=<same-id> — desirable UX.
-    autoSelectedForDeepLinkRef.current = null;
-    router.replace("/inbox", { scroll: false });
-  }, [router]);
-
 
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {
     setMessages(loaded);
   }, []);
 
   const handleNewMessage = useCallback((msg: Message) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev;
-      return [...prev, msg];
-    });
+    setMessages((prev) => [...prev, msg]);
   }, []);
 
   const handleUpdateMessage = useCallback(
-    (id: string, updates: Partial<Message>) => {
+    (msgId: string, updates: Partial<Message>) => {
       setMessages((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
+        prev.map((m) => (m.id === msgId ? { ...m, ...updates } : m))
       );
     },
     []
   );
+
+  const handleCloseConversation = useCallback(() => {
+    setActiveConversation(null);
+    setActiveContact(null);
+    setMessages([]);
+  }, []);
 
   const handleStatusChange = useCallback(
     (conversationId: string, status: ConversationStatus) => {
@@ -276,34 +231,58 @@ export default function InboxPage() {
     [activeConversation]
   );
 
-  // On mobile (<lg) we show a SINGLE pane — either the list or the
-  // thread — rather than cramming both side-by-side. Selecting a
-  // conversation slides the thread in; the thread's back button pops
-  // it back to the list. On lg+ both panes render side-by-side as
-  // before, unchanged.
   const hasActiveConv = !!activeConversation;
+  const openCount = conversations.filter((c) => c.status === "open").length;
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
-      {/* WhatsApp connection banner — in the flex column, not absolute,
-          so it pushes the panels down instead of overlapping them. */}
+    <div className="-m-4 sm:-m-6 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-[#f8faf9]">
+      {/* Page header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-[#e7ece9] bg-white px-5 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-white">
+            <Inbox className="h-4 w-4" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-[#0c1f17] leading-tight">Live Chat</h1>
+            <p className="text-[11px] text-slate-400 leading-tight">
+              {openCount > 0
+                ? `${openCount} open conversation${openCount === 1 ? "" : "s"}`
+                : "All caught up"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            LIVE
+          </span>
+        </div>
+      </div>
+
+      {/* WhatsApp not-connected banner */}
       {whatsappConnected === false && (
-        <div className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2">
-          <WifiOff className="h-4 w-4 text-amber-400" />
-          <p className="text-xs text-amber-400">
-            WhatsApp® is not connected. Go to Settings to connect your account.
+        <div className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2">
+          <WifiOff className="h-3.5 w-3.5 text-amber-600" />
+          <p className="text-xs font-semibold text-amber-700">
+            WhatsApp is not connected.{" "}
+            <a href="/settings?tab=whatsapp" className="underline hover:text-amber-900">
+              Go to Settings
+            </a>{" "}
+            to connect your account.
           </p>
         </div>
       )}
 
+      {/* 3-pane body */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left panel: Conversation list.
-            Hidden on mobile when a conversation is selected so the
-            thread can occupy the full width. Always visible on lg+. */}
+        {/* LEFT — conversation list */}
         <div
           className={cn(
-            "flex h-full flex-1 lg:flex-none",
-            hasActiveConv ? "hidden lg:flex" : "flex",
+            "flex h-full flex-1 lg:flex-none border-r border-[#e7ece9] bg-white",
+            hasActiveConv ? "hidden lg:flex" : "flex"
           )}
         >
           <ConversationList
@@ -314,34 +293,64 @@ export default function InboxPage() {
           />
         </div>
 
-        {/* Center panel: Message thread.
-            Hidden on mobile when no conversation is selected so the
-            list can occupy the full width. Always visible on lg+
-            (shows its own empty-state if no thread is picked yet). */}
+        {/* CENTER — message thread */}
         <div
           className={cn(
-            "flex h-full flex-1 lg:flex",
-            hasActiveConv ? "flex" : "hidden lg:flex",
+            "flex h-full flex-1 bg-[#f8faf9]",
+            hasActiveConv ? "flex" : "hidden lg:flex"
           )}
         >
-          <MessageThread
-            conversation={activeConversation}
-            contact={activeContact}
-            messages={messages}
-            onMessagesLoaded={handleMessagesLoaded}
-            onNewMessage={handleNewMessage}
-            onUpdateMessage={handleUpdateMessage}
-            onStatusChange={handleStatusChange}
-            onAssignChange={handleAssignChange}
-            onBack={handleCloseConversation}
-          />
+          {!hasActiveConv ? (
+            <EmptyState whatsappConnected={whatsappConnected} />
+          ) : (
+            <MessageThread
+              conversation={activeConversation}
+              contact={activeContact}
+              messages={messages}
+              onMessagesLoaded={handleMessagesLoaded}
+              onNewMessage={handleNewMessage}
+              onUpdateMessage={handleUpdateMessage}
+              onStatusChange={handleStatusChange}
+              onAssignChange={handleAssignChange}
+              onBack={handleCloseConversation}
+            />
+          )}
         </div>
 
-        {/* Right panel: Contact sidebar — desktop only. */}
-        <div className="hidden lg:block">
+        {/* RIGHT — contact sidebar (desktop only) */}
+        <div className="hidden lg:block border-l border-[#e7ece9] bg-white">
           <ContactSidebar contact={activeContact} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function EmptyState({ whatsappConnected }: { whatsappConnected: boolean | null }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center bg-[#f8faf9]">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white border border-[#e7ece9] shadow-sm">
+        <Inbox className="h-7 w-7 text-slate-300" />
+      </div>
+      <div>
+        <h2 className="text-base font-bold text-[#0c1f17]">Your inbox is ready</h2>
+        <p className="mt-1 max-w-xs text-sm text-slate-400 leading-relaxed">
+          Select a conversation from the left to start replying. New messages appear here in real time.
+        </p>
+      </div>
+      {whatsappConnected === false && (
+        <a
+          href="/settings?tab=whatsapp"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 transition-colors"
+        >
+          Connect WhatsApp →
+        </a>
+      )}
+      {whatsappConnected === true && (
+        <p className="text-[11px] text-slate-400">
+          No messages yet? Customers can message your business number to start a conversation.
+        </p>
+      )}
     </div>
   );
 }

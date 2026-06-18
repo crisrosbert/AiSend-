@@ -7,14 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, ArrowRight, Zap } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -28,99 +21,164 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setError(error.message);
       setLoading(false);
       return;
     }
-
     router.push("/dashboard");
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
-      <Card className="w-full max-w-md border-slate-800 bg-slate-900">
-        <CardHeader className="items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10">
-            <MessageSquare className="h-6 w-6 text-violet-500" />
+    <div className="flex min-h-screen bg-[#0a0a0f]">
+      {/* Left panel — branding */}
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden">
+        {/* Background effects */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/40 via-transparent to-transparent" />
+        <div className="absolute top-1/3 -left-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-0 w-60 h-60 bg-emerald-400/5 rounded-full blur-3xl" />
+
+        {/* Logo */}
+        <div className="relative flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500">
+            <MessageSquare className="h-5 w-5 text-white" />
           </div>
-          <CardTitle className="text-xl text-white">Welcome back</CardTitle>
-          <CardDescription className="text-slate-400">
-            Sign in to your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+          <span className="font-display text-xl font-700 text-white tracking-tight">
+            Clickstream <span className="text-emerald-400">WA</span>
+          </span>
+        </div>
+
+        {/* Main content */}
+        <div className="relative space-y-8">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400">
+              <Zap className="h-3 w-3" />
+              Powered by WhatsApp Business API
+            </div>
+            <h1 className="font-display text-5xl font-800 leading-tight text-white">
+              Your WhatsApp<br />
+              <span className="text-emerald-400">Growth Engine</span>
+            </h1>
+            <p className="text-lg text-slate-400 leading-relaxed max-w-sm">
+              Send broadcasts, manage conversations, and automate follow-ups — all from one powerful dashboard.
+            </p>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { value: "10x", label: "Faster Outreach" },
+              { value: "98%", label: "Delivery Rate" },
+              { value: "3min", label: "Setup Time" },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 text-center">
+                <p className="font-display text-2xl font-700 text-emerald-400">{stat.value}</p>
+                <p className="text-xs text-slate-500 mt-1">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom */}
+        <div className="relative">
+          <p className="text-sm text-slate-600">
+            © 2026 Clickstream Performance Marketing. All rights reserved.
+          </p>
+        </div>
+      </div>
+
+      {/* Right panel — login form */}
+      <div className="flex w-full lg:w-1/2 items-center justify-center px-6 py-12">
+        <div className="w-full max-w-sm space-y-8">
+          {/* Mobile logo */}
+          <div className="flex lg:hidden items-center gap-3 justify-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500">
+              <MessageSquare className="h-5 w-5 text-white" />
+            </div>
+            <span className="font-display text-xl font-700 text-white">
+              Clickstream <span className="text-emerald-400">WA</span>
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="font-display text-3xl font-700 text-white">Welcome back</h2>
+            <p className="text-slate-400">Sign in to your CRM dashboard</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-5">
             {error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                 {error}
               </div>
             )}
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="email" className="text-slate-300">
-                Email
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium text-slate-300">
+                Email address
               </Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="you@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500 focus-visible:border-violet-500 focus-visible:ring-violet-500/20"
+                className="h-11 border-slate-800 bg-slate-900 text-white placeholder:text-slate-600 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20 rounded-xl"
               />
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-slate-300">
+                <Label htmlFor="password" className="text-sm font-medium text-slate-300">
                   Password
                 </Label>
-                <Link
-                  href="/forgot-password"
-                  className="text-sm text-violet-500 hover:text-violet-400"
-                >
+                <Link href="/forgot-password" className="text-xs text-emerald-500 hover:text-emerald-400">
                   Forgot password?
                 </Link>
               </div>
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500 focus-visible:border-violet-500 focus-visible:ring-violet-500/20"
+                className="h-11 border-slate-800 bg-slate-900 text-white placeholder:text-slate-600 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20 rounded-xl"
               />
             </div>
 
             <Button
               type="submit"
               disabled={loading}
-              className="mt-2 h-10 w-full bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50"
+              className="h-11 w-full rounded-xl bg-emerald-500 text-white font-medium hover:bg-emerald-400 disabled:opacity-50 transition-all duration-200 group"
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? (
+                "Signing in..."
+              ) : (
+                <span className="flex items-center gap-2">
+                  Sign in
+                  <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              )}
             </Button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-slate-400">
+          <p className="text-center text-sm text-slate-500">
             Don&apos;t have an account?{" "}
-            <Link
-              href="/signup"
-              className="text-violet-500 hover:text-violet-400"
-            >
-              Create account
+            <Link href="/signup" className="font-medium text-emerald-500 hover:text-emerald-400">
+              Get started free
             </Link>
           </p>
-        </CardContent>
-      </Card>
+
+          <p className="text-center text-xs text-slate-700">
+            By signing in, you agree to our{" "}
+            <a href="https://performancemktg.net/privacy-policy/" target="_blank" className="text-slate-600 hover:text-slate-400">
+              Privacy Policy
+            </a>
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

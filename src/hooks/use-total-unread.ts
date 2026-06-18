@@ -6,11 +6,14 @@ import type { Conversation } from "@/types";
 
 /**
  * Count of conversations with at least one unread inbound message for
- * the current user. Used by the sidebar to surface a green dot on the
- * Inbox nav entry when the user is elsewhere in the app.
+ * the current user. Used by the sidebar (and mobile tab bar) to surface
+ * a badge on the Inbox / Chat nav entry when the user is elsewhere.
  *
- * Lives on its own realtime channel (distinct from the inbox page's
- * "inbox-realtime") so both can coexist without sharing state.
+ * Each hook instance opens its OWN uniquely-named realtime channel, so
+ * the hook can be safely used by more than one component at once (e.g.
+ * the desktop sidebar AND the mobile tab bar) without the two trying to
+ * register on the same channel name — which throws
+ * "cannot add 'postgres_changes' callbacks ... after subscribe()".
  */
 export function useTotalUnread(): number {
   const [total, setTotal] = useState(0);
@@ -19,12 +22,16 @@ export function useTotalUnread(): number {
   // events can adjust the total in O(1) without refetching.
   const countsRef = useRef<Map<string, number>>(new Map());
 
+  // Stable, unique channel name for THIS hook instance. Generated once.
+  const channelNameRef = useRef<string>(
+    `total-unread-${Math.random().toString(36).slice(2)}`,
+  );
+
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
 
-    // Initial load. RLS scopes this to the signed-in user automatically —
-    // no explicit user_id filter needed here.
+    // Initial load. RLS scopes this to the signed-in user automatically.
     (async () => {
       const { data, error } = await supabase
         .from("conversations")
@@ -43,7 +50,7 @@ export function useTotalUnread(): number {
     })();
 
     const channel = supabase
-      .channel("total-unread-realtime")
+      .channel(channelNameRef.current)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversations" },
@@ -56,7 +63,6 @@ export function useTotalUnread(): number {
             const row = payload.new as Conversation;
             map.set(row.id, row.unread_count ?? 0);
           }
-          // Recompute — cheap, conversations per user stay small.
           let sum = 0;
           for (const n of map.values()) if (n > 0) sum += 1;
           setTotal(sum);

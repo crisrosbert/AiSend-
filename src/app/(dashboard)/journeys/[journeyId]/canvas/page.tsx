@@ -1,10 +1,3 @@
-To make the simulator **completely independent and robust**, it needs to handle the entire canvas layout logically. A business owner might add multiple different keywords or have a path with several connected nodes. The sandbox shouldn't just look for the first text box it finds—it should trace the actual paths connected by the lines (Edges) on your canvas!
-
-Here is the ultimate, fully production-ready, type-checked code for `src/app/(dashboard)/journeys/[journeyId]/canvas/page.tsx`. This code introduces an edge-tracing execution engine: when you type a message in the sandbox, it checks your trigger keywords, and then follows the lines to fire the exact text boxes, media blocks, or tag operations that come next in sequence!
-
-### Your Complete, Self-Contained, Error-Free Canvas Code
-
-```typescript
 "use client";
 
 import { useCallback, useEffect, useState, useRef } from "react";
@@ -265,14 +258,10 @@ function CanvasInner() {
     setSimulatedPrompts((prev) => prev.includes(rawInput) ? prev : [rawInput, ...prev]);
     setAiPrompt("");
 
-    // Read saved configuration terms dynamically from the trigger drawer list
     const registeredKeywords = journey?.trigger?.keywords?.map(k => k.trim().toLowerCase()) ?? [];
 
     setTimeout(() => {
-      // Rule 1: Check if the typed string matches any user keyword config
       if (registeredKeywords.includes(query) || (registeredKeywords.length === 0 && query === "hi")) {
-        
-        // Find all node paths directly connected to the root trigger
         const connectedEdges = edges.filter((e) => e.source === "trigger");
         
         if (connectedEdges.length === 0) {
@@ -280,7 +269,6 @@ function CanvasInner() {
           return;
         }
 
-        // Loop through and execute every branch connected to the trigger sequentially
         connectedEdges.forEach((edge) => {
           const targetNode = nodes.find((n) => n.id === edge.target);
           if (targetNode) {
@@ -298,7 +286,6 @@ function CanvasInner() {
         });
 
       } else {
-        // Fallback execution notice matching independent keyword terms
         const termsList = registeredKeywords.length > 0 ? registeredKeywords.map(k => `"${k}"`).join(", ") : '"hi"';
         setMockChatHistory((prev) => [
           ...prev,
@@ -316,7 +303,7 @@ function CanvasInner() {
 
   return (
     <div className="-m-4 sm:-m-6 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-[#f8faf9]">
-      {/* Top Bar Header Area Layout controls */}
+      {/* Top Bar Header Area */}
       <div className="flex shrink-0 items-center justify-between border-b border-[#e7ece9] bg-white px-5 py-3 z-10 shadow-xs">
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/journeys" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
@@ -328,11 +315,11 @@ function CanvasInner() {
               onChange={(e) => setJourney({ ...journey, name: e.target.value })}
               className="block w-full max-w-xs bg-transparent text-sm font-bold text-[#0c1f17] focus:outline-none focus:underline decoration-emerald-500 decoration-2 underline-offset-4"
             />
-            <div className="text-[10px] font-semibold text-slate-400 mt-0.5">{isLive ? "  Running on WhatsApp" : "Draft Mode Active"}</div>
+            <div className="text-[10px] font-semibold text-slate-400 mt-0.5">{isLive ? "🟢 Running on WhatsApp" : "Draft Mode Active"}</div>
           </div>
         </div>
 
-        {/* Dynamic Route subnav tabs navigation frame */}
+        {/* Dynamic Route subnav tabs */}
         <div className="hidden md:flex items-center gap-1 rounded-xl border border-[#e7ece9] bg-[#f8faf9] p-1">
           {CANVAS_TABS.map((t) => {
             const active = t.slug === "canvas";
@@ -351,7 +338,7 @@ function CanvasInner() {
           })}
         </div>
 
-        {/* Action Trigger Buttons Strip Layout */}
+        {/* Action Trigger Buttons Strip */}
         <div className="flex items-center gap-2">
           <button onClick={() => setAiPanelOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-white px-3.5 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-all shadow-xs">
             <Sparkles className="size-3.5" /> Dry-Run Sandbox
@@ -378,7 +365,7 @@ function CanvasInner() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* LEFT PALETTE PANEL STEPS WORKSPACE ASSEMBLEY */}
+        {/* LEFT PALETTE PANEL */}
         <aside className="w-60 border-r border-[#e7ece9] bg-white flex flex-col shrink-0">
           <div className="p-3 border-b border-slate-50 bg-slate-50/50">
             <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Automation Steps</h3>
@@ -389,7 +376,7 @@ function CanvasInner() {
           </div>
         </aside>
 
-        {/* CENTER FLOW CANVAS CONTAINER BOARD */}
+        {/* CENTER FLOW CANVAS */}
         <div className="flex-1 relative bg-[#fcfdfe]">
           <ReactFlow
             nodes={nodes}
@@ -425,9 +412,9 @@ function CanvasInner() {
           )}
         </div>
 
-        {/* RIGHT DRAWER MODULE PANEL — LIVE SIMULATOR ENGINE */}
+        {/* RIGHT DRAWER PANEL — LIVE SIMULATOR ENGINE */}
         {aiPanelOpen && (
-          <aside className="w-80 shrink-0 overflow-y-auto border-l border-[#e7ece9] bg-white flex flex-col justify-between z-10 animate-slideLeft">
+          <aside className="w-80 shrink-0 overflow-y-auto border-l border-[#e7ece9] bg-white flex flex-col justify-between z-10">
             <div className="border-b border-[#e7ece9] p-4 bg-slate-50/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -439,7 +426,7 @@ function CanvasInner() {
                 </button>
               </div>
 
-              {/* Previous Options Dynamic Prompt Selector Core Entry */}
+              {/* Previous Options Dynamic Prompt Selector */}
               <div className="mt-3 flex items-center justify-between gap-2 relative">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Simulator Terminal</label>
                 
@@ -505,7 +492,7 @@ function CanvasInner() {
               ))}
             </div>
 
-            {/* Simulated Messaging Input Composer Bar Strip */}
+            {/* Simulated Messaging Input Composer Bar */}
             <div className="p-3 border-t border-[#e7ece9] bg-slate-50 flex items-center gap-1.5 shrink-0">
               <input
                 type="text"
@@ -722,7 +709,7 @@ function InlineDrawerOverlayConfig({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-xs" />
       <aside
         className="relative w-full max-w-md overflow-y-auto bg-white border-l border-[#e7ece9] shadow-2xl flex flex-col justify-between"
         onClick={(e) => e.stopPropagation()}
@@ -780,5 +767,3 @@ function InlineDrawerOverlayConfig({
     </div>
   );
 }
-
-```

@@ -166,10 +166,10 @@ function CanvasInner() {
       }
     }
     load();
-  }, [journeyId]);
+  }, [journeyId, supabase, router]);
 
   const onConnect = useCallback(
-    (connection: Connection) => setEdges((eds) => addEdge({ ...connection, animated: true, style: { stroke: "#10b981", strokeWidth: 2 } }, eds)),
+    (connection: Connection) => setEdges((eds) => addEdge({ ...connection, animated: true, style: { stroke: "#cbd5d1", strokeWidth: 2 } }, eds)),
     [setEdges]
   );
 
@@ -301,9 +301,17 @@ function CanvasInner() {
     }, 450);
   };
 
+  if (loading || !journey) {
+    return <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center bg-white"><Loader2 className="size-6 animate-spin text-emerald-500" /></div>;
+  }
+
+  const isLive = journey.status === "active";
+  const sendNodes = NODE_CATALOG.filter((n) => n.group === "Send");
+  const doNodes = NODE_CATALOG.filter((n) => n.group === "Do");
+
   return (
     <div className="-m-4 sm:-m-6 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-[#f8faf9]">
-      {/* Top Bar Header Area */}
+      {/* Top Bar Header Area Layout controls */}
       <div className="flex shrink-0 items-center justify-between border-b border-[#e7ece9] bg-white px-5 py-3 z-10 shadow-xs">
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/journeys" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
@@ -311,15 +319,17 @@ function CanvasInner() {
           </Link>
           <div className="min-w-0">
             <input
-              value={journey.name}
-              onChange={(e) => setJourney({ ...journey, name: e.target.value })}
+              value={journey?.name ?? ""}
+              onChange={(e) => {
+                if (journey) setJourney({ ...journey, name: e.target.value });
+              }}
               className="block w-full max-w-xs bg-transparent text-sm font-bold text-[#0c1f17] focus:outline-none focus:underline decoration-emerald-500 decoration-2 underline-offset-4"
             />
             <div className="text-[10px] font-semibold text-slate-400 mt-0.5">{isLive ? "🟢 Running on WhatsApp" : "Draft Mode Active"}</div>
           </div>
         </div>
 
-        {/* Dynamic Route subnav tabs */}
+        {/* Dynamic Route subnav tabs navigation frame */}
         <div className="hidden md:flex items-center gap-1 rounded-xl border border-[#e7ece9] bg-[#f8faf9] p-1">
           {CANVAS_TABS.map((t) => {
             const active = t.slug === "canvas";
@@ -338,7 +348,7 @@ function CanvasInner() {
           })}
         </div>
 
-        {/* Action Trigger Buttons Strip */}
+        {/* Action Trigger Buttons Strip Layout */}
         <div className="flex items-center gap-2">
           <button onClick={() => setAiPanelOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-white px-3.5 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-all shadow-xs">
             <Sparkles className="size-3.5" /> Dry-Run Sandbox
@@ -622,7 +632,7 @@ function TriggerConfigDrawer({
                 {(draft.keywords?.length ?? 0) > 0 && (
                   <div className="flex flex-wrap gap-1.5 p-2 border border-slate-100 bg-slate-50/50 rounded-xl">
                     {draft.keywords?.map((kw, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                      <span key={i} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                         {kw}
                         <button onClick={() => setDraft({ ...draft, keywords: draft.keywords?.filter((_, idx) => idx !== i) })}><X className="size-3 opacity-60 hover:opacity-100" /></button>
                       </span>
@@ -709,7 +719,7 @@ function InlineDrawerOverlayConfig({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-xs" />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       <aside
         className="relative w-full max-w-md overflow-y-auto bg-white border-l border-[#e7ece9] shadow-2xl flex flex-col justify-between"
         onClick={(e) => e.stopPropagation()}

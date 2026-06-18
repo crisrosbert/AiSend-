@@ -15,9 +15,10 @@ import {
   ArrowLeft, Save, Sparkles, ChevronDown, ChevronRight, Plus,
   Zap, MessageSquare, Image as ImageIcon, List as ListIcon, BookOpen,
   Package, Boxes, FileText, UserCheck, TrendingUp, GitBranch, Webhook,
-  Tag, Loader2, Power, PowerOff, X, Brain, Settings as SettingsIcon,
+  Tag, Loader2, Power, PowerOff, X, Brain, Settings as SettingsIcon, History,
 } from "lucide-react";
 import { NODE_CATALOG, type Journey, type JourneyStatus, type NodeType, type Trigger } from "@/types/journey";
+import { NodeConfigDrawer } from "@/components/journeys/node-config-drawer";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   MessageSquare, Image: ImageIcon, List: ListIcon, BookOpen, Package, Boxes, FileText,
@@ -125,6 +126,11 @@ function CanvasInner() {
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 
+  // ── DRY-RUN SANDBOX HISTORY & STATE ENGINE TRACKERS ──
+  const [mockChatHistory, setMockChatHistory] = useState<Array<{ sender: "user" | "bot"; text: string }>>([]);
+  const [simulatedPrompts, setSimulatedPrompts] = useState<string[]>([]);
+  const [showHistoryDropdown, setShowHistoryDropdown] = useState(false);
+
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const idCounter = useRef(0);
@@ -189,7 +195,7 @@ function CanvasInner() {
         data: { nodeType: t },
       },
     ]);
-  };
+  }
 
   const updateNodeData = useCallback((nodeId: string, newData: Record<string, unknown>) => {
     setNodes((prev) => prev.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...newData } } : n)));
@@ -242,18 +248,26 @@ function CanvasInner() {
     toast.success(next === "active" ? "Journey is now Live" : "Journey is in Draft");
   }
 
-  async function generateFromPrompt() {
+  // ── INTERACTIVE DRY-RUN SIMULATOR LOGIC DISPATCHER ──
+  const handleSimulateMessage = () => {
     if (!aiPrompt.trim()) return;
-    setAiGenerating(true);
-    try {
-      await new Promise((r) => setTimeout(r, 900));
-      toast.info("AI Journey generation active");
-      addNodeOfType("TEXT_BUTTONS");
-    } finally {
-      setAiGenerating(false);
-      setAiPrompt("");
-    }
-  }
+
+    const query = aiPrompt.trim();
+    setMockChatHistory((prev) => [...prev, { sender: "user", text: query }]);
+    setSimulatedPrompts((prev) => prev.includes(query) ? prev : [query, ...prev]);
+    setAiPrompt("");
+
+    setTimeout(() => {
+      if (query.toLowerCase() === "pricing") {
+        setMockChatHistory((prev) => [...prev, { sender: "bot", text: "Here is our latest software pricing matrix tier package framework. Let me know if you would like a demo!" }]);
+      } else {
+        setMockChatHistory((prev) => [...prev, { sender: "bot", text: "No matching keyword trigger found on your current canvas layout maps. Try typing 'pricing'!" }]);
+      }
+      
+      const chatPane = document.getElementById("sandbox-chat-flow");
+      if (chatPane) chatPane.scrollTo({ top: chatPane.scrollHeight, behavior: "smooth" });
+    }, 600);
+  };
 
   if (loading || !journey) {
     return <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center bg-white"><Loader2 className="size-6 animate-spin text-emerald-500" /></div>;
@@ -303,7 +317,7 @@ function CanvasInner() {
         {/* Operational Command Buttons */}
         <div className="flex items-center gap-2">
           <button onClick={() => setAiPanelOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-white px-3.5 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-all shadow-xs">
-            <Sparkles className="size-3.5" /> Describe with AI
+            <Sparkles className="size-3.5" /> Dry-Run Sandbox
           </button>
           <button
             onClick={toggleStatus}
@@ -327,8 +341,8 @@ function CanvasInner() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* LEFT PALETTE PANELS */}
-        <aside class="w-60 border-r border-[#e7ece9] bg-white flex flex-col shrink-0">
+        {/* LEFT PALETTE PANELS ── className SYNTAX FIXED HERE */}
+        <aside className="w-60 border-r border-[#e7ece9] bg-white flex flex-col shrink-0">
           <div className="p-3 border-b border-slate-50 bg-slate-50/50">
             <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Automation Steps</h3>
           </div>
@@ -362,7 +376,6 @@ function CanvasInner() {
             />
           </ReactFlow>
 
-          {/* ── THE FIXED POSITION ELEVATED HELPER TIP DESIGN BLOCK ── */}
           {nodes.length <= 1 && (
             <div className="pointer-events-none absolute bottom-5 left-5 z-10 max-w-xs">
               <div className="rounded-xl border border-dashed border-emerald-300 bg-white/90 backdrop-blur-md p-4 shadow-md">
@@ -375,33 +388,101 @@ function CanvasInner() {
           )}
         </div>
 
-        {/* RIGHT DRAWERS - AI CONTROL PANEL */}
+        {/* RIGHT DRAWERS - AI CONTROL PANEL & DRY-RUN SANDBOX ENGINE */}
         {aiPanelOpen && (
-          <aside className="w-80 shrink-0 overflow-y-auto border-l border-[#e7ece9] bg-white flex flex-col">
-            <div className="border-b border-[#e7ece9] p-4 flex items-center justify-between bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <Sparkles className="size-4 text-purple-600" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0c1f17]">Describe your journey</h3>
+          <aside className="w-80 shrink-0 overflow-y-auto border-l border-[#e7ece9] bg-white flex flex-col justify-between z-10">
+            {/* Header with Title & Previous Prompts Dropdown Button */}
+            <div className="border-b border-[#e7ece9] p-4 bg-slate-50/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="size-4 text-purple-600" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0c1f17]">Dry-Run Sandbox</h3>
+                </div>
+                <button onClick={() => setAiPanelOpen(false)} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 transition-colors">
+                  <X className="size-4" />
+                </button>
               </div>
-              <button onClick={() => setAiPanelOpen(false)} className="rounded-md p-1 text-slate-400 hover:bg-slate-100"><X className="size-4" /></button>
+
+              {/* Previous Options Dynamic Controller */}
+              <div className="mt-3 flex items-center justify-between gap-2 relative">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Simulator Sandbox</label>
+                
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowHistoryDropdown(!showHistoryDropdown)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-xs"
+                  >
+                    <History className="size-3 text-slate-400" />
+                    Previous Prompts
+                    <ChevronDown className="size-3 text-slate-400" />
+                  </button>
+
+                  {/* History Prompts Overlay Popover Option List */}
+                  {showHistoryDropdown && (
+                    <div className="absolute right-0 mt-1 w-48 rounded-xl border border-slate-200 bg-white p-1 shadow-lg z-50 animate-fadeIn">
+                      {simulatedPrompts.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 p-2 text-center">No simulation history yet</p>
+                      ) : (
+                        <div className="max-h-36 overflow-y-auto">
+                          {simulatedPrompts.map((promptText, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => {
+                                setAiPrompt(promptText);
+                                setShowHistoryDropdown(false);
+                              }}
+                              className="w-full text-left rounded-lg px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 truncate block"
+                            >
+                              "{promptText}"
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="p-4 space-y-4">
-              <p className="text-xs text-slate-400 leading-normal">Describe what you want and your AI agent will automatically configure your core workflow channels.</p>
-              <textarea
+
+            {/* Interactive Mock Chat Simulator Frame Layout */}
+            <div className="flex-1 bg-[#efeae2] p-3 overflow-y-auto flex flex-col gap-2 shadow-inner min-h-0" id="sandbox-chat-flow">
+              <div className="mx-auto bg-white/80 backdrop-blur border border-slate-200/50 rounded-lg px-2 py-1 text-[10px] font-medium text-slate-500 text-center max-w-[240px] shadow-xs">
+                🔒 Sandbox active. Test canvas rules safely.
+              </div>
+
+              {mockChatHistory.map((chat, idx) => (
+                <div
+                  key={idx}
+                  className={`max-w-[85%] rounded-xl p-2.5 shadow-xs text-xs relative ${
+                    chat.sender === "user" 
+                      ? "self-end bg-emerald-600 text-white rounded-tr-none" 
+                      : "self-start bg-white text-slate-800 rounded-tl-none border border-slate-200/50"
+                  }`}
+                >
+                  {chat.sender === "bot" && (
+                    <span className="block text-[9px] font-bold text-amber-500 uppercase tracking-wide mb-0.5">🤖 Bot Match</span>
+                  )}
+                  {chat.text}
+                </div>
+              ))}
+            </div>
+
+            {/* Text Input Action Composer Composer Bar Panel */}
+            <div className="p-3 border-t border-[#e7ece9] bg-slate-50 flex items-center gap-1.5 shrink-0">
+              <input
+                type="text"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="e.g. When a customer asks for pricing details, verify their warm tag status and send the e-commerce catalogue details..."
-                rows={5}
-                className="w-full rounded-xl border border-[#e7ece9] bg-slate-50 p-3 text-xs text-[#0c1f17] placeholder:text-slate-400 focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/10 transition-all"
+                onKeyDown={(e) => { if (e.key === "Enter") handleSimulateMessage(); }}
+                placeholder="Type 'pricing' to test trigger..."
+                className="flex-1 min-w-0 rounded-xl border border-[#e7ece9] bg-white px-3 py-2 text-xs text-[#0c1f17] placeholder:text-slate-400 outline-none focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all"
               />
               <button
-                onClick={generateFromPrompt}
-                disabled={aiGenerating || !aiPrompt.trim()}
-                className="w-full flex items-center justify-center gap-2 rounded-xl h-9 text-xs font-bold text-white disabled:opacity-50 transition-all"
-                style={{ background: "linear-gradient(135deg,#8b5cf6,#6d28d9)", boxShadow: "0 4px 12px rgba(139,92,246,.2)" }}
+                onClick={handleSimulateMessage}
+                disabled={!aiPrompt.trim()}
+                className="h-8 w-8 shrink-0 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center transition-all shadow-xs disabled:opacity-40"
               >
-                {aiGenerating ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                Generate Journey Nodes
+                <Zap className="size-3.5" />
               </button>
             </div>
           </aside>

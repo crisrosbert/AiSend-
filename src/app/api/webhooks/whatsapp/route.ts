@@ -9,6 +9,39 @@ const supabase = createClient(
 
 const GEMINI_API_KEY = "AIzaSyDKT3yeyEPw5YXXoY4l-eVoLbgtKHUVwGo";
 
+interface MetaMessage {
+  from: string;
+  text?: { body: string };
+}
+
+interface MetaPayload {
+  entry?: Array<{
+    changes?: Array<{
+      value?: {
+        messages?: Array<MetaMessage>;
+        metadata?: { phone_number_id: string };
+      };
+    }>;
+  }>;
+}
+
+interface JourneyNode {
+  id: string;
+  type: string;
+  data?: {
+    text?: string;
+    caption?: string;
+    tagName?: string;
+    endpoint?: string;
+    method?: string;
+  };
+}
+
+interface JourneyEdge {
+  source: string;
+  target: string;
+}
+
 // 1. Meta Webhook Verification (Handshake)
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -25,7 +58,7 @@ export async function GET(req: NextRequest) {
 // 2. Core Incoming Message Pipeline
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as MetaPayload;
     
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
@@ -44,12 +77,15 @@ export async function POST(req: NextRequest) {
     const phoneId = value?.metadata?.phone_number_id;
     const metaToken = process.env.WHATSAPP_ACCESS_TOKEN;
 
+    if (!phoneId || !metaToken) {
+      return NextResponse.json({ error: "Missing Meta credentials configuration" }, { status: 400 });
+    }
+
     // ── STEP 1: LOG THE INCOMING MESSAGE TO YOUR LIVE CHAT INBOX DATABASE ──
-    // This makes sure the text immediately appears on the left side of your inbox screen
     await supabase.from("messages").insert({
       phone: customerPhone,
       text: rawInput,
-      sender: "user", // Tells your UI to render it as an incoming grey bubble
+      sender: "user", // Renders as an incoming grey bubble
       created_at: new Date().toISOString()
     });
 
@@ -57,14 +93,14 @@ export async function POST(req: NextRequest) {
     const { data: journey } = await supabase
       .from("journeys")
       .select("*")
-      .eq("status", "active") // Runs only if the journey is toggled to live
+      .eq("status", "active")
       .maybeSingle();
 
     if (!journey) {
       return NextResponse.json({ status: "logged_no_flow" });
     }
 
-    const registeredKeywords = journey.trigger?.keywords?.map((k: string) => k.trim().toLowerCase()) ?? [];
+    const registeredKeywords = (journey.trigger?.keywords as string[])?.map((k: string) => k.trim().toLowerCase()) ?? [];
 
     // Typo-tolerance engine matching (Levenshtein calculation matrix)
     const findClosestKeyword = (input: string, targets: string[]): string | null => {
@@ -93,13 +129,13 @@ export async function POST(req: NextRequest) {
       const aiText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "Thanks for your message.";
 
       // Dispatch the response to the user's phone screen via Meta
-      await sendWhatsAppTextMessage(phoneId, metaToken!, customerPhone, aiText);
+      await sendWhatsAppTextMessage(phoneId, metaToken, customerPhone, aiText);
 
       // Save the AI's reply to your database so it displays in your Live Chat panel logs
       await supabase.from("messages").insert({
         phone: customerPhone,
         text: aiText,
-        sender: "bot", // Renders as an outgoing green bubble in the UI
+        sender: "bot", // Renders as an outgoing green bubble
         created_at: new Date().toISOString()
       });
 
@@ -107,10 +143,10 @@ export async function POST(req: NextRequest) {
     }
 
     // ── STEP 4: TRACE AND EXECUTE CONNECTED CANVAS PATH EDGES ──
-    const connectedEdges = journey.edges.filter((e: any) => e.source === "trigger");
+    const connectedEdges = (journey.edges as JourneyEdge[]).filter((e) => e.source === "trigger");
     
     for (const edge of connectedEdges) {
-      const targetNode = journey.nodes.find((n: any) => n.id === edge.target);
+      const targetNode = (journey.nodes as JourneyNode[]).find((n) => n.id === edge.target);
       if (!targetNode) continue;
 
       const nodeType = targetNode.type;
@@ -126,7 +162,7 @@ export async function POST(req: NextRequest) {
         const replyText = targetNode.data?.text || targetNode.data?.caption || "Step processed.";
         
         // Trigger outbound messaging delivery via WhatsApp
-        await sendWhatsAppTextMessage(phoneId, metaToken!, customerPhone, replyText);
+        await sendWhatsAppTextMessage(phoneId, metaToken, customerPhone, replyText);
 
         // Update the live conversation stream records
         await supabase.from("messages").insert({
@@ -139,8 +175,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ status: "canvas_handled" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }
 

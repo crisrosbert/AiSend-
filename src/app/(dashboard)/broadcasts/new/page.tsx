@@ -1,222 +1,330 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { MessageTemplate } from '@/types';
-import { Step1ChooseTemplate } from '@/components/broadcasts/step1-choose-template';
-import { Step2SelectAudience } from '@/components/broadcasts/step2-select-audience';
-import { Step3Personalize } from '@/components/broadcasts/step3-personalize';
-import { Step4ScheduleSend } from '@/components/broadcasts/step4-schedule-send';
-import { useBroadcastSending } from '@/hooks/use-broadcast-sending';
-import { Check } from 'lucide-react';
+import { Broadcast } from '@/types';
+import { getBroadcastStatus } from '@/lib/broadcast-status';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  FileEdit,
+  Plus,
+  Radio,
+  Trash2,
+  Play,
+} from 'lucide-react';
 
-const steps = [
-  { label: 'Template', key: 'template' },
-  { label: 'Audience', key: 'audience' },
-  { label: 'Personalize', key: 'personalize' },
-  { label: 'Send', key: 'send' },
-] as const;
+function RateCell({
+  value,
+  total,
+  color,
+}: {
+  value: number;
+  total: number;
+  color: string;
+}) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-800">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs tabular-nums text-slate-300">{pct}%</span>
+    </div>
+  );
+}
 
-export default function NewBroadcastPage() {
+export default function BroadcastsPage() {
   const router = useRouter();
-  const { createAndSendBroadcast, isProcessing, progress } = useBroadcastSending();
+  const supabase = createClient();
 
-  const [currentStep, setCurrentStep] = useState(0);
-  const [template, setTemplate] = useState<MessageTemplate | null>(null);
-  const [audience, setAudience] = useState<{
-    type: 'all' | 'tags' | 'custom_field' | 'csv';
-    tagIds?: string[];
-    customField?: {
-      fieldId: string;
-      operator: 'is' | 'is_not' | 'contains';
-      value: string;
-    };
-    csvContacts?: { phone: string; name?: string }[];
-    excludeTagIds?: string[];
-  }>({ type: 'all' });
-  const [variables, setVariables] = useState<
-    Record<string, { type: 'static' | 'field' | 'custom_field'; value: string }>
-  >({});
-  const [name, setName] = useState('');
+  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
+  const [drafts, setDrafts] = useState<Broadcast[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteDraft, setConfirmDeleteDraft] = useState<Broadcast | null>(null);
 
-  async function handleSend() {
-    if (!template) return;
-
+  const fetchBroadcasts = useCallback(async () => {
+    setLoading(true);
     try {
-      const broadcastId = await createAndSendBroadcast({
-        name,
-        template,
-        audience: {
-          type: audience.type,
-          tagIds: audience.tagIds,
-          customField: audience.customField,
-          csvContacts: audience.csvContacts,
-          excludeTagIds: audience.excludeTagIds,
-        },
-        variables,
-      });
-      router.push(`/broadcasts/${broadcastId}`);
+      const { data, error } = await supabase
+        .from('broadcasts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const all = data ?? [];
+      setDrafts(all.filter((b) => b.status === 'draft'));
+      setBroadcasts(all.filter((b) => b.status !== 'draft'));
     } catch (err) {
-      // Previously swallowed with console.error — the wizard would
-      // just no-op, leaving the user confused. Surface the reason.
-      const message = err instanceof Error ? err.message : 'Broadcast failed';
-      console.error('Broadcast failed:', err);
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : 'Failed to load broadcasts');
+    } finally {
+      setLoading(false);
     }
-  }
+  }, [supabase]);
 
-  /**
-   * Writes a draft broadcast row — no recipients, no sending. The user
-   * can revisit it via the list page to finish the flow later. We
-   * don't persist the in-progress audience/variable config here
-   * because the current schema doesn't carry it past `audience_filter`
-   * and `template_variables`; those are enough for the user to
-   * recognize the draft but not to exactly round-trip into the wizard.
-   * A full resume-draft UX is a future polish.
-   */
-  async function handleSaveDraft() {
-    if (!template || !name.trim()) {
-      toast.error('Give the broadcast a name before saving a draft.');
-      return;
-    }
-    const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user) {
-      toast.error('Not signed in.');
-      return;
-    }
+  useEffect(() => {
+    fetchBroadcasts();
+  }, [fetchBroadcasts]);
 
-    const { error } = await supabase.from('broadcasts').insert({
-      user_id: user.id,
-      name: name.trim(),
-      template_name: template.name,
-      template_language: template.language ?? 'en_US',
-      template_variables: variables,
-      audience_filter: {
-        type: audience.type,
-        tagIds: audience.tagIds,
-      },
-      status: 'draft',
-      total_recipients: 0,
-      sent_count: 0,
-      delivered_count: 0,
-      read_count: 0,
-      replied_count: 0,
-      failed_count: 0,
-    });
-
-    if (error) {
-      toast.error(`Failed to save draft: ${error.message}`);
-      return;
+  async function deleteDraft(draft: Broadcast) {
+    setDeletingId(draft.id);
+    try {
+      const res = await fetch(`/api/broadcasts/draft?id=${draft.id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error ?? 'Delete failed');
+      }
+      toast.success('Draft deleted');
+      fetchBroadcasts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete draft');
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteDraft(null);
     }
-    toast.success('Draft saved');
-    router.push('/broadcasts');
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">New Broadcast</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Create and send a broadcast message to your contacts.
-        </p>
-      </div>
-
-      {/* Step Indicator */}
-      <div className="flex items-center justify-between">
-        {steps.map((step, index) => {
-          const isActive = index === currentStep;
-          const isCompleted = index < currentStep;
-
-          return (
-            <div key={step.key} className="flex flex-1 items-center">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition-all ${
-                    isCompleted
-                      ? 'bg-violet-500 text-white'
-                      : isActive
-                        ? 'border-2 border-violet-500 bg-violet-500/10 text-violet-400'
-                        : 'border border-slate-700 bg-slate-800 text-slate-500'
-                  }`}
-                >
-                  {isCompleted ? <Check className="h-4 w-4" /> : index + 1}
-                </div>
-                <span
-                  className={`hidden text-sm font-medium sm:block ${
-                    isActive ? 'text-white' : isCompleted ? 'text-violet-400' : 'text-slate-500'
-                  }`}
-                >
-                  {step.label}
-                </span>
-              </div>
-              {index < steps.length - 1 && (
-                <div
-                  className={`mx-3 h-px flex-1 ${
-                    index < currentStep ? 'bg-violet-500' : 'bg-slate-800'
-                  }`}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Step Content */}
-      <div className="relative min-h-[400px]">
-        <div
-          className="transition-all duration-300 ease-in-out"
-          style={{
-            opacity: isProcessing ? 0.6 : 1,
-            pointerEvents: isProcessing ? 'none' : 'auto',
-          }}
-        >
-          {currentStep === 0 && (
-            <Step1ChooseTemplate
-              selectedTemplate={template}
-              onSelect={setTemplate}
-              onNext={() => setCurrentStep(1)}
-              onBack={() => router.push('/broadcasts')}
-            />
-          )}
-          {currentStep === 1 && (
-            <Step2SelectAudience
-              audience={audience}
-              onUpdate={setAudience}
-              onNext={() => setCurrentStep(2)}
-              onBack={() => setCurrentStep(0)}
-            />
-          )}
-          {currentStep === 2 && template && (
-            <Step3Personalize
-              template={template}
-              variables={variables}
-              onUpdate={setVariables}
-              onNext={() => setCurrentStep(3)}
-              onBack={() => setCurrentStep(1)}
-            />
-          )}
-          {currentStep === 3 && template && (
-            <Step4ScheduleSend
-              name={name}
-              onNameChange={setName}
-              template={template}
-              audience={audience}
-              onSend={handleSend}
-              onSaveDraft={handleSaveDraft}
-              onBack={() => setCurrentStep(2)}
-              isProcessing={isProcessing}
-              progress={progress}
-            />
-          )}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Campaigns</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Send bulk messages to your contacts using approved templates.
+          </p>
         </div>
+        <Button
+          onClick={() => router.push('/broadcasts/new')}
+          className="bg-violet-600 text-white hover:bg-violet-700"
+        >
+          <Plus className="h-4 w-4" />
+          New Broadcast
+        </Button>
       </div>
+
+      {/* ── Drafts section ──────────────────────────────────────── */}
+      {drafts.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <FileEdit className="h-4 w-4 text-slate-400" />
+            <h2 className="text-sm font-semibold text-slate-300">
+              Saved drafts ({drafts.length})
+            </h2>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {drafts.map((draft) => {
+              const af = (draft.audience_filter as Record<string, unknown>) ?? {};
+              const audienceType = (af.type as string) ?? 'all';
+              const step = typeof af._current_step === 'number' ? af._current_step : 0;
+              const stepLabels = ['Template', 'Audience', 'Personalise', 'Review'];
+              const isDeleting = deletingId === draft.id;
+
+              return (
+                <div
+                  key={draft.id}
+                  className="flex flex-col justify-between rounded-xl border border-slate-700 bg-slate-900/60 p-4"
+                >
+                  <div className="mb-3 space-y-1">
+                    <p className="font-medium text-white">{draft.name}</p>
+                    {draft.template_name && (
+                      <p className="text-xs text-slate-400">
+                        Template: <span className="text-slate-300">{draft.template_name}</span>
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-400">
+                      Audience: <span className="text-slate-300 capitalize">{audienceType}</span>
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Last step:{' '}
+                      <span className="text-violet-400">{stepLabels[step] ?? 'Template'}</span>
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {new Date(draft.created_at).toLocaleDateString(undefined, {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => router.push(`/broadcasts/new?draft=${draft.id}`)}
+                      className="flex-1 bg-violet-600 text-white hover:bg-violet-700"
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                      Resume
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isDeleting}
+                      onClick={() => setConfirmDeleteDraft(draft)}
+                      className="border-slate-700 bg-transparent text-slate-400 hover:bg-slate-800 hover:text-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Sent broadcasts ─────────────────────────────────────── */}
+      <div className="space-y-3">
+        {drafts.length > 0 && (
+          <h2 className="text-sm font-semibold text-slate-300">Sent campaigns</h2>
+        )}
+
+        {loading ? (
+          <div className="flex h-32 items-center justify-center">
+            <span className="text-sm text-slate-400">Loading…</span>
+          </div>
+        ) : broadcasts.length === 0 && drafts.length === 0 ? (
+          <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900">
+            <Radio className="mb-3 h-10 w-10 text-slate-600" />
+            <p className="text-sm font-medium text-white">No broadcasts yet</p>
+            <p className="mt-1 text-xs text-slate-400">
+              Create your first broadcast to reach your contacts at scale.
+            </p>
+            <Button
+              onClick={() => router.push('/broadcasts/new')}
+              className="mt-4 bg-violet-600 text-white hover:bg-violet-700"
+            >
+              <Plus className="h-4 w-4" />
+              New Broadcast
+            </Button>
+          </div>
+        ) : broadcasts.length === 0 ? (
+          <div className="flex h-32 flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900">
+            <p className="text-sm text-slate-400">No sent campaigns yet. Finish a draft to send your first broadcast.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-800 hover:bg-transparent">
+                  <TableHead className="text-slate-400">Name</TableHead>
+                  <TableHead className="hidden text-slate-400 md:table-cell">Template</TableHead>
+                  <TableHead className="hidden text-right text-slate-400 sm:table-cell">
+                    Recipients
+                  </TableHead>
+                  <TableHead className="hidden text-slate-400 lg:table-cell">Delivery</TableHead>
+                  <TableHead className="hidden text-slate-400 lg:table-cell">Read</TableHead>
+                  <TableHead className="text-slate-400">Status</TableHead>
+                  <TableHead className="hidden text-slate-400 sm:table-cell">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {broadcasts.map((broadcast) => {
+                  const status = getBroadcastStatus(broadcast.status);
+                  return (
+                    <TableRow
+                      key={broadcast.id}
+                      className="cursor-pointer border-slate-800 hover:bg-slate-800/50"
+                      onClick={() => router.push(`/broadcasts/${broadcast.id}`)}
+                    >
+                      <TableCell className="font-medium text-white">
+                        {broadcast.name}
+                      </TableCell>
+                      <TableCell className="hidden text-slate-300 md:table-cell">
+                        {broadcast.template_name}
+                      </TableCell>
+                      <TableCell className="hidden text-right text-slate-300 tabular-nums sm:table-cell">
+                        {broadcast.total_recipients}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <RateCell
+                          value={broadcast.delivered_count}
+                          total={broadcast.total_recipients}
+                          color="bg-violet-500"
+                        />
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <RateCell
+                          value={broadcast.read_count}
+                          total={broadcast.total_recipients}
+                          color="bg-blue-500"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}
+                        >
+                          {status.pulse && (
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+                              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yellow-400" />
+                            </span>
+                          )}
+                          {status.label}
+                        </span>
+                      </TableCell>
+                      <TableCell className="hidden text-slate-400 sm:table-cell">
+                        {new Date(broadcast.created_at).toLocaleDateString()}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      {/* Confirm delete draft dialog */}
+      <AlertDialog
+        open={!!confirmDeleteDraft}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteDraft(null); }}
+      >
+        <AlertDialogContent className="border-slate-800 bg-slate-900">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete draft?</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
+              &ldquo;{confirmDeleteDraft?.name}&rdquo; will be permanently deleted. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-slate-700 bg-transparent text-slate-300 hover:bg-slate-800">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmDeleteDraft && deleteDraft(confirmDeleteDraft)}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

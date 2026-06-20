@@ -5,6 +5,7 @@ import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { normalizePhone, phonesMatch } from '@/lib/whatsapp/phone-utils'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { runJourneysForInbound } from '@/lib/journeys/runner'
 
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,19 +77,16 @@ export async function GET(request: Request) {
     const mode = searchParams.get('hub.mode')
     const challenge = searchParams.get('hub.challenge')
     const verifyToken = searchParams.get('hub.verify_token')
-
     if (mode !== 'subscribe' || !challenge || !verifyToken) {
       return NextResponse.json(
         { error: 'Missing verification parameters' },
         { status: 400 }
       )
     }
-
     // Fetch all whatsapp configs to check verify tokens
     const { data: configs, error: configError } = await supabaseAdmin()
       .from('whatsapp_config')
       .select('id, verify_token')
-
     if (configError || !configs) {
       console.error('Error fetching configs for verification:', configError)
       return NextResponse.json(
@@ -96,7 +94,6 @@ export async function GET(request: Request) {
         { status: 403 }
       )
     }
-
     // Check if any config's verify_token matches. Also collect the
     // matching row so we can opportunistically upgrade its token to
     // GCM if it was still in the legacy CBC format.
@@ -113,7 +110,6 @@ export async function GET(request: Request) {
         // Malformed / wrong-key token row — skip it and keep checking.
       }
     }
-
     if (matchedConfig) {
       // Fire-and-forget GCM upgrade. Safe to run on every subscribe
       // since it's a no-op once the column is already GCM.
@@ -137,7 +133,6 @@ export async function GET(request: Request) {
         headers: { 'Content-Type': 'text/plain' },
       })
     }
-
     return NextResponse.json(
       { error: 'Verification token mismatch' },
       { status: 403 }
@@ -157,7 +152,6 @@ export async function POST(request: Request) {
   // signed. request.json() would re-encode and break the signature.
   const rawBody = await request.text()
   const signature = request.headers.get('x-hub-signature-256')
-
   if (!verifyMetaWebhookSignature(rawBody, signature)) {
     // 401 (not 200) — we want Meta's delivery dashboard to show failures
     // loudly if a misconfiguration causes signatures to stop matching,
@@ -165,29 +159,24 @@ export async function POST(request: Request) {
     console.warn('[webhook] rejected request with invalid signature')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
-
   let body: { entry?: WhatsAppWebhookEntry[] }
   try {
     body = JSON.parse(rawBody)
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
-
   // Process asynchronously so we can ack Meta within their timeout.
   processWebhook(body).catch((error) => {
     console.error('Error processing webhook:', error)
   })
-
   return NextResponse.json({ status: 'received' }, { status: 200 })
 }
 
 async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
   if (!body.entry) return
-
   for (const entry of body.entry) {
     for (const change of entry.changes) {
       const value = change.value
-
       // Template approval/rejection events — Meta pushes these on the
       // `message_template_status_update` field when a submitted template
       // changes state. Handle and continue (no messages/contacts here).
@@ -198,42 +187,35 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
         await handleTemplateStatusUpdate(value)
         continue
       }
-
       // Handle status updates
       if (value.statuses) {
         for (const status of value.statuses) {
           await handleStatusUpdate(status)
         }
       }
-
       // Handle incoming messages
       if (!value.messages || !value.contacts) continue
-
       const phoneNumberId = value.metadata!.phone_number_id
-
       // Find user's config by phone_number_id
       const { data: config, error: configError } = await supabaseAdmin()
         .from('whatsapp_config')
         .select('*')
         .eq('phone_number_id', phoneNumberId)
         .single()
-
       if (configError || !config) {
         console.error('No config found for phone_number_id:', phoneNumberId)
         continue
       }
-
       const decryptedAccessToken = decrypt(config.access_token)
-
       for (let i = 0; i < value.messages.length; i++) {
         const message = value.messages[i]
         const contact = value.contacts[i] || value.contacts[0]
-
         await processMessage(
           message,
           contact,
           config.user_id,
-          decryptedAccessToken
+          decryptedAccessToken,
+          phoneNumberId
         )
       }
     }
@@ -305,12 +287,10 @@ async function handleTemplateStatusUpdate(value: {
   const name = value.message_template_name
   const language = value.message_template_language
   const event = (value.event || '').toUpperCase()
-
   if (!metaId && !name) {
     console.warn('[webhook] template status update with no id or name')
     return
   }
-
   // Map Meta's event to our TitleCase status CHECK values.
   let status: 'Approved' | 'Rejected' | 'Pending'
   switch (event) {
@@ -326,12 +306,10 @@ async function handleTemplateStatusUpdate(value: {
     default:
       status = 'Pending'
   }
-
   const patch: Record<string, unknown> = {
     status,
     updated_at: new Date().toISOString(),
   }
-
   // Try id match first (most precise), then name+language.
   if (metaId) {
     const { data, error } = await supabaseAdmin()
@@ -341,7 +319,6 @@ async function handleTemplateStatusUpdate(value: {
       .select('id')
     if (!error && data && data.length > 0) return
   }
-
   if (name) {
     let q = supabaseAdmin()
       .from('message_templates')
@@ -367,43 +344,35 @@ async function handleStatusUpdate(status: {
     .from('messages')
     .update({ status: status.status })
     .eq('message_id', status.id)
-
   if (msgErr) {
     console.error('Error updating message status:', msgErr)
   }
-
   // 2) Mirror onto broadcast_recipients via whatsapp_message_id
   //    (added in migration 003). The aggregate trigger on
   //    broadcast_recipients re-derives the parent broadcast's
   //    sent/delivered/read/failed counts automatically.
   const tsIso = new Date(parseInt(status.timestamp) * 1000).toISOString()
-
   const { data: recipient, error: recFetchErr } = await supabaseAdmin()
     .from('broadcast_recipients')
     .select('id, status')
     .eq('whatsapp_message_id', status.id)
     .maybeSingle()
-
   if (recFetchErr) {
     console.error('Error fetching broadcast recipient:', recFetchErr)
     return
   }
   if (!recipient) return // message wasn't part of a broadcast — fine
-
   // Guard transitions — forward-only on the success ladder, and
   // `failed` only from pre-delivered states.
   if (!isValidStatusTransition(recipient.status, status.status)) return
-
   const update: Record<string, unknown> = { status: status.status }
   if (status.status === 'sent' && !('sent_at' in update)) update.sent_at = tsIso
   if (status.status === 'delivered') update.delivered_at = tsIso
   if (status.status === 'read') update.read_at = tsIso
-
   const { error: recUpdateErr } = await supabaseAdmin()
     .from('broadcast_recipients')
     .update(update)
     .eq('id', recipient.id)
-
   if (recUpdateErr) {
     console.error('Error updating broadcast recipient status:', recUpdateErr)
   }
@@ -428,15 +397,12 @@ async function flagBroadcastReplyIfAny(userId: string, contactId: string) {
       .in('status', ['sent', 'delivered', 'read'])
       .order('created_at', { ascending: false })
       .limit(1)
-
     if (error || !recs || recs.length === 0) return
-
     const row = recs[0]
     const { error: updErr } = await supabaseAdmin()
       .from('broadcast_recipients')
       .update({ status: 'replied', replied_at: new Date().toISOString() })
       .eq('id', row.id)
-
     if (updErr) {
       console.error('Error marking broadcast recipient replied:', updErr)
     }
@@ -482,7 +448,6 @@ async function handleReaction(
 ) {
   const reaction = message.reaction
   if (!reaction?.message_id) return
-
   const targetInternalId = await lookupInternalIdByMetaId(
     reaction.message_id,
     conversationId
@@ -494,7 +459,6 @@ async function handleReaction(
     )
     return
   }
-
   // Empty emoji = removal (per Meta's Cloud API spec).
   if (!reaction.emoji) {
     const { error: delError } = await supabaseAdmin()
@@ -508,7 +472,6 @@ async function handleReaction(
     }
     return
   }
-
   const { error: upsertError } = await supabaseAdmin()
     .from('message_reactions')
     .upsert(
@@ -530,11 +493,11 @@ async function processMessage(
   message: WhatsAppMessage,
   contact: { profile: { name: string }; wa_id: string },
   userId: string,
-  accessToken: string
+  accessToken: string,
+  phoneNumberId: string
 ) {
   const senderPhone = normalizePhone(message.from)
   const contactName = contact.profile.name
-
   // Find or create contact
   const contactOutcome = await findOrCreateContact(
     userId,
@@ -543,14 +506,12 @@ async function processMessage(
   )
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact
-
   // Find or create conversation
   const conversation = await findOrCreateConversation(
     userId,
     contactRecord.id
   )
   if (!conversation) return
-
   // Reactions short-circuit here — they aren't messages. We never insert
   // into `messages`, never bump unread_count, never update last_message_text.
   // Done before parseMessageContent so the media-URL fetch is skipped.
@@ -558,13 +519,11 @@ async function processMessage(
     await handleReaction(message, conversation.id, contactRecord.id)
     return
   }
-
   // Parse message content based on type
   const { contentText, mediaUrl, mediaType } = await parseMessageContent(
     message,
     accessToken
   )
-
   // Resolve swipe-reply context if present. A missing parent is fine —
   // we just store NULL and the UI renders the message without a quote.
   let replyToInternalId: string | null = null
@@ -580,7 +539,6 @@ async function processMessage(
       )
     }
   }
-
   // Insert message — field names MUST match the messages table schema
   // (see supabase/migrations/001_initial_schema.sql):
   //   conversation_id, sender_type, content_type, content_text,
@@ -589,7 +547,6 @@ async function processMessage(
   // column; the MIME type is only used to construct the proxy URL during
   // parseMessageContent. Silence the unused-var warning:
   void mediaType
-
   // The messages.content_type CHECK constraint only allows:
   //   text, image, document, audio, video, location, template
   // Map incoming WhatsApp types that aren't in that list to the closest
@@ -602,7 +559,6 @@ async function processMessage(
     : message.type === 'sticker'
       ? 'image'   // stickers are images
       : 'text'    // reaction, unknown → text fallback
-
   // Determine whether this is the contact's very first inbound message
   // BEFORE we insert, so the count is accurate. Covers the case where
   // the contact row already exists (manual add / CSV import) but they've
@@ -613,7 +569,6 @@ async function processMessage(
     .eq('conversation_id', conversation.id)
     .eq('sender_type', 'customer')
   const isFirstInboundMessage = (priorCustomerMsgCount ?? 0) === 0
-
   const { error: msgError } = await supabaseAdmin().from('messages').insert({
     conversation_id: conversation.id,
     sender_type: 'customer',
@@ -625,12 +580,10 @@ async function processMessage(
     created_at: new Date(parseInt(message.timestamp) * 1000).toISOString(),
     reply_to_message_id: replyToInternalId,
   })
-
   if (msgError) {
     console.error('Error inserting message:', msgError)
     return
   }
-
   // Update conversation
   const { error: convError } = await supabaseAdmin()
     .from('conversations')
@@ -641,16 +594,13 @@ async function processMessage(
       updated_at: new Date().toISOString(),
     })
     .eq('id', conversation.id)
-
   if (convError) {
     console.error('Error updating conversation:', convError)
   }
-
   // If this contact was a recent broadcast recipient, flag the reply
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(userId, contactRecord.id)
-
   // Fire any automations that react to this webhook event. All dispatches
   // run here (not earlier) so the contact, conversation, and inbound
   // message all exist before any step — including send_message — runs.
@@ -682,6 +632,19 @@ async function processMessage(
       },
     }).catch((err) => console.error('[automations] dispatch failed:', err))
   }
+
+  // Also try journey execution (Flow Studio canvas flows). Fire-and-forget
+  // like the automations above — slow journeys must not block the
+  // webhook's 200 OK response to Meta.
+  runJourneysForInbound({
+    userId,
+    conversationId: conversation.id,
+    contactId: contactRecord.id,
+    customerPhone: senderPhone,
+    inboundText,
+    phoneNumberId,
+    accessToken,
+  }).catch((err) => console.error('[journeys] dispatch failed:', err))
 }
 
 async function parseMessageContent(
@@ -710,7 +673,6 @@ async function parseMessageContent(
       return null
     }
   }
-
   switch (message.type) {
     case 'text':
       return {
@@ -718,7 +680,6 @@ async function parseMessageContent(
         mediaUrl: null,
         mediaType: null,
       }
-
     case 'image':
       if (message.image?.id) {
         return {
@@ -728,7 +689,6 @@ async function parseMessageContent(
         }
       }
       return { contentText: null, mediaUrl: null, mediaType: null }
-
     case 'video':
       if (message.video?.id) {
         return {
@@ -738,7 +698,6 @@ async function parseMessageContent(
         }
       }
       return { contentText: null, mediaUrl: null, mediaType: null }
-
     case 'document':
       if (message.document?.id) {
         return {
@@ -749,7 +708,6 @@ async function parseMessageContent(
         }
       }
       return { contentText: null, mediaUrl: null, mediaType: null }
-
     case 'audio':
       if (message.audio?.id) {
         return {
@@ -759,7 +717,6 @@ async function parseMessageContent(
         }
       }
       return { contentText: null, mediaUrl: null, mediaType: null }
-
     case 'sticker':
       // Stickers are images under the hood. Treat them as such so the
       // MessageBubble renders the <img>. The caller maps the DB
@@ -772,7 +729,6 @@ async function parseMessageContent(
         }
       }
       return { contentText: null, mediaUrl: null, mediaType: null }
-
     case 'location':
       if (message.location) {
         const loc = message.location
@@ -786,14 +742,12 @@ async function parseMessageContent(
         }
       }
       return { contentText: null, mediaUrl: null, mediaType: null }
-
     case 'reaction':
       return {
         contentText: message.reaction?.emoji || null,
         mediaUrl: null,
         mediaType: null,
       }
-
     default:
       return {
         contentText: `[Unsupported message type: ${message.type}]`,
@@ -823,15 +777,12 @@ async function findOrCreateContact(
     .from('contacts')
     .select('*')
     .eq('user_id', userId)
-
   if (contactsError) {
     console.error('Error fetching contacts:', contactsError)
     return null
   }
-
   // Use phonesMatch for flexible matching
   const existingContact = contacts?.find((c: ContactRow) => phonesMatch(c.phone, phone))
-
   if (existingContact) {
     // Update name if it changed
     if (name && name !== existingContact.name) {
@@ -842,7 +793,6 @@ async function findOrCreateContact(
     }
     return { contact: existingContact, wasCreated: false }
   }
-
   // Create new contact
   const { data: newContact, error: createError } = await supabaseAdmin()
     .from('contacts')
@@ -853,12 +803,10 @@ async function findOrCreateContact(
     })
     .select()
     .single()
-
   if (createError) {
     console.error('Error creating contact:', createError)
     return null
   }
-
   return { contact: newContact, wasCreated: true }
 }
 
@@ -875,11 +823,9 @@ async function findOrCreateConversation(userId: string, contactId: string) {
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
-
   if (!findError && existing) {
     return existing
   }
-
   // Create new conversation only if none exists
   const { data: newConv, error: createError } = await supabaseAdmin()
     .from('conversations')
@@ -889,11 +835,9 @@ async function findOrCreateConversation(userId: string, contactId: string) {
     })
     .select()
     .single()
-
   if (createError) {
     console.error('Error creating conversation:', createError)
     return null
   }
-
   return newConv
 }

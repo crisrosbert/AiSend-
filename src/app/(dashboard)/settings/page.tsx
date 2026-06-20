@@ -1,7 +1,8 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Settings, MessageSquare, Tag, User } from 'lucide-react';
+import { Settings, MessageSquare, Tag, User, Zap } from 'lucide-react';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { BusinessProfile } from '@/components/settings/business-profile';
 import { ConnectWhatsApp } from '@/components/settings/connect-whatsapp';
@@ -10,22 +11,24 @@ import { TagManager } from '@/components/settings/tag-manager';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { PasswordForm } from '@/components/settings/password-form';
 import { SessionsCard } from '@/components/settings/sessions-card';
+import CannedRepliesPage from './canned-replies/page';
 
-const TAB_VALUES = ['profile', 'whatsapp', 'templates', 'tags'] as const;
+const TAB_VALUES = ['profile', 'whatsapp', 'templates', 'tags', 'canned-replies'] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
 const TABS: { value: TabValue; label: string; icon: typeof User }[] = [
-  { value: 'profile',   label: 'Profile',         icon: User },
-  { value: 'whatsapp',  label: 'WhatsApp Config',  icon: Settings },
-  { value: 'templates', label: 'Templates',        icon: MessageSquare },
-  { value: 'tags',      label: 'Tags',             icon: Tag },
+  { value: 'profile',        label: 'Profile',        icon: User },
+  { value: 'whatsapp',       label: 'WhatsApp',       icon: Settings },
+  { value: 'templates',      label: 'Templates',      icon: MessageSquare },
+  { value: 'tags',           label: 'Tags',           icon: Tag },
+  { value: 'canned-replies', label: 'Quick Replies',  icon: Zap },
 ];
 
 function isTabValue(v: string | null): v is TabValue {
   return !!v && (TAB_VALUES as readonly string[]).includes(v);
 }
 
-export default function SettingsPage() {
+function SettingsInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryTab = searchParams.get('tab');
@@ -44,7 +47,7 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Manage your profile, WhatsApp integration, message templates, and tags.
+          Manage your profile, WhatsApp integration, message templates, tags, and quick replies.
         </p>
       </div>
 
@@ -69,9 +72,7 @@ export default function SettingsPage() {
         })}
       </div>
 
-      {/* KEY FIX: all tabs stay mounted, only hidden/shown via CSS.
-          This prevents the WhatsApp config from losing its loaded state
-          when user switches to another tab and comes back. */}
+      {/* All tabs stay mounted — only hidden/shown via CSS to preserve state */}
       <div className={tab === 'profile' ? 'block' : 'hidden'}>
         <div className="space-y-6">
           <ProfileForm />
@@ -95,6 +96,18 @@ export default function SettingsPage() {
       <div className={tab === 'tags' ? 'block' : 'hidden'}>
         <TagManager />
       </div>
+
+      <div className={tab === 'canned-replies' ? 'block' : 'hidden'}>
+        <CannedRepliesPage />
+      </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="h-64 flex items-center justify-center text-sm text-slate-400">Loading…</div>}>
+      <SettingsInner />
+    </Suspense>
   );
 }

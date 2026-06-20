@@ -1,11 +1,10 @@
 "use client"
 
 import { use, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
-
+import { ReactFlowProvider } from "reactflow"
+import { FlowCanvas } from "@/components/automations/flow-canvas"
 import {
-  AutomationBuilder,
   fromServerSteps,
   type BuilderInitial,
   type ServerStepNode,
@@ -18,7 +17,6 @@ export default function EditAutomationPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
-  const router = useRouter()
   const [initial, setInitial] = useState<BuilderInitial | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,7 +25,7 @@ export default function EditAutomationPage({
     async function load() {
       const res = await fetch(`/api/automations/${id}`)
       if (!res.ok) {
-        if (!cancelled) setError(`Failed to load (${res.status})`)
+        if (!cancelled) setError(`Failed to load automation (${res.status})`)
         return
       }
       const body = await res.json()
@@ -43,32 +41,31 @@ export default function EditAutomationPage({
       })
     }
     load()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [id])
 
   if (error) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3">
+      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-slate-950">
         <p className="text-sm text-red-400">{error}</p>
-        <button
-          onClick={() => router.push("/automations")}
-          className="text-sm text-violet-400 hover:text-violet-300"
-        >
-          Back to Automations
-        </button>
+        <a href="/automations" className="text-sm text-violet-400 hover:text-violet-300">
+          ← Back to Automations
+        </a>
       </div>
     )
   }
 
   if (!initial) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
+      <div className="flex h-screen items-center justify-center bg-slate-950">
+        <Loader2 className="size-6 animate-spin text-violet-500" />
       </div>
     )
   }
 
-  return <AutomationBuilder initial={initial} />
+  return (
+    <ReactFlowProvider>
+      <FlowCanvas initial={initial} />
+    </ReactFlowProvider>
+  )
 }

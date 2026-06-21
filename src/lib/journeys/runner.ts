@@ -90,10 +90,8 @@ export async function runJourneysForInbound(
   args: RunJourneysArgs,
 ): Promise<boolean> {
   try {
-    try {                                                          ← DELETE
     console.log('[journeys.runner] CALLED with text:', args.inboundText)
     const text = (args.inboundText || '').trim()
-    const text = (args.inboundText || '').trim()                   ← DELETE
     if (!text) return false
 
     // Fetch ALL active journeys for THIS user. Filtering by user_id is

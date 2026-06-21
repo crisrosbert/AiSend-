@@ -1,144 +1,210 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
+import { Send, Loader2, Bell } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import type { Broadcast, Contact } from '@/types';
+
+interface ResendUnreadButtonProps {
+  broadcast: Broadcast;
+  /** Count of recipients with status sent|delivered (received, not read). */
+  unreadCount: number;
+}
+
+const SEND_BATCH_SIZE = 10;
+const SEND_BATCH_DELAY_MS = 1000;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * POST /api/broadcasts/resend-unread
- * Body: { broadcast_id: string }
- *
- * Creates a NEW broadcast that targets only the recipients of the
- * original who received the message but did NOT read it
- * (status = 'sent' or 'delivered'). Returns the new broadcast id so
- * the client can open it and run the send via the existing pipeline.
- *
- * The new broadcast is created as a 'draft' with a pre-filled
- * recipient set; the client send hook picks it up.
+ * "Resend to non-readers" — creates a NEW broadcast targeting only the
+ * recipients of this broadcast who received but did not read it
+ * (status 'sent' or 'delivered'). Opted-out contacts are filtered out.
+ * Reuses the same /api/whatsapp/broadcast send endpoint with Meta-safe
+ * pacing (10 msgs / 1s).
  */
-export async function POST(request: Request) {
-  try {
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export function ResendUnreadButton({ broadcast, unreadCount }: ResendUnreadButtonProps) {
+  const router = useRouter();
+  const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [confirm, setConfirm] = useState(false);
 
-    const body = await request.json()
-    const { broadcast_id } = body as { broadcast_id?: string }
-    if (!broadcast_id) {
-      return NextResponse.json({ error: 'broadcast_id is required' }, { status: 400 })
-    }
+  async function handleResend() {
+    setSending(true);
+    setProgress(0);
+    const supabase = createClient();
 
-    // 1. Load the original broadcast (verify ownership)
-    const { data: original, error: origErr } = await supabase
-      .from('broadcasts')
-      .select('*')
-      .eq('id', broadcast_id)
-      .eq('user_id', user.id)
-      .single()
+    try {
+      // 1. Create the resend broadcast + recipient rows server-side
+      const res = await fetch('/api/broadcasts/resend-unread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broadcast_id: broadcast.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
 
-    if (origErr || !original) {
-      return NextResponse.json({ error: 'Broadcast not found' }, { status: 404 })
-    }
-
-    // 2. Find recipients who received but did NOT read
-    //    (status 'sent' or 'delivered'). Exclude read/replied/failed/pending.
-    const { data: unreadRecipients, error: recErr } = await supabase
-      .from('broadcast_recipients')
-      .select('contact_id')
-      .eq('broadcast_id', broadcast_id)
-      .in('status', ['sent', 'delivered'])
-      .not('contact_id', 'is', null)
-
-    if (recErr) {
-      return NextResponse.json({ error: recErr.message }, { status: 500 })
-    }
-
-    const contactIds = [...new Set(
-      (unreadRecipients ?? [])
-        .map((r) => r.contact_id)
-        .filter((id): id is string => Boolean(id)),
-    )]
-
-    if (contactIds.length === 0) {
-      return NextResponse.json(
-        { error: 'No unread recipients — everyone already read this broadcast.' },
-        { status: 400 },
-      )
-    }
-
-    // 3. Filter out any contacts who have since opted out
-    const { data: activeContacts, error: contactErr } = await supabase
-      .from('contacts')
-      .select('id')
-      .in('id', contactIds)
-      .is('opted_out_at', null)
-
-    if (contactErr) {
-      return NextResponse.json({ error: contactErr.message }, { status: 500 })
-    }
-
-    const finalContactIds = (activeContacts ?? []).map((c) => c.id)
-    if (finalContactIds.length === 0) {
-      return NextResponse.json(
-        { error: 'All unread recipients have opted out. Nothing to resend.' },
-        { status: 400 },
-      )
-    }
-
-    // 4. Create the new broadcast row (draft, status sending happens on send)
-    const { data: newBroadcast, error: createErr } = await supabase
-      .from('broadcasts')
-      .insert({
-        user_id: user.id,
-        name: `${original.name} (Resend to unread)`,
-        template_name: original.template_name,
-        template_language: original.template_language,
-        template_variables: original.template_variables,
-        audience_filter: {
-          type: 'resend_unread',
-          source_broadcast_id: broadcast_id,
-        },
-        status: 'sending',
-        total_recipients: finalContactIds.length,
-        sent_count: 0,
-        delivered_count: 0,
-        read_count: 0,
-        replied_count: 0,
-        failed_count: 0,
-      })
-      .select()
-      .single()
-
-    if (createErr || !newBroadcast) {
-      return NextResponse.json(
-        { error: createErr?.message ?? 'Failed to create resend broadcast' },
-        { status: 500 },
-      )
-    }
-
-    // 5. Insert recipient rows for the new broadcast
-    const recipientRows = finalContactIds.map((cid) => ({
-      broadcast_id: newBroadcast.id,
-      contact_id: cid,
-      status: 'pending' as const,
-    }))
-
-    const INSERT_CHUNK = 200
-    for (let i = 0; i < recipientRows.length; i += INSERT_CHUNK) {
-      const chunk = recipientRows.slice(i, i + INSERT_CHUNK)
-      const { error: insErr } = await supabase
-        .from('broadcast_recipients')
-        .insert(chunk)
-      if (insErr) {
-        return NextResponse.json({ error: insErr.message }, { status: 500 })
+      const newBroadcastId: string = data.id;
+      const skipped: number = data.skipped_opted_out ?? 0;
+      if (skipped > 0) {
+        toast.info(`${skipped} opted-out contact${skipped !== 1 ? 's' : ''} skipped.`);
       }
-    }
 
-    return NextResponse.json({
-      id: newBroadcast.id,
-      recipients: finalContactIds.length,
-      skipped_opted_out: contactIds.length - finalContactIds.length,
-    })
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+      // 2. Fetch the freshly-created recipients with their contacts
+      const { data: recipients, error: recErr } = await supabase
+        .from('broadcast_recipients')
+        .select('id, contact:contacts(*)')
+        .eq('broadcast_id', newBroadcastId);
+      if (recErr || !recipients) throw new Error('Failed to load recipients');
+
+      // 3. Send in paced batches (reuse existing endpoint)
+      const stored = (broadcast.template_variables ?? {}) as Record<
+        string,
+        { type: string; value: string }
+      >;
+      const resolveParams = (contact: Contact): string[] => {
+        const keys = Object.keys(stored).sort((a, b) => Number(a) - Number(b));
+        return keys.map((k) => {
+          const v = stored[k];
+          if (!v) return '';
+          if (v.type === 'static') return v.value;
+          if (v.type === 'field') {
+            const map: Record<string, string | undefined> = {
+              name: contact.name, phone: contact.phone,
+              email: contact.email, company: contact.company,
+            };
+            return map[v.value] ?? '';
+          }
+          return '';
+        });
+      };
+
+      let failed = 0;
+      const total = recipients.length;
+
+      for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
+        const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
+        const apiRecipients = batch
+          .filter((r) => r.contact?.phone)
+          .map((r) => ({
+            phone: r.contact!.phone as string,
+            params: resolveParams(r.contact as Contact),
+          }));
+
+        if (apiRecipients.length > 0) {
+          try {
+            const sendRes = await fetch('/api/whatsapp/broadcast', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                recipients: apiRecipients,
+                template_name: broadcast.template_name,
+                template_language: broadcast.template_language ?? 'en_US',
+              }),
+            });
+            const sendData = await sendRes.json();
+            const byPhone = new Map<string, { status: string; whatsapp_message_id?: string; error?: string }>();
+            for (const r of (sendData.results ?? [])) byPhone.set(r.phone, r);
+
+            for (const r of batch) {
+              const phone = r.contact?.phone;
+              const result = phone ? byPhone.get(phone) : undefined;
+              if (result?.status === 'sent') {
+                await supabase.from('broadcast_recipients').update({
+                  status: 'sent',
+                  sent_at: new Date().toISOString(),
+                  whatsapp_message_id: result.whatsapp_message_id ?? null,
+                }).eq('id', r.id);
+              } else {
+                failed++;
+                await supabase.from('broadcast_recipients').update({
+                  status: 'failed',
+                  error_message: result?.error ?? 'No result',
+                }).eq('id', r.id);
+              }
+            }
+          } catch (err) {
+            for (const r of batch) {
+              failed++;
+              await supabase.from('broadcast_recipients').update({
+                status: 'failed',
+                error_message: err instanceof Error ? err.message : 'Send failed',
+              }).eq('id', r.id);
+            }
+          }
+        }
+
+        setProgress(20 + Math.round(((i + batch.length) / total) * 75));
+        if (i + SEND_BATCH_SIZE < recipients.length) await sleep(SEND_BATCH_DELAY_MS);
+      }
+
+      // 4. Finalize the broadcast row
+      const sentCount = total - failed;
+      await supabase.from('broadcasts').update({
+        status: failed === total ? 'failed' : 'sent',
+        sent_count: sentCount,
+        failed_count: failed,
+        updated_at: new Date().toISOString(),
+      }).eq('id', newBroadcastId);
+
+      setProgress(100);
+      toast.success(`Follow-up sent to ${sentCount} non-reader${sentCount !== 1 ? 's' : ''}`);
+      router.push(`/broadcasts/${newBroadcastId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Resend failed');
+    } finally {
+      setSending(false);
+      setConfirm(false);
+    }
   }
+
+  if (unreadCount === 0) return null;
+
+  if (sending) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm">
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+        <span className="text-amber-300">Resending… {progress}%</span>
+      </div>
+    );
+  }
+
+  if (confirm) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm">
+        <span className="text-amber-300">
+          Resend to {unreadCount} non-reader{unreadCount !== 1 ? 's' : ''}?
+        </span>
+        <Button
+          variant="outline" size="sm"
+          onClick={() => setConfirm(false)}
+          className="h-7 border-slate-700 bg-transparent text-slate-300 hover:bg-slate-800"
+        >
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleResend}
+          className="h-7 bg-amber-600 text-white hover:bg-amber-700"
+        >
+          <Send className="h-3 w-3" /> Confirm
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => setConfirm(true)}
+      className="border-amber-500/30 bg-transparent text-amber-400 hover:bg-amber-500/10"
+      title="Send this template again to everyone who received but didn't read it"
+    >
+      <Bell className="h-3.5 w-3.5" />
+      Resend to unread ({unreadCount})
+    </Button>
+  );
 }

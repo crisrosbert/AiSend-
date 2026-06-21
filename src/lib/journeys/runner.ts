@@ -14,12 +14,17 @@
 //     non-existent contacts.tag column.
 //   - Recursive graph walk: handles multi-step flows (Trigger → A → B → C),
 //     with a depth cap to prevent runaway loops.
-//   - Fire-and-forget from the webhook: errors here log but never break
-//     the inbound message pipeline.
+//   - Credits deducted AFTER each successful Meta send (same pattern as
+//     /api/whatsapp/send and /api/whatsapp/broadcast).
 //   - Gemini fallback is opt-in per user via env. Never hardcoded.
 
 import { createClient } from '@supabase/supabase-js'
 import { sendTextMessage } from '@/lib/whatsapp/meta-api'
+import {
+  getOrgIdForUser,
+  deductCredits,
+  MESSAGE_PRICE_INR,
+} from '@/lib/billing/credits'
 
 // Lazy admin client — same pattern as the webhook to avoid build-time
 // crashes when env vars are missing.
@@ -80,9 +85,8 @@ export interface RunJourneysArgs {
 
 /**
  * Try to execute any active journey for this user whose trigger matches
- * the inbound text. Returns true when a journey ran (so the caller can
- * skip the older automations engine for this message if it wants to
- * avoid double-replies). Returns false when nothing matched.
+ * the inbound text. Returns true when a journey ran. Returns false when
+ * nothing matched.
  *
  * Errors are logged and swallowed — never throws.
  */
@@ -101,22 +105,23 @@ export async function runJourneysForInbound(
       .select('id, user_id, name, status, trigger, nodes, edges')
       .eq('user_id', args.userId)
       .eq('status', 'active')
-console.log('[journeys.runner] userId:', args.userId)
-console.log('[journeys.runner] journeys found:', journeys?.length ?? 0)
-console.log('[journeys.runner] inboundText:', args.inboundText)
-if (error) console.error('[journeys.runner] fetch error:', error.message)
+
+    console.log('[journeys.runner] journeys found:', journeys?.length ?? 0)
+    if (error) console.error('[journeys.runner] fetch error:', error.message)
+
     if (error) {
       console.error('[journeys.runner] fetch failed:', error.message)
       return false
     }
     if (!journeys || journeys.length === 0) return false
 
-    // Walk every active journey and run the first one whose trigger
-    // matches. We stop after the first match to avoid sending multiple
-    // bot replies for one customer message (which would feel spammy).
+    // Resolve org_id for billing (best-effort — if no org, we still send
+    // but skip credit deduction so the message isn't blocked).
+    const orgId = await getOrgIdForUser(admin(), args.userId)
+
     for (const journey of journeys as JourneyRow[]) {
       if (triggerMatches(journey.trigger, text)) {
-        await executeJourney(journey, args)
+        await executeJourney(journey, args, orgId)
         return true
       }
     }
@@ -139,10 +144,6 @@ function triggerMatches(trigger: JourneyTrigger, inbound: string): boolean {
       .map((k) => k.trim().toLowerCase())
       .filter(Boolean)
     if (keywords.length === 0) return false
-
-    // Match when the inbound message CONTAINS any configured keyword.
-    // Whole-word boundary check so "hi" doesn't match "this" — that
-    // was a real bug in the previous attempt.
     return keywords.some((kw) => containsWord(lower, kw))
   }
 
@@ -156,8 +157,6 @@ function triggerMatches(trigger: JourneyTrigger, inbound: string): boolean {
     }
   }
 
-  // template_start and ad_click are NOT inbound-message triggers; they
-  // fire from other code paths (broadcast sends, ad-click webhook).
   return false
 }
 
@@ -167,12 +166,8 @@ function triggerMatches(trigger: JourneyTrigger, inbound: string): boolean {
  */
 function containsWord(haystack: string, needle: string): boolean {
   if (!needle) return false
-  // Multi-word keywords: just use substring (whole-phrase boundary check
-  // gets tricky and substring is correct here — "track my order" should
-  // match "i want to track my order").
   if (needle.includes(' ')) return haystack.includes(needle)
 
-  // Single word: enforce boundaries so "hi" doesn't match "this".
   const idx = haystack.indexOf(needle)
   if (idx === -1) return false
   const before = idx === 0 ? '' : haystack[idx - 1]
@@ -185,20 +180,19 @@ function containsWord(haystack: string, needle: string): boolean {
 
 // ── Graph execution ──
 
-const MAX_DEPTH = 20 // safety cap against accidental loops
+const MAX_DEPTH = 20
 
 async function executeJourney(
   journey: JourneyRow,
   args: RunJourneysArgs,
+  orgId: string | null,
 ): Promise<void> {
-  // Find the trigger node — it's either type === 'TRIGGER' or id === 'trigger'
   const triggerNode = journey.nodes.find(
     (n) => n.type === 'TRIGGER' || n.id === 'trigger',
   )
   const startId = triggerNode?.id || 'trigger'
-
   const visited = new Set<string>()
-  await walk(journey, startId, visited, args, 0)
+  await walk(journey, startId, visited, args, orgId, 0)
 }
 
 async function walk(
@@ -206,6 +200,7 @@ async function walk(
   fromId: string,
   visited: Set<string>,
   args: RunJourneysArgs,
+  orgId: string | null,
   depth: number,
 ): Promise<void> {
   if (depth > MAX_DEPTH) {
@@ -213,33 +208,26 @@ async function walk(
     return
   }
 
-  // Find every edge leaving fromId.
   const outgoing = (journey.edges || []).filter((e) => e.source === fromId)
 
   for (const edge of outgoing) {
-    if (visited.has(edge.target)) continue // already executed in this run
+    if (visited.has(edge.target)) continue
     visited.add(edge.target)
 
     const node = journey.nodes.find((n) => n.id === edge.target)
     if (!node) continue
 
-    // Execute this node and decide whether to walk past it.
-    const cont = await executeNode(node, args)
-
-    // CONDITION nodes branch — for now we walk both outputs (Phase 3
-    // adds the yes/no handle routing). Most other nodes just continue.
+    const cont = await executeNode(node, args, orgId)
     if (cont) {
-      await walk(journey, node.id, visited, args, depth + 1)
+      await walk(journey, node.id, visited, args, orgId, depth + 1)
     }
   }
 }
 
-/**
- * Execute one node. Returns true if downstream nodes should also run.
- */
 async function executeNode(
   node: JourneyNode,
   args: RunJourneysArgs,
+  orgId: string | null,
 ): Promise<boolean> {
   const data = node.data || {}
   const type = node.type
@@ -249,24 +237,20 @@ async function executeNode(
       case 'TEXT_BUTTONS': {
         const text = String(data.text || '').trim()
         if (text) {
-          await sendBotMessage(args, text)
+          await sendBotMessage(args, text, orgId)
         }
         return true
       }
 
       case 'MEDIA_BUTTONS': {
-        // For now send the caption as a plain text message. Phase 3
-        // adds proper media sending via sendImageMessage / etc.
         const caption = String(data.caption || data.text || '').trim()
         if (caption) {
-          await sendBotMessage(args, caption)
+          await sendBotMessage(args, caption, orgId)
         }
         return true
       }
 
       case 'TEMPLATE': {
-        // Real template send via Meta API will come in Phase 3.
-        // For now we just log — silently skipping keeps the flow moving.
         console.log('[journeys.runner] TEMPLATE node skipped (Phase 3)')
         return true
       }
@@ -290,51 +274,53 @@ async function executeNode(
       }
 
       case 'CONDITION': {
-        // Phase 3 will evaluate the condition and pick yes/no branch.
-        // For now we just continue and let walk() take all outputs.
         return true
       }
 
       case 'HANDOFF_TO_HUMAN': {
         const msg = String(data.customerMessage || 'An agent will reply shortly.').trim()
         if (msg) {
-          await sendBotMessage(args, msg)
+          await sendBotMessage(args, msg, orgId)
         }
-        // Mark the conversation as pending so a human picks it up.
         await admin()
           .from('conversations')
           .update({ status: 'pending', updated_at: new Date().toISOString() })
           .eq('id', args.conversationId)
-        // Stop the flow — humans take over from here.
         return false
       }
 
       case 'CONVERSION_EVENT': {
-        // Phase 3 wires this to Meta Conversions API.
         console.log('[journeys.runner] CONVERSION_EVENT skipped (Phase 3)')
         return true
       }
 
       default:
-        // Unknown node type — log and continue so one bad node doesn't
-        // brick the rest of the flow.
         console.warn('[journeys.runner] unknown node type:', type)
         return true
     }
   } catch (err) {
     console.error(`[journeys.runner] node ${node.id} (${type}) failed:`, err)
-    return true // continue to other nodes even on failure
+    return true
   }
 }
 
 // ── Helpers ──
 
 /**
- * Send a text message to the customer AND save it to the messages table
- * so it shows up in the inbox like any other bot reply.
+ * Send a text message to the customer, save it to the messages table,
+ * and deduct credits from the org wallet.
+ *
+ * Credit deduction follows the same pattern as /api/whatsapp/send:
+ *   - Deduct AFTER Meta accepts the message (never charge for failed sends)
+ *   - Journey bot replies are priced as 'service' messages (₹0) by default
+ *     since they're inbound-triggered replies within the 24h window.
+ *   - If we ever send TEMPLATE nodes (Phase 3), price them as 'marketing'.
  */
-async function sendBotMessage(args: RunJourneysArgs, text: string): Promise<void> {
-  // 1. Send via Meta. Capture the returned message_id for status tracking.
+async function sendBotMessage(
+  args: RunJourneysArgs,
+  text: string,
+  orgId: string | null,
+): Promise<void> {
   let metaMessageId: string | null = null
   try {
     const result = await sendTextMessage({
@@ -343,13 +329,12 @@ async function sendBotMessage(args: RunJourneysArgs, text: string): Promise<void
       to: args.customerPhone,
       text,
     })
-metaMessageId = result?.messageId ?? null
+    metaMessageId = result?.messageId ?? null
   } catch (err) {
     console.error('[journeys.runner] sendTextMessage failed:', err)
-    // Still save the attempt to the DB so the agent can see what was tried.
   }
 
-  // 2. Save to messages with the REAL schema.
+  // Save to messages with the REAL schema.
   const { error: msgErr } = await admin().from('messages').insert({
     conversation_id: args.conversationId,
     sender_type: 'bot',
@@ -365,7 +350,7 @@ metaMessageId = result?.messageId ?? null
     return
   }
 
-  // 3. Update conversation last_message preview.
+  // Update conversation last_message preview.
   await admin()
     .from('conversations')
     .update({
@@ -374,6 +359,27 @@ metaMessageId = result?.messageId ?? null
       updated_at: new Date().toISOString(),
     })
     .eq('id', args.conversationId)
+
+  // Deduct credits — only if Meta accepted the message AND we have an org.
+  // Journey bot replies are priced as 'service' (₹0) since they fire within
+  // the 24h customer-initiated window. This mirrors WhatsApp's own pricing
+  // where service conversations are free. If you want to charge for journey
+  // replies, change 'service' to 'marketing' here.
+  if (metaMessageId && orgId) {
+    const price = MESSAGE_PRICE_INR['service'] // ₹0 for inbound-triggered replies
+    if (price > 0) {
+      const deb = await deductCredits(admin(), {
+        orgId,
+        userId: args.userId,
+        amount: price,
+        description: `Journey bot reply`,
+        reference: metaMessageId,
+      })
+      if (!deb.ok) {
+        console.warn('[journeys.runner] credit deduction failed:', deb.message)
+      }
+    }
+  }
 }
 
 /**
@@ -386,7 +392,6 @@ async function applyTagToContact(
   tagName: string,
   remove: boolean,
 ): Promise<void> {
-  // Find or create the tag.
   const { data: existingTag } = await admin()
     .from('tags')
     .select('id')
@@ -418,7 +423,6 @@ async function applyTagToContact(
       .eq('contact_id', contactId)
       .eq('tag_id', tagId)
   } else {
-    // Upsert into the join — unique(contact_id, tag_id) prevents dupes.
     const { error: linkErr } = await admin()
       .from('contact_tags')
       .upsert(
@@ -432,7 +436,7 @@ async function applyTagToContact(
 }
 
 /**
- * Fire an outbound HTTP request. Best-effort: failures are logged but
+ * Fire an outbound HTTP request. Best-effort — failures are logged but
  * don't break the flow.
  */
 async function callWebhook(

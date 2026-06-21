@@ -342,7 +342,7 @@ async function sendBotMessage(args: RunJourneysArgs, text: string): Promise<void
       to: args.customerPhone,
       text,
     })
- metaMessageId = result?.messages?.[0]?.id ?? null
+metaMessageId = result?.messageId ?? null
   } catch (err) {
     console.error('[journeys.runner] sendTextMessage failed:', err)
     // Still save the attempt to the DB so the agent can see what was tried.

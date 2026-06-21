@@ -302,7 +302,12 @@ export default function BroadcastDetailPage() {
             </div>
           </div>
         </div>
-
+{broadcast.status === 'sent' && (
+  <ResendUnreadButton
+    broadcast={broadcast}
+    unreadCount={Math.max(0, broadcast.sent_count - broadcast.read_count)}
+  />
+)}
         {/* Delete — inline-confirm pattern matches the pipeline-settings
             "Delete Pipeline" flow. Mid-send broadcasts can't be deleted
             because orphaning in-flight Meta messages would leave the

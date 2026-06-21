@@ -16,7 +16,7 @@ import {
 import {
   Search, Plus, Upload, MoreHorizontal, Pencil, Trash2, Loader2,
   Users, ChevronLeft, ChevronRight, Phone, Mail, Building2,
-  MessageSquare, Filter, Download, UserCheck, ShieldOff, ShieldCheck,
+  MessageSquare, Filter, UserCheck, ShieldOff, ShieldCheck,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
@@ -138,7 +138,9 @@ export default function ContactsPage() {
     setLoading(false);
   }, [supabase, page, search, optOutFilter, tagsMap]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchTags(); }, [fetchTags]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
 
   const displayContacts = tagFilter
@@ -442,10 +444,8 @@ export default function ContactsPage() {
                   </button>
 
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="size-8 p-0 text-slate-400 hover:text-slate-700">
-                        <MoreHorizontal className="size-4" />
-                      </Button>
+                    <DropdownMenuTrigger className="flex size-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
+                      <MoreHorizontal className="size-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-white border-[#e7ece9]">
                       <DropdownMenuItem
@@ -513,6 +513,7 @@ export default function ContactsPage() {
           open={detailOpen}
           onOpenChange={setDetailOpen}
           contactId={detailContactId}
+          onUpdated={fetchContacts}
         />
       )}
       {importOpen && (

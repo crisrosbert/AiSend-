@@ -100,7 +100,10 @@ export async function runJourneysForInbound(
       .select('id, user_id, name, status, trigger, nodes, edges')
       .eq('user_id', args.userId)
       .eq('status', 'active')
-
+console.log('[journeys.runner] userId:', args.userId)
+console.log('[journeys.runner] journeys found:', journeys?.length ?? 0)
+console.log('[journeys.runner] inboundText:', args.inboundText)
+if (error) console.error('[journeys.runner] fetch error:', error.message)
     if (error) {
       console.error('[journeys.runner] fetch failed:', error.message)
       return false

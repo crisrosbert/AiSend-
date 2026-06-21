@@ -53,11 +53,20 @@ export function ResendUnreadButton({ broadcast, unreadCount }: ResendUnreadButto
       }
 
       // 2. Fetch the freshly-created recipients with their contacts
-      const { data: recipients, error: recErr } = await supabase
+      const { data: rawRecipients, error: recErr } = await supabase
         .from('broadcast_recipients')
         .select('id, contact:contacts(*)')
         .eq('broadcast_id', newBroadcastId);
-      if (recErr || !recipients) throw new Error('Failed to load recipients');
+      if (recErr || !rawRecipients) throw new Error('Failed to load recipients');
+
+      // Supabase types the joined `contact` as an array — normalize each
+      // row to a single Contact so the rest of the code is cleanly typed.
+      const recipients: { id: string; contact: Contact | null }[] = (
+        rawRecipients as unknown as { id: string; contact: Contact | Contact[] | null }[]
+      ).map((r) => ({
+        id: r.id,
+        contact: Array.isArray(r.contact) ? (r.contact[0] ?? null) : r.contact,
+      }));
 
       // 3. Send in paced batches (reuse existing endpoint)
       const stored = (broadcast.template_variables ?? {}) as Record<

@@ -1,3 +1,8 @@
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const mode = searchParams.get('hub.mode')
+  const challenge = searchParams.get('hub.challenge')
+  const verifyToken = searchParams.get('hub.verify_token')
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 

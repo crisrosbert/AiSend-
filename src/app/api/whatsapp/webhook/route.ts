@@ -165,10 +165,18 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
-  // Process asynchronously so we can ack Meta within their timeout.
-  processWebhook(body).catch((error) => {
+  // Process the webhook BEFORE returning. On Vercel serverless, any work
+  // still pending when the response is returned gets frozen/killed — so
+  // a fire-and-forget processWebhook() would have its journey/automation
+  // sends cut off mid-flight (this was why auto-replies silently failed).
+  // Meta allows ~20s before timing out; our processing is 2-4s, so it's
+  // safe to await. If anything throws, we still ack 200 so Meta doesn't
+  // retry-storm us.
+  try {
+    await processWebhook(body)
+  } catch (error) {
     console.error('Error processing webhook:', error)
-  })
+  }
   return NextResponse.json({ status: 'received' }, { status: 200 })
 }
 
@@ -633,18 +641,25 @@ async function processMessage(
     }).catch((err) => console.error('[automations] dispatch failed:', err))
   }
 
-  // Also try journey execution (Flow Studio canvas flows). Fire-and-forget
-  // like the automations above — slow journeys must not block the
-  // webhook's 200 OK response to Meta.
-  runJourneysForInbound({
-    userId,
-    conversationId: conversation.id,
-    contactId: contactRecord.id,
-    customerPhone: senderPhone,
-    inboundText,
-    phoneNumberId,
-    accessToken,
-  }).catch((err) => console.error('[journeys] dispatch failed:', err))
+  // Journey execution (Flow Studio canvas flows). We AWAIT this rather
+  // than fire-and-forget: on Vercel serverless, pending async work is
+  // frozen/killed once the function returns. The POST handler already
+  // runs processWebhook() fire-and-forget (Meta still gets a fast 200),
+  // so awaiting here is safe — and REQUIRED for the send to complete.
+  try {
+    console.log('[journeys] dispatching for text:', inboundText)
+    await runJourneysForInbound({
+      userId,
+      conversationId: conversation.id,
+      contactId: contactRecord.id,
+      customerPhone: senderPhone,
+      inboundText,
+      phoneNumberId,
+      accessToken,
+    })
+  } catch (err) {
+    console.error('[journeys] dispatch failed:', err)
+  }
 }
 
 async function parseMessageContent(

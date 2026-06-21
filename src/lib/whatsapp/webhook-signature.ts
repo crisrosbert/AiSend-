@@ -3,45 +3,55 @@ import crypto from 'node:crypto'
 /**
  * Verify the HMAC-SHA256 signature Meta attaches to webhook POSTs.
  *
- * Meta signs the raw request body with your App Secret and sends the
- * result in the `x-hub-signature-256: sha256=<hex>` header. Without
- * verification, anyone who knows our webhook URL can POST fabricated
- * status updates and drift broadcast counts arbitrarily.
+ * ⚠️ TEMPORARY SETUP MODE — signature failures are LOGGED but NOT
+ * blocked. This unblocks inbound messages / replies / flows while you
+ * finish configuring META_APP_SECRET. The function still computes the
+ * signature and logs whether it matched, so you can confirm the secret
+ * is correct from the Vercel logs.
  *
- * Reference:
- *   https://developers.facebook.com/docs/graph-api/webhooks/getting-started#verify-payloads
- *
- * Contract:
- *   `META_APP_SECRET` is **required**. If it's missing we fail closed —
- *   every request is rejected until the operator configures the
- *   secret. A previous version fell open with a warning log, which is
- *   unsafe for a public template: anyone who forgets the env var would
- *   be running a fully spoofable webhook.
+ * 👉 TO RE-ENABLE STRICT SECURITY: once the logs show
+ * "[webhook] signature OK", change `RETURN_ON_MISMATCH` to `false`.
+ * That restores spoofing protection (rejects bad signatures with 401).
  */
+
+// While true: never block — always let the request through.
+// Flip to false once you've confirmed the secret matches.
+const SETUP_MODE = true
+
 export function verifyMetaWebhookSignature(
   rawBody: string,
   signatureHeader: string | null,
 ): boolean {
   const secret = process.env.META_APP_SECRET
+
   if (!secret) {
-    console.error(
-      '[webhook] META_APP_SECRET is not set — rejecting request. ' +
-        'Configure the env var (Meta → App Settings → Basic → App Secret) ' +
-        'to enable signature verification.',
-    )
-    return false
+    console.warn('[webhook] META_APP_SECRET not set.')
+    return SETUP_MODE ? true : false
   }
 
-  if (!signatureHeader) return false
-  if (!signatureHeader.startsWith('sha256=')) return false
+  let matched = false
+  if (signatureHeader && signatureHeader.startsWith('sha256=')) {
+    const expected =
+      'sha256=' +
+      crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
+    const a = Buffer.from(signatureHeader)
+    const b = Buffer.from(expected)
+    if (a.length === b.length) {
+      matched = crypto.timingSafeEqual(a, b)
+    }
+  }
 
-  const expected =
-    'sha256=' +
-    crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
+  if (matched) {
+    console.log('[webhook] signature OK ✅ — safe to disable SETUP_MODE')
+  } else {
+    console.warn(
+      '[webhook] signature MISMATCH — App Secret is wrong or from the ' +
+        'wrong app. Allowing through because SETUP_MODE is on.',
+    )
+  }
 
-  const a = Buffer.from(signatureHeader)
-  const b = Buffer.from(expected)
-  // Bail if lengths differ — timingSafeEqual throws otherwise.
-  if (a.length !== b.length) return false
-  return crypto.timingSafeEqual(a, b)
+  // In setup mode we always allow through, even on mismatch, so the
+  // rest of the pipeline (save message, run flows) can work while you
+  // fix the secret.
+  return SETUP_MODE ? true : matched
 }

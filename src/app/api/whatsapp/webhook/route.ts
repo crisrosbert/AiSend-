@@ -615,39 +615,13 @@ async function processMessage(
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
   const inboundText = contentText ?? message.text?.body ?? ''
-  const automationTriggers: (
-    | 'new_contact_created'
-    | 'first_inbound_message'
-    | 'new_message_received'
-    | 'keyword_match'
-  )[] = ['new_message_received', 'keyword_match']
-  // new_contact_created fires only when the webhook just auto-created the
-  // contact row. first_inbound_message fires whenever this is the contact's
-  // first-ever customer-sent message — a superset that also catches
-  // manually-imported contacts sending for the first time. We dispatch both
-  // so users can pick whichever semantic they want; an automation that
-  // listens to only one trigger runs only when that trigger matches.
-  if (contactOutcome.wasCreated) automationTriggers.unshift('new_contact_created')
-  if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message')
-  for (const triggerType of automationTriggers) {
-    runAutomationsForTrigger({
-      userId,
-      triggerType,
-      contactId: contactRecord.id,
-      context: {
-        message_text: inboundText,
-        conversation_id: conversation.id,
-      },
-    }).catch((err) => console.error('[automations] dispatch failed:', err))
-  }
 
-  // Journey execution (Flow Studio canvas flows). We AWAIT this rather
-  // than fire-and-forget: on Vercel serverless, pending async work is
-  // frozen/killed once the function returns. The POST handler already
-  // runs processWebhook() fire-and-forget (Meta still gets a fast 200),
-  // so awaiting here is safe — and REQUIRED for the send to complete.
+  // ── JOURNEY FIRST ──
+  // The journey produces the customer-facing auto-reply, so we run it
+  // BEFORE the slower automations engine to minimise reply latency.
+  // We AWAIT it: on Vercel serverless, pending async work is frozen the
+  // instant the function returns, so the WhatsApp send must finish here.
   try {
-    console.log('[journeys] dispatching for text:', inboundText)
     await runJourneysForInbound({
       userId,
       conversationId: conversation.id,
@@ -660,6 +634,34 @@ async function processMessage(
   } catch (err) {
     console.error('[journeys] dispatch failed:', err)
   }
+
+  // ── AUTOMATIONS SECOND ──
+  // These run after the reply has already gone out. We still await them
+  // (so Vercel doesn't kill them) but they no longer delay the reply.
+  const automationTriggers: (
+    | 'new_contact_created'
+    | 'first_inbound_message'
+    | 'new_message_received'
+    | 'keyword_match'
+  )[] = ['new_message_received', 'keyword_match']
+  if (contactOutcome.wasCreated) automationTriggers.unshift('new_contact_created')
+  if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message')
+
+  // Fire all automation triggers in PARALLEL rather than sequentially,
+  // then await them together — cuts total wait when several match.
+  await Promise.allSettled(
+    automationTriggers.map((triggerType) =>
+      runAutomationsForTrigger({
+        userId,
+        triggerType,
+        contactId: contactRecord.id,
+        context: {
+          message_text: inboundText,
+          conversation_id: conversation.id,
+        },
+      }),
+    ),
+  )
 }
 
 async function parseMessageContent(

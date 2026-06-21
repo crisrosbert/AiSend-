@@ -1,77 +1,115 @@
-/**
- * OPT-OUT DETECTION
- *
- * Detects when an inbound message is an opt-out request.
- * Meta recommends honouring at minimum: STOP, STOPALL, UNSUBSCRIBE,
- * CANCEL, END, QUIT — plus common Indian variants.
- *
- * Returns { isOptOut: true, keyword } or { isOptOut: false }.
- */
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 
-const OPT_OUT_KEYWORDS = new Set([
-  // Meta's recommended list (case-insensitive, full-word match)
-  'stop',
-  'stopall',
-  'unsubscribe',
-  'cancel',
-  'end',
-  'quit',
-  // Common variants
-  'opt out',
-  'opt-out',
-  'optout',
-  'remove me',
-  'no more',
-  'don\'t message',
-  'dont message',
-  'block',
-  'mujhe mat bhejo',   // Hindi: don't send me
-  'band karo',          // Hindi: stop this
-  'rokna',             // Hindi: stop
-])
+export async function POST(request: Request) {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-const OPT_IN_KEYWORDS = new Set([
-  'start',
-  'unstop',
-  'subscribe',
-  'yes',
-  'optin',
-  'opt in',
-  'opt-in',
-  'resume',
-  'shuru karo',        // Hindi: start
-])
+    const body = await request.json()
+    const { contact_id, action } = body as {
+      contact_id?: string
+      action?: string
+    }
 
-export interface OptOutResult {
-  isOptOut: boolean
-  isOptIn: boolean
-  keyword: string | null
+    if (!contact_id) {
+      return NextResponse.json({ error: 'contact_id is required' }, { status: 400 })
+    }
+    if (action !== 'opt_in' && action !== 'opt_out') {
+      return NextResponse.json(
+        { error: 'action must be opt_in or opt_out' },
+        { status: 400 },
+      )
+    }
+
+    const { data: contact, error: fetchErr } = await supabase
+      .from('contacts')
+      .select('id, opted_out_at')
+      .eq('id', contact_id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (fetchErr || !contact) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+    }
+
+    if (action === 'opt_out') {
+      const { error } = await supabase
+        .from('contacts')
+        .update({
+          opted_out_at: new Date().toISOString(),
+          opt_out_keyword: 'MANUAL',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', contact_id)
+        .eq('user_id', user.id)
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      await supabase.from('opt_out_log').insert({
+        user_id: user.id,
+        contact_id,
+        action: 'opt_out',
+        keyword: 'MANUAL',
+        source: 'manual',
+        actor_id: user.id,
+      })
+    } else {
+      const { error } = await supabase
+        .from('contacts')
+        .update({
+          opted_out_at: null,
+          opt_out_keyword: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', contact_id)
+        .eq('user_id', user.id)
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      await supabase.from('opt_out_log').insert({
+        user_id: user.id,
+        contact_id,
+        action: 'opt_in',
+        keyword: null,
+        source: 'manual',
+        actor_id: user.id,
+      })
+    }
+
+    return NextResponse.json({ success: true, action })
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 }
 
-/**
- * Checks whether a message text is an opt-out or opt-in command.
- * Normalises the text: trim, lowercase, collapse whitespace.
- */
-export function detectOptOutKeyword(text: string | null | undefined): OptOutResult {
-  if (!text) return { isOptOut: false, isOptIn: false, keyword: null }
-
-  const normalised = text.trim().toLowerCase().replace(/\s+/g, ' ')
-
-  // Full-message match first (most reliable — contact sent ONLY "STOP")
-  if (OPT_OUT_KEYWORDS.has(normalised)) {
-    return { isOptOut: true, isOptIn: false, keyword: normalised }
-  }
-
-  // Also catch "STOP please" or "Please STOP" — starts-with or ends-with
-  for (const kw of OPT_OUT_KEYWORDS) {
-    if (normalised.startsWith(kw + ' ') || normalised.endsWith(' ' + kw)) {
-      return { isOptOut: true, isOptIn: false, keyword: kw }
+export async function GET(request: Request) {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-  }
 
-  if (OPT_IN_KEYWORDS.has(normalised)) {
-    return { isOptOut: false, isOptIn: true, keyword: normalised }
-  }
+    const { searchParams } = new URL(request.url)
+    const contact_id = searchParams.get('contact_id')
+    if (!contact_id) {
+      return NextResponse.json({ error: 'contact_id is required' }, { status: 400 })
+    }
 
-  return { isOptOut: false, isOptIn: false, keyword: null }
+    const { data, error } = await supabase
+      .from('opt_out_log')
+      .select('*')
+      .eq('contact_id', contact_id)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ log: data ?? [] })
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 }

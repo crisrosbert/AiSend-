@@ -9,7 +9,9 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-let _client: ReturnType<typeof createClient> | null = null
+// Untyped admin client (cast to any) — same pattern as runner.ts.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _client: any = null
 function db() {
   if (!_client) {
     _client = createClient(
@@ -93,7 +95,6 @@ export async function ingestSource(
       },
     }))
 
-    // Insert in batches to avoid hitting Supabase body size limits
     const BATCH = 50
     let inserted = 0
     for (let i = 0; i < rows.length; i += BATCH) {
@@ -154,7 +155,7 @@ async function fetchUrlText(url: string): Promise<string | null> {
         'User-Agent': 'AiSend-Bot/1.0 (knowledge base indexer)',
         'Accept': 'text/html,text/plain',
       },
-      signal: AbortSignal.timeout(10_000), // 10 second timeout
+      signal: AbortSignal.timeout(10_000),
     })
 
     if (!res.ok) {
@@ -172,29 +173,23 @@ async function fetchUrlText(url: string): Promise<string | null> {
 
 /**
  * Strip HTML tags and extract readable text.
- * Removes scripts, styles, nav, footer — keeps main content.
  */
 function extractTextFromHtml(html: string): string {
   return html
-    // Remove script and style blocks entirely
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
     .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
     .replace(/<header[\s\S]*?<\/header>/gi, ' ')
-    // Convert block elements to newlines so paragraphs are preserved
     .replace(/<\/(p|div|h[1-6]|li|tr|section|article)>/gi, '\n')
     .replace(/<br\s*\/?>/gi, '\n')
-    // Remove all remaining HTML tags
     .replace(/<[^>]+>/g, ' ')
-    // Decode common HTML entities
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
-    // Collapse whitespace
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
@@ -202,11 +197,6 @@ function extractTextFromHtml(html: string): string {
 
 /**
  * Split text into overlapping chunks for storage.
- *
- * Strategy: split on paragraph boundaries first, then enforce
- * a word-count ceiling. Overlap of ~50 words between chunks
- * prevents answers being cut off at chunk boundaries.
- *
  * Exported so it can be unit-tested independently.
  */
 export function chunkText(
@@ -214,24 +204,20 @@ export function chunkText(
   maxWords = 350,
   overlapWords = 50,
 ): string[] {
-  // Split into paragraphs first
   const paragraphs = text
     .split(/\n\n+/)
     .map((p) => p.trim())
-    .filter((p) => p.length > 20) // skip very short paragraphs
+    .filter((p) => p.length > 20)
 
   const chunks: string[] = []
-  let current: string[] = []  // words in current chunk
+  let current: string[] = []
   let currentWordCount = 0
 
   for (const para of paragraphs) {
     const words = para.split(/\s+/)
 
-    // If adding this paragraph would exceed the limit
     if (currentWordCount + words.length > maxWords && current.length > 0) {
-      // Save current chunk
       chunks.push(current.join(' '))
-      // Start next chunk with overlap from end of current
       const overlap = current.slice(-overlapWords)
       current = [...overlap]
       currentWordCount = overlap.length
@@ -241,7 +227,6 @@ export function chunkText(
     currentWordCount += words.length
   }
 
-  // Don't forget the last chunk
   if (current.length > 0) {
     chunks.push(current.join(' '))
   }

@@ -17,6 +17,8 @@
 //   - Credits deducted AFTER each successful Meta send (same pattern as
 //     /api/whatsapp/send and /api/whatsapp/broadcast).
 //   - Gemini fallback is opt-in per user via env. Never hardcoded.
+//   - When no keyword trigger matches, falls back to the AI agent
+//     (runAgentFallback) so conversations aren't left unanswered.
 
 import { createClient } from '@supabase/supabase-js'
 import { sendTextMessage } from '@/lib/whatsapp/meta-api'
@@ -25,6 +27,7 @@ import {
   deductCredits,
   MESSAGE_PRICE_INR,
 } from '@/lib/billing/credits'
+import { runAgentFallback } from '@/lib/agent/fallback'
 
 // Lazy admin client — same pattern as the webhook to avoid build-time
 // crashes when env vars are missing.
@@ -124,6 +127,23 @@ export async function runJourneysForInbound(
         await executeJourney(journey, args, orgId)
         return true
       }
+    }
+
+    // No keyword matched. Try the AI agent fallback on the first active
+    // journey (the one most likely to have a persona configured).
+    const firstJourney = (journeys as JourneyRow[])[0]
+    if (firstJourney) {
+      const agentReplied = await runAgentFallback({
+        userId: args.userId,
+        journeyId: firstJourney.id,
+        conversationId: args.conversationId,
+        contactId: args.contactId,
+        customerPhone: args.customerPhone,
+        inboundText: args.inboundText,
+        phoneNumberId: args.phoneNumberId,
+        accessToken: args.accessToken,
+      })
+      if (agentReplied) return true
     }
 
     return false

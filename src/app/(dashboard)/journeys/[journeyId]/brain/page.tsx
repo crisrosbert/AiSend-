@@ -96,7 +96,7 @@ export default function BrainPage() {
           type: "faq",
           title: faqQuestion.slice(0, 100),
           content: `Q: ${faqQuestion}\n\nA: ${faqAnswer}`,
-          status: "ready",
+          status: "processing", // changed from "ready" — ingestSource() will flip to "ready"
         };
       } else if (addType === "url") {
         if (!sourceUrl.trim()) {
@@ -124,7 +124,7 @@ export default function BrainPage() {
           type: "file",
           title: title.trim(),
           content: content.trim(),
-          status: "ready",
+          status: "processing", // changed from "ready" — ingestSource() will flip to "ready"
         };
       }
 
@@ -137,11 +137,68 @@ export default function BrainPage() {
         toast.error("Couldn't save source. Run the brain_sources migration.");
         return;
       }
+
       toast.success(`${SOURCE_META[addType].label} added`);
       setSources((prev) => [data as BrainSource, ...prev]);
       resetForm();
+
+      // Trigger ingestion — chunk the content into agent_kb_chunks so the
+      // AI agent can search it. Without this the source is saved but the
+      // agent has nothing to retrieve.
+      void ingestSource(data as BrainSource);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function ingestSource(source: BrainSource) {
+    // FAQ and file/text are ready immediately to ingest from their content.
+    // URL sources need the server to fetch the page first.
+    try {
+      // Optimistically show "processing" while chunks are created
+      setSources((prev) =>
+        prev.map((s) =>
+          s.id === source.id ? { ...s, status: "processing" as const } : s
+        )
+      );
+
+      const res = await fetch("/api/agent/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source_id: source.id,
+          journey_id: journeyId,
+          source_type: source.type === "file" ? "text" : source.type,
+          content: source.content ?? undefined,
+          url: source.source_url ?? undefined,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok || result.status === "failed") {
+        toast.error(`Indexing failed: ${result.error || "unknown error"}`);
+        setSources((prev) =>
+          prev.map((s) =>
+            s.id === source.id ? { ...s, status: "failed" as const } : s
+          )
+        );
+        return;
+      }
+
+      toast.success(`Indexed ${result.chunksCreated} chunks`);
+      setSources((prev) =>
+        prev.map((s) =>
+          s.id === source.id ? { ...s, status: "ready" as const } : s
+        )
+      );
+    } catch (err) {
+      console.error("ingestSource error:", err);
+      setSources((prev) =>
+        prev.map((s) =>
+          s.id === source.id ? { ...s, status: "failed" as const } : s
+        )
+      );
     }
   }
 

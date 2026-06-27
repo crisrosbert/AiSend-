@@ -8,7 +8,11 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-let _client: ReturnType<typeof createClient> | null = null
+// Untyped admin client. We cast to `any` because this project does not
+// generate Supabase types — same pattern as src/lib/journeys/runner.ts.
+// Without this, .from()/.rpc() infer `never` and break the build.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _client: any = null
 function db() {
   if (!_client) {
     _client = createClient(
@@ -52,10 +56,7 @@ export async function retrieve(
     const query = args.query.trim()
     if (!query) return []
 
-    // ── Phase 1: Postgres full-text search ──
-    // plainto_tsquery converts natural language to a tsquery safely
-    // (no special chars needed from the user side).
-    // ts_rank gives a relevance score 0-1 we can filter/sort on.
+    // ── Phase 1: Postgres full-text search via RPC ──
     const { data, error } = await db().rpc('search_kb_chunks', {
       p_tenant_id: args.tenantId,
       p_journey_id: args.journeyId ?? null,
@@ -71,13 +72,8 @@ export async function retrieve(
 
     if (!data || data.length === 0) return []
 
-    return (data as Array<{
-      id: string
-      content: string
-      source_id: string
-      chunk_index: number
-      rank: number
-    }>).map((row) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data as any[]).map((row) => ({
       id: row.id,
       content: row.content,
       sourceId: row.source_id,
@@ -101,11 +97,10 @@ async function fallbackIlike(
   const words = args.query
     .toLowerCase()
     .split(/\s+/)
-    .filter((w) => w.length > 2) // skip very short words
+    .filter((w) => w.length > 2)
 
   if (words.length === 0) return []
 
-  // Build OR filter: content ilike %word1% or %word2%
   const filter = words.map((w) => `content.ilike.%${w}%`).join(',')
 
   let q = db()
@@ -123,11 +118,12 @@ async function fallbackIlike(
 
   if (error || !data) return []
 
-  return data.map((row, i) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map((row, i: number) => ({
     id: row.id,
     content: row.content,
     sourceId: row.source_id,
     chunkIndex: row.chunk_index,
-    score: 1 - i * 0.1, // fake descending score
+    score: 1 - i * 0.1,
   }))
 }

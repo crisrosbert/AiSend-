@@ -75,6 +75,65 @@ export default function BrainPage() {
     setAddType(null);
   }
 
+  // Trigger ingestion — chunk the content into agent_kb_chunks so the AI
+  // agent can actually search it. Without this, a source is saved to
+  // brain_sources but agent_kb_chunks stays empty and the agent has
+  // nothing to retrieve, even if the UI shows "Ready".
+  async function ingestSource(source: BrainSource) {
+    try {
+      // Optimistically show "processing" while chunks are created
+      setSources((prev) =>
+        prev.map((s) =>
+          s.id === source.id ? { ...s, status: "processing" as const } : s
+        )
+      );
+
+      const res = await fetch("/api/agent/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source_id: source.id,
+          journey_id: journeyId,
+          source_type: source.type === "file" ? "text" : source.type,
+          content: source.content ?? undefined,
+          url: source.source_url ?? undefined,
+        }),
+      });
+
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok || result.status === "failed") {
+        console.error("ingestSource failed:", result);
+        toast.error(`Indexing failed: ${result.error || "unknown error"}`);
+        setSources((prev) =>
+          prev.map((s) =>
+            s.id === source.id ? { ...s, status: "failed" as const } : s
+          )
+        );
+        return;
+      }
+
+      toast.success(
+        result.chunksCreated
+          ? `Indexed ${result.chunksCreated} chunks`
+          : "Source indexed"
+      );
+      setSources((prev) =>
+        prev.map((s) =>
+          s.id === source.id ? { ...s, status: "ready" as const } : s
+        )
+      );
+    } catch (err) {
+      console.error("ingestSource error:", err);
+      toast.error("Indexing failed — see console for details");
+      setSources((prev) =>
+        prev.map((s) =>
+          s.id === source.id ? { ...s, status: "failed" as const } : s
+        )
+      );
+    }
+  }
+
   async function handleAdd() {
     if (!addType) return;
     setSaving(true);
@@ -96,7 +155,7 @@ export default function BrainPage() {
           type: "faq",
           title: faqQuestion.slice(0, 100),
           content: `Q: ${faqQuestion}\n\nA: ${faqAnswer}`,
-          status: "ready",
+          status: "processing",
         };
       } else if (addType === "url") {
         if (!sourceUrl.trim()) {
@@ -124,7 +183,7 @@ export default function BrainPage() {
           type: "file",
           title: title.trim(),
           content: content.trim(),
-          status: "ready",
+          status: "processing",
         };
       }
 
@@ -140,6 +199,10 @@ export default function BrainPage() {
       toast.success(`${SOURCE_META[addType].label} added`);
       setSources((prev) => [data as BrainSource, ...prev]);
       resetForm();
+
+      // Now actually chunk it into agent_kb_chunks so the AI agent has
+      // something to retrieve.
+      void ingestSource(data as BrainSource);
     } finally {
       setSaving(false);
     }

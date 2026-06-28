@@ -16,6 +16,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { searchKnowledgeBase } from '@/lib/agent/tools/knowledge-base-tools'
+import { bookAppointment } from '@/lib/agent/tools/booking-tools'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -78,6 +79,21 @@ const TOOLS = [
         tag: { type: 'string', description: 'The tag to apply' },
       },
       required: ['tag'],
+    },
+  },
+  {
+    name: 'book_appointment',
+    description:
+      'Capture a consultation or appointment request once you have collected the customer\'s name, phone number, and preferred date/time. Call this to save the lead. The team confirms the exact time later. ALWAYS collect name and phone before calling this.',
+    parameters: {
+      type: 'object',
+      properties: {
+        customer_name: { type: 'string', description: 'Customer full name' },
+        customer_phone: { type: 'string', description: 'Customer phone number' },
+        service: { type: 'string', description: 'What they want (e.g. consultation, gynecomastia surgery)' },
+        preferred_date: { type: 'string', description: 'Preferred date/time in their words (e.g. "next Monday", "29 March")' },
+      },
+      required: ['customer_name', 'customer_phone'],
     },
   },
   {
@@ -286,6 +302,18 @@ async function executeTool(
           tenantId: args.tenantId,
           journeyId: args.journeyId,
           query,
+        })
+      }
+
+      case 'book_appointment': {
+        return await bookAppointment({
+          tenantId: args.tenantId,
+          contactId: args.contactId,
+          conversationId: args.conversationId,
+          customerName: String(toolCall.args.customer_name || ''),
+          customerPhone: String(toolCall.args.customer_phone || ''),
+          service: String(toolCall.args.service || 'Consultation'),
+          preferredDate: toolCall.args.preferred_date ? String(toolCall.args.preferred_date) : undefined,
         })
       }
 

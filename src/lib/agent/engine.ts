@@ -236,7 +236,7 @@ async function callGemini(
   }
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -395,7 +395,7 @@ async function logUsage(args: RunAgentArgs, log: LogArgs): Promise<void> {
       conversation_id: args.conversationId,
       journey_id: args.journeyId ?? null,
       vertical: args.verticalConfigId ?? null,
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       output_tokens: log.tokens,
       tools_called: log.toolsUsed,
       handoff: log.handoff,

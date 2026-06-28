@@ -6,10 +6,16 @@
 // Hardened version: every insert is checked, errors are logged with a
 // clear label so failures show the exact cause in Vercel logs instead
 // of a cryptic "Cannot read properties of null".
+//
+// On AI handoff: flags the conversation needs_attention=true (shows in
+// inbox) and sends a WhatsApp template notification to the business
+// owner so a hot lead doesn't sit unseen.
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { runAgent } from '@/lib/agent/engine'
+import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
+import { decrypt } from '@/lib/whatsapp/encryption'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -27,6 +33,43 @@ const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
+}
+
+// Notify the business owner that a hot lead is waiting in the inbox.
+// Uses an approved WhatsApp template (sendable anytime, no 24h window).
+// Fails silently — never breaks the visitor's chat.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function notifyClinic(config: any): Promise<void> {
+  try {
+    if (!config.notify_phone || !config.notify_template) return
+
+    const { data: waConfig } = await db()
+      .from('whatsapp_config')
+      .select('phone_number_id, access_token')
+      .eq('user_id', config.org_user_id)
+      .maybeSingle()
+
+    if (!waConfig?.phone_number_id || !waConfig?.access_token) {
+      console.log('[widget/notify] no WhatsApp credentials')
+      return
+    }
+
+    // access_token is stored encrypted — decrypt before use
+    const accessToken = decrypt(waConfig.access_token)
+
+    await sendTemplateMessage({
+      phoneNumberId: waConfig.phone_number_id,
+      accessToken,
+      to: config.notify_phone,
+      templateName: config.notify_template,
+      language: 'en',
+      params: ['A website visitor wants to book a consultation'],
+    })
+
+    console.log('[widget/notify] clinic notified')
+  } catch (err) {
+    console.error('[widget/notify] failed (non-fatal):', err)
+  }
 }
 
 export async function OPTIONS() {
@@ -254,7 +297,22 @@ export async function POST(req: Request) {
       })
       .eq('id', conversationId)
 
-    // 8. Return reply
+    // 8. On handoff: flag the inbox + notify the business owner
+    if (result.handoffRequested) {
+      await db()
+        .from('conversations')
+        .update({
+          status: 'pending',
+          needs_attention: true,
+          handoff_reason: 'Website visitor wants to book / needs human',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', conversationId)
+
+      void notifyClinic(config)
+    }
+
+    // 9. Return reply to the widget
     return NextResponse.json(
       {
         reply,

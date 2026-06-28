@@ -1,16 +1,11 @@
 // src/app/api/widget/message/route.ts
 //
 // Public endpoint the website widget POSTs visitor messages to.
-// No auth — identified by org_id (the client's user_id) + visitor_id.
+// No auth — identified by org_id + visitor_id.
 //
-// Flow:
-//   1. Resolve widget config by org_id
-//   2. Find or create a conversation (channel='website') + widget_session
-//   3. Save the visitor's message
-//   4. Call runAgent() — the SAME engine WhatsApp uses
-//   5. Save + return the AI reply
-//
-// CORS enabled so it can be called from any client website.
+// Hardened version: every insert is checked, errors are logged with a
+// clear label so failures show the exact cause in Vercel logs instead
+// of a cryptic "Cannot read properties of null".
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -41,13 +36,7 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}))
-    const {
-      org_id,        // the client's user_id (from data-org on the script)
-      visitor_id,    // random id from browser localStorage
-      message,
-      page_url,
-      page_title,
-    } = body
+    const { org_id, visitor_id, message, page_url, page_title } = body
 
     if (!org_id || !visitor_id || !message?.trim()) {
       return NextResponse.json(
@@ -57,69 +46,113 @@ export async function POST(req: Request) {
     }
 
     // 1. Load widget config
-    const { data: config } = await db()
+    const { data: config, error: configErr } = await db()
       .from('widget_configs')
       .select('*')
       .eq('org_user_id', org_id)
       .eq('is_active', true)
       .maybeSingle()
 
+    if (configErr) {
+      console.error('[widget/message] config error:', configErr.message)
+    }
     if (!config) {
       return NextResponse.json(
-        { error: 'Widget not configured for this business' },
-        { status: 404, headers: CORS },
+        { reply: 'This chat is not configured yet. Please contact the business directly.' },
+        { status: 200, headers: CORS },
       )
     }
 
-    // 2. Find or create the widget session + conversation
-    let { data: session } = await db()
+    // 2. Find existing session
+    const { data: session } = await db()
       .from('widget_sessions')
       .select('*')
       .eq('org_user_id', org_id)
       .eq('visitor_id', visitor_id)
       .maybeSingle()
 
-    let conversationId: string
-    let contactId: string
+    let conversationId: string | null = null
+    let contactId: string | null = null
 
     if (session?.conversation_id) {
       conversationId = session.conversation_id
-      // Get the contact tied to this conversation
       const { data: conv } = await db()
         .from('conversations')
         .select('contact_id')
         .eq('id', conversationId)
         .maybeSingle()
-      contactId = conv?.contact_id
-    } else {
-      // Create a contact for this website visitor
-      const visitorPhone = `web_${visitor_id.slice(0, 12)}`
-      const { data: contact } = await db()
+      contactId = conv?.contact_id ?? null
+    }
+
+    // 3. If no existing conversation, create contact + conversation
+    if (!conversationId) {
+      const visitorPhone = `web_${String(visitor_id).slice(0, 12)}`
+
+      // Try to find an existing contact with this phone first (avoid dup)
+      const { data: existingContact } = await db()
         .from('contacts')
-        .insert({
-          user_id: org_id,
-          phone: visitorPhone,
-          name: `Website Visitor ${visitor_id.slice(0, 6)}`,
-        })
         .select('id')
-        .single()
-      contactId = contact.id
+        .eq('user_id', org_id)
+        .eq('phone', visitorPhone)
+        .maybeSingle()
 
-      // Create the conversation (channel = website)
-      const { data: conv } = await db()
+      if (existingContact?.id) {
+        contactId = existingContact.id
+      } else {
+        const { data: contact, error: contactErr } = await db()
+          .from('contacts')
+          .insert({
+            user_id: org_id,
+            phone: visitorPhone,
+            name: `Website Visitor ${String(visitor_id).slice(0, 6)}`,
+          })
+          .select('id')
+          .single()
+
+        if (contactErr || !contact) {
+          console.error('[widget/message] CONTACT insert failed:', contactErr?.message, contactErr?.details)
+          return NextResponse.json(
+            { reply: 'Sorry, I could not start the chat. Please try again.' },
+            { status: 200, headers: CORS },
+          )
+        }
+        contactId = contact.id
+      }
+
+      // Check for an existing open conversation for this contact
+      const { data: existingConv } = await db()
         .from('conversations')
-        .insert({
-          user_id: org_id,
-          contact_id: contactId,
-          channel: 'website',
-          status: 'open',
-        })
         .select('id')
-        .single()
-      conversationId = conv.id
+        .eq('user_id', org_id)
+        .eq('contact_id', contactId)
+        .maybeSingle()
 
-      // Create or update the session
-      if (session) {
+      if (existingConv?.id) {
+        conversationId = existingConv.id
+      } else {
+        const { data: conv, error: convErr } = await db()
+          .from('conversations')
+          .insert({
+            user_id: org_id,
+            contact_id: contactId,
+            channel: 'website',
+            status: 'open',
+          })
+          .select('id')
+          .single()
+
+        if (convErr || !conv) {
+          console.error('[widget/message] CONVERSATION insert failed:', convErr?.message, convErr?.details)
+          return NextResponse.json(
+            { reply: 'Sorry, I could not start the chat. Please try again.' },
+            { status: 200, headers: CORS },
+          )
+        }
+        conversationId = conv.id
+      }
+
+      // Upsert the widget session
+      if (session?.id) {
         await db()
           .from('widget_sessions')
           .update({
@@ -130,7 +163,7 @@ export async function POST(req: Request) {
           })
           .eq('id', session.id)
       } else {
-        await db().from('widget_sessions').insert({
+        const { error: sessErr } = await db().from('widget_sessions').insert({
           org_user_id: org_id,
           visitor_id,
           conversation_id: conversationId,
@@ -138,11 +171,22 @@ export async function POST(req: Request) {
           page_url,
           page_title,
         })
+        if (sessErr) {
+          console.error('[widget/message] session insert (non-fatal):', sessErr.message)
+        }
       }
     }
 
-    // 3. Save the visitor's message
-    await db().from('messages').insert({
+    if (!conversationId || !contactId) {
+      console.error('[widget/message] missing conversationId or contactId after setup')
+      return NextResponse.json(
+        { reply: 'Sorry, something went wrong. Please try again.' },
+        { status: 200, headers: CORS },
+      )
+    }
+
+    // 4. Save the visitor's message
+    const { error: msgErr } = await db().from('messages').insert({
       conversation_id: conversationId,
       sender_type: 'customer',
       content_type: 'text',
@@ -150,6 +194,9 @@ export async function POST(req: Request) {
       status: 'delivered',
       created_at: new Date().toISOString(),
     })
+    if (msgErr) {
+      console.error('[widget/message] message insert (non-fatal):', msgErr.message)
+    }
 
     await db()
       .from('conversations')
@@ -157,11 +204,10 @@ export async function POST(req: Request) {
         last_message_text: message.trim(),
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        unread_count: 1,
       })
       .eq('id', conversationId)
 
-    // 4. Load the persona for the agent (if a journey is linked)
+    // 5. Load persona for the linked journey
     let systemPrompt: string | undefined
     if (config.journey_id) {
       const { data: persona } = await db()
@@ -172,14 +218,14 @@ export async function POST(req: Request) {
       systemPrompt = persona?.raw_prompt ?? undefined
     }
 
-    // 5. Call the AI engine
+    // 6. Call the AI engine
     const result = await runAgent({
       tenantId: org_id,
       orgId: null,
       verticalConfigId: null,
       conversationId,
       contactId,
-      customerPhone: `web_${visitor_id.slice(0, 12)}`,
+      customerPhone: `web_${String(visitor_id).slice(0, 12)}`,
       inboundText: message.trim(),
       journeyId: config.journey_id ?? undefined,
       systemPromptOverride: systemPrompt,
@@ -187,9 +233,9 @@ export async function POST(req: Request) {
 
     const reply =
       result.reply ||
-      "Thanks for your message! Let me connect you with our team for more help."
+      'Thanks for your message! Let me connect you with our team for more help.'
 
-    // 6. Save the AI reply
+    // 7. Save the AI reply
     await db().from('messages').insert({
       conversation_id: conversationId,
       sender_type: 'bot',
@@ -208,7 +254,7 @@ export async function POST(req: Request) {
       })
       .eq('id', conversationId)
 
-    // 7. Return reply to the widget
+    // 8. Return reply
     return NextResponse.json(
       {
         reply,
@@ -220,8 +266,8 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error('[widget/message] error:', err)
     return NextResponse.json(
-      { error: 'Something went wrong', reply: 'Sorry, I had trouble there. Please try again.' },
-      { status: 500, headers: CORS },
+      { reply: 'Sorry, I had trouble there. Please try again.' },
+      { status: 200, headers: CORS },
     )
   }
 }

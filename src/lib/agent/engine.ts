@@ -337,18 +337,22 @@ function buildSystemPrompt(override?: string): string {
 async function getConversationHistory(
   conversationId: string,
 ): Promise<Array<{ role: 'user' | 'model'; text: string }>> {
+  // Load the most recent 12 messages (descending), then reverse to
+  // chronological order. Loading ascending+limit would grab the OLDEST
+  // messages and lose recent context as the chat grows.
   const { data } = await db()
     .from('messages')
-    .select('sender_type, content_text')
+    .select('sender_type, content_text, created_at')
     .eq('conversation_id', conversationId)
     .in('sender_type', ['customer', 'bot'])
-    .order('created_at', { ascending: true })
-    .limit(10)
+    .order('created_at', { ascending: false })
+    .limit(12)
 
   if (!data) return []
 
   return data
     .filter((m: { content_text: string | null }) => m.content_text)
+    .reverse()
     .map((m: { sender_type: string; content_text: string }) => ({
       role: m.sender_type === 'customer' ? ('user' as const) : ('model' as const),
       text: m.content_text,

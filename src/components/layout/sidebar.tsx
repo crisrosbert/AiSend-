@@ -18,6 +18,7 @@ import {
   LogOut,
   X,
   GitBranch,
+  CalendarCheck,
 } from "lucide-react";
 import {
   Avatar,
@@ -40,6 +41,7 @@ const navItems = [
   { path: "pipelines", label: "Pipelines",  icon: GitBranch },
   { path: "broadcasts",label: "Campaigns",  icon: Radio },
   { path: "automations",label: "Flows",     icon: Zap },
+  { path: "bookings",  label: "Bookings",   icon: CalendarCheck },
 ];
 
 const bottomNavItems = [

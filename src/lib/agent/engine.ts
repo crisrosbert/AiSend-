@@ -17,6 +17,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { searchKnowledgeBase } from '@/lib/agent/tools/knowledge-base-tools'
 import { bookAppointment } from '@/lib/agent/tools/booking-tools'
+import { callLLM, type LLMTool, type LLMTurn } from '@/lib/agent/llm-provider'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -53,7 +54,7 @@ export interface AgentResult {
 
 // ── Tool definitions exposed to Gemini ──
 
-const TOOLS = [
+const TOOLS: LLMTool[] = [
   {
     name: 'search_knowledge_base',
     description:
@@ -113,7 +114,6 @@ const TOOLS = [
 // ── Main entry point ──
 
 export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
-  const apiKey = process.env.GEMINI_API_KEY
   const empty: AgentResult = {
     reply: '',
     toolsUsed: [],
@@ -121,8 +121,14 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
     tokensUsed: 0,
   }
 
-  if (!apiKey) {
-    console.warn('[agent/engine] GEMINI_API_KEY not set — agent disabled')
+  // Provider + key check (gemini or openai depending on LLM_PROVIDER)
+  const provider = (process.env.LLM_PROVIDER || 'gemini').toLowerCase()
+  const hasKey =
+    provider === 'openai'
+      ? !!process.env.OPENAI_API_KEY
+      : !!process.env.GEMINI_API_KEY
+  if (!hasKey) {
+    console.warn(`[agent/engine] no API key for provider "${provider}" — agent disabled`)
     return empty
   }
 
@@ -135,21 +141,22 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
     const history = await getConversationHistory(args.conversationId)
     const systemPrompt = buildSystemPrompt(args.systemPromptOverride)
 
-    // Build the running contents array (conversation so far)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const contents: any[] = [
-      ...history.map((h) => ({ role: h.role, parts: [{ text: h.text }] })),
-      { role: 'user', parts: [{ text: args.inboundText }] },
+    // Build the running turns array (conversation so far) in the
+    // provider-agnostic format. callLLM() converts this to whatever the
+    // active provider (Gemini / OpenAI) needs.
+    const turns: LLMTurn[] = [
+      ...history.map((h) => ({ role: h.role, text: h.text })),
+      { role: 'user' as const, text: args.inboundText },
     ]
 
     let finalReply = ''
 
     // Tool-call loop — max 4 iterations to prevent runaway
     for (let iter = 0; iter < 4; iter++) {
-      const resp = await callGemini(apiKey, systemPrompt, contents)
+      const resp = await callLLM(systemPrompt, turns, TOOLS)
       totalTokens += resp.tokens
 
-      // Did Gemini ask to call a tool?
+      // Did the model ask to call a tool?
       const toolCall = resp.toolCall
       if (toolCall) {
         toolsUsed.push(toolCall.name)
@@ -165,23 +172,13 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
           break
         }
 
-        // Add the model's function_call + our function_response to history
-        contents.push({
-          role: 'model',
-          parts: [{ functionCall: { name: toolCall.name, args: toolCall.args } }],
+        // Add the model's tool call + our tool result to the turns
+        turns.push({ role: 'model', toolCall })
+        turns.push({
+          role: 'tool',
+          toolResult: { name: toolCall.name, result: toolResult },
         })
-        contents.push({
-          role: 'user',
-          parts: [
-            {
-              functionResponse: {
-                name: toolCall.name,
-                response: { result: toolResult },
-              },
-            },
-          ],
-        })
-        // Loop again so Gemini can use the tool result to answer
+        // Loop again so the model can use the tool result to answer
         continue
       }
 
@@ -231,62 +228,6 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
 }
 
 // ── Gemini API call ──
-
-interface GeminiResponse {
-  text: string
-  toolCall: { name: string; args: Record<string, unknown> } | null
-  tokens: number
-}
-
-async function callGemini(
-  apiKey: string,
-  systemPrompt: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contents: any[],
-): Promise<GeminiResponse> {
-  const body = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents,
-    tools: [{ function_declarations: TOOLS }],
-    generation_config: { temperature: 0.3, max_output_tokens: 600 },
-  }
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-  )
-
-  if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`Gemini API ${res.status}: ${errText.slice(0, 200)}`)
-  }
-
-  const data = await res.json()
-  const parts = data?.candidates?.[0]?.content?.parts ?? []
-  const tokens = data?.usageMetadata?.totalTokenCount ?? 0
-
-  // Look for a function call in the parts
-  for (const part of parts) {
-    if (part.functionCall?.name) {
-      return {
-        text: '',
-        toolCall: {
-          name: part.functionCall.name,
-          args: part.functionCall.args ?? {},
-        },
-        tokens,
-      }
-    }
-  }
-
-  // Otherwise extract text
-  const text = parts.map((p: { text?: string }) => p.text ?? '').join('')
-  return { text, toolCall: null, tokens }
-}
 
 // ── Tool execution ──
 
@@ -429,7 +370,7 @@ async function logUsage(args: RunAgentArgs, log: LogArgs): Promise<void> {
       conversation_id: args.conversationId,
       journey_id: args.journeyId ?? null,
       vertical: args.verticalConfigId ?? null,
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       output_tokens: log.tokens,
       tools_called: log.toolsUsed,
       handoff: log.handoff,

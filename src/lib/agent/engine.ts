@@ -17,6 +17,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { searchKnowledgeBase } from '@/lib/agent/tools/knowledge-base-tools'
 import { bookAppointment } from '@/lib/agent/tools/booking-tools'
+import { sendPaymentLink } from '@/lib/agent/tools/payment-tools'
 import { callLLM, type LLMTool, type LLMTurn } from '@/lib/agent/llm-provider'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +96,19 @@ const TOOLS: LLMTool[] = [
         preferred_date: { type: 'string', description: 'Preferred date/time in their words (e.g. "next Monday", "29 March")' },
       },
       required: ['customer_name', 'customer_phone'],
+    },
+  },
+  {
+    name: 'send_payment_link',
+    description:
+      'Create a secure payment link (UPI/card/netbanking) for the customer when they want to pay for something — a paid consultation, a product, a booking fee. Collect the amount and what it is for first. Only use this if the customer explicitly wants to pay now.',
+    parameters: {
+      type: 'object',
+      properties: {
+        amount_rupees: { type: 'number', description: 'Amount in rupees' },
+        description: { type: 'string', description: 'What the payment is for' },
+      },
+      required: ['amount_rupees', 'description'],
     },
   },
   {
@@ -255,6 +269,17 @@ async function executeTool(
           customerPhone: String(toolCall.args.customer_phone || ''),
           service: String(toolCall.args.service || 'Consultation'),
           preferredDate: toolCall.args.preferred_date ? String(toolCall.args.preferred_date) : undefined,
+        })
+      }
+
+      case 'send_payment_link': {
+        return await sendPaymentLink({
+          tenantId: args.tenantId,
+          contactId: args.contactId,
+          conversationId: args.conversationId,
+          amountRupees: Number(toolCall.args.amount_rupees || 0),
+          description: String(toolCall.args.description || 'Payment'),
+          customerPhone: args.customerPhone,
         })
       }
 

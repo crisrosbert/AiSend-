@@ -47,7 +47,7 @@ export async function middleware(request: NextRequest) {
   }
   // Slug routes — /[slug]/dashboard etc
   const slugRouteMatch = pathname.match(
-    /^\/([a-z0-9-]+)\/(dashboard|inbox|contacts|pipelines|broadcasts|automations|bookings|settings)(\/.*)?$/
+    /^\/([a-z0-9-]+)\/(dashboard|inbox|contacts|pipelines|broadcasts|automations|bookings|leads|settings)(\/.*)?$/
   )
   if (slugRouteMatch) {
     const slug = slugRouteMatch[1]
@@ -63,7 +63,7 @@ export async function middleware(request: NextRequest) {
     }
   }
   // Legacy protected paths
-  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/bookings', '/settings']
+  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/bookings', '/leads', '/settings']
   if (!user && protectedPaths.some(path => pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'

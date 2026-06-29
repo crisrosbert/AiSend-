@@ -20,6 +20,7 @@ import {
   GitBranch,
   CalendarCheck,
   Globe,
+  MessageCircle,
 } from "lucide-react";
 import {
   Avatar,
@@ -44,6 +45,7 @@ const navItems = [
   { path: "automations",label: "Flows",     icon: Zap },
   { path: "bookings",  label: "Bookings",   icon: CalendarCheck },
   { path: "leads",     label: "Website Leads", icon: Globe },
+  { path: "widget",    label: "Website Widget", icon: MessageCircle },
 ];
 
 const bottomNavItems = [

@@ -47,7 +47,7 @@ export async function middleware(request: NextRequest) {
   }
   // Slug routes — /[slug]/dashboard etc
   const slugRouteMatch = pathname.match(
-    /^\/([a-z0-9-]+)\/(dashboard|inbox|contacts|pipelines|broadcasts|automations|bookings|leads|settings)(\/.*)?$/
+    /^\/([a-z0-9-]+)\/(dashboard|inbox|contacts|pipelines|broadcasts|automations|bookings|leads|widget|settings)(\/.*)?$/
   )
   if (slugRouteMatch) {
     const slug = slugRouteMatch[1]

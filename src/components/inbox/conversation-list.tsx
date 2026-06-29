@@ -112,6 +112,7 @@ export function ConversationList({
         .from("conversations")
         .select(`*, contact:contacts(*)`, { count: "exact" })
         .eq("status", TAB_TO_STATUS[activeTab])
+        .or("channel.eq.whatsapp,channel.is.null")
         .order("last_message_at", { ascending: false, nullsFirst: false })
         .limit(PAGE_SIZE);
 

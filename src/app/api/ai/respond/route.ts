@@ -4,8 +4,14 @@ export async function POST(req: Request) {
   try {
     const { prompt } = await req.json();
 
-    // Direct string declaration blocks any environment mismatch bugs
-    const geminiApiKey = "AIzaSyD3qusnHssGCRXvfMHREpe_uIuZAOucgUk";
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+      console.error("GEMINI_API_KEY not set — /api/ai/respond disabled");
+      return NextResponse.json(
+        { error: "AI suggest is not configured." },
+        { status: 503 },
+      );
+    }
 
     const systemInstruction = 
       "You are an AI customer support assistant assisting a live agent over a WhatsApp Business inbox. " +

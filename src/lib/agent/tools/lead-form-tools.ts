@@ -3,7 +3,7 @@
 // Lets the AI show a lead-capture form and save submissions to the leads
 // table. The form is AI-triggered (show_lead_form tool) so it appears at
 // the right moment — either up front (gate mode) or after interest
-// (progressive mode), controlled per-agent.
+// (progressive mode), controlled per-agent. 
 //
 // Used by: src/lib/agent/engine.ts
 

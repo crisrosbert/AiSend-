@@ -3,7 +3,7 @@
 // Lets the AI show a lead-capture form and save submissions to the leads
 // table. The form is AI-triggered (show_lead_form tool) so it appears at
 // the right moment — either up front (gate mode) or after interest
-// (progressive mode), controlled per-agent. 
+// (progressive mode), controlled per-agent.
 //
 // Used by: src/lib/agent/engine.ts
 
@@ -33,6 +33,7 @@ export interface SaveLeadArgs {
   extra?: Record<string, unknown>
 }
 
+// Save a submitted lead form to the leads table.
 export async function saveLead(args: SaveLeadArgs): Promise<string> {
   try {
     const { error } = await db().from('leads').insert({
@@ -60,21 +61,22 @@ export async function saveLead(args: SaveLeadArgs): Promise<string> {
   }
 }
 
-export function buildLeadFormFields(
-  fields: string[],
-): Array<{ key: string; label: string; type: string; required: boolean }> {
+// The show_lead_form tool doesn't do backend work — it signals the widget
+// to render the form. The engine returns a { showLeadForm: true, fields }
+// marker that the widget picks up. This function builds that marker's fields.
+export function buildLeadFormFields(fields: string[]): Array<{ key: string; label: string; type: string; required: boolean }> {
   const FIELD_DEFS: Record<string, { label: string; type: string }> = {
-    first_name:   { label: 'First Name',      type: 'text' },
-    last_name:    { label: 'Last Name',        type: 'text' },
-    phone:        { label: 'Mobile Number',    type: 'tel' },
-    email:        { label: 'Business Email',   type: 'email' },
-    company_name: { label: 'Company Name',     type: 'text' },
+    first_name: { label: 'First Name', type: 'text' },
+    last_name: { label: 'Last Name', type: 'text' },
+    phone: { label: 'Mobile Number', type: 'tel' },
+    email: { label: 'Business Email', type: 'email' },
+    company_name: { label: 'Company Name', type: 'text' },
   }
 
   return fields.map((f) => ({
-    key:      f,
-    label:    FIELD_DEFS[f]?.label || f,
-    type:     FIELD_DEFS[f]?.type || 'text',
+    key: f,
+    label: FIELD_DEFS[f]?.label || f,
+    type: FIELD_DEFS[f]?.type || 'text',
     required: true,
   }))
 }

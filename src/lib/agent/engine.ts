@@ -4,21 +4,31 @@
 // file flow-engine.ts is allowed to call inside /lib/agent/.
 //
 // Flow:
-//   1. Load conversation history (last 10 messages)
-//   2. Build system prompt (vertical config + persona override)
-//   3. Call Gemini Flash with function-calling tools
-//   4. If Gemini requests a tool → execute it → feed result back → loop
-//   5. Return the final reply string (NEVER sends to WhatsApp itself)
-//   6. Log usage to agent_usage_logs
+//   1. Load conversation history (last 12 messages)
+//   2. Load the agent row (capability flags) if an agentId is provided
+//   3. Build system prompt (persona override + media catalog + lead rules)
+//   4. Build the tool set gated by the agent's capability flags
+//   5. Call the LLM with function-calling tools
+//   6. If the model requests a tool -> execute it -> feed result back -> loop
+//   7. Return the final reply + any media to send (flow-engine delivers it)
+//   8. Log usage to agent_usage_logs
 //
 // BOUNDARY: flow-engine.ts imports ONLY runAgent() from here.
-//           This file imports tools + rag, never /lib/core/.
+//           This file imports tools + rag + engine-capabilities, never /lib/core/.
 
 import { createClient } from '@supabase/supabase-js'
 import { searchKnowledgeBase } from '@/lib/agent/tools/knowledge-base-tools'
 import { bookAppointment } from '@/lib/agent/tools/booking-tools'
 import { sendPaymentLink } from '@/lib/agent/tools/payment-tools'
 import { callLLM, type LLMTool, type LLMTurn } from '@/lib/agent/llm-provider'
+import {
+  loadAgent,
+  buildAgentTools,
+  buildAgentSystemAddon,
+  handleCapabilityTool,
+  type Agent,
+} from '@/lib/agent/engine-capabilities'
+import type { MediaItem } from '@/lib/agent/tools/media-tools'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -44,6 +54,10 @@ export interface RunAgentArgs {
   inboundText: string
   journeyId?: string
   systemPromptOverride?: string
+  // NEW: which agent (agents row) drives this conversation. When set, the
+  // engine loads its capability flags and enables lead-form / media / etc.
+  // When omitted, the engine behaves exactly as before (all tools on).
+  agentId?: string
 }
 
 export interface AgentResult {
@@ -51,79 +65,104 @@ export interface AgentResult {
   toolsUsed: string[]
   handoffRequested: boolean
   tokensUsed: number
+  // NEW: media the AI chose to send. flow-engine sends each of these to the
+  // customer as a separate WhatsApp media message, in order, after `reply`.
+  mediaToSend: MediaItem[]
 }
 
-// ── Tool definitions exposed to Gemini ──
+// ── Base tools (always available) ──
 
-const TOOLS: LLMTool[] = [
-  {
-    name: 'search_knowledge_base',
-    description:
-      "Search the business's knowledge base (FAQs, pricing, timings, policies, product info) to answer the customer's question accurately. Use this whenever the customer asks something specific about the business.",
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'The search query based on the customer question',
-        },
+const SEARCH_KB_TOOL: LLMTool = {
+  name: 'search_knowledge_base',
+  description:
+    "Search the business's knowledge base (FAQs, pricing, timings, policies, product info) to answer the customer's question accurately. Use this whenever the customer asks something specific about the business.",
+  parameters: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'The search query based on the customer question',
       },
-      required: ['query'],
     },
+    required: ['query'],
   },
-  {
-    name: 'tag_contact',
-    description:
-      'Tag the customer in the CRM to track their intent or segment (e.g. "interested_in_pricing", "ready_to_buy", "needs_followup").',
-    parameters: {
-      type: 'object',
-      properties: {
-        tag: { type: 'string', description: 'The tag to apply' },
-      },
-      required: ['tag'],
+}
+
+const TAG_CONTACT_TOOL: LLMTool = {
+  name: 'tag_contact',
+  description:
+    'Tag the customer in the CRM to track their intent or segment (e.g. "interested_in_pricing", "ready_to_buy", "needs_followup").',
+  parameters: {
+    type: 'object',
+    properties: {
+      tag: { type: 'string', description: 'The tag to apply' },
     },
+    required: ['tag'],
   },
-  {
-    name: 'book_appointment',
-    description:
-      'Capture a consultation or appointment request once you have collected the customer\'s name, phone number, and preferred date/time. Call this to save the lead. The team confirms the exact time later. ALWAYS collect name and phone before calling this.',
-    parameters: {
-      type: 'object',
-      properties: {
-        customer_name: { type: 'string', description: 'Customer full name' },
-        customer_phone: { type: 'string', description: 'Customer phone number' },
-        service: { type: 'string', description: 'What they want (e.g. consultation, gynecomastia surgery)' },
-        preferred_date: { type: 'string', description: 'Preferred date/time in their words (e.g. "next Monday", "29 March")' },
-      },
-      required: ['customer_name', 'customer_phone'],
+}
+
+const BOOK_APPOINTMENT_TOOL: LLMTool = {
+  name: 'book_appointment',
+  description:
+    "Capture a consultation or appointment request once you have collected the customer's name, phone number, and preferred date/time. Call this to save the lead. The team confirms the exact time later. ALWAYS collect name and phone before calling this.",
+  parameters: {
+    type: 'object',
+    properties: {
+      customer_name: { type: 'string', description: 'Customer full name' },
+      customer_phone: { type: 'string', description: 'Customer phone number' },
+      service: { type: 'string', description: 'What they want (e.g. consultation, gynecomastia surgery)' },
+      preferred_date: { type: 'string', description: 'Preferred date/time in their words (e.g. "next Monday", "29 March")' },
     },
+    required: ['customer_name', 'customer_phone'],
   },
-  {
-    name: 'send_payment_link',
-    description:
-      'Create a secure payment link (UPI/card/netbanking) for the customer when they want to pay for something — a paid consultation, a product, a booking fee. Collect the amount and what it is for first. Only use this if the customer explicitly wants to pay now.',
-    parameters: {
-      type: 'object',
-      properties: {
-        amount_rupees: { type: 'number', description: 'Amount in rupees' },
-        description: { type: 'string', description: 'What the payment is for' },
-      },
-      required: ['amount_rupees', 'description'],
+}
+
+const SEND_PAYMENT_LINK_TOOL: LLMTool = {
+  name: 'send_payment_link',
+  description:
+    'Create a secure payment link (UPI/card/netbanking) for the customer when they want to pay for something — a paid consultation, a product, a booking fee. Collect the amount and what it is for first. Only use this if the customer explicitly wants to pay now.',
+  parameters: {
+    type: 'object',
+    properties: {
+      amount_rupees: { type: 'number', description: 'Amount in rupees' },
+      description: { type: 'string', description: 'What the payment is for' },
     },
+    required: ['amount_rupees', 'description'],
   },
-  {
-    name: 'handoff_to_human',
-    description:
-      'Transfer the conversation to a human agent. Use when the customer is frustrated, explicitly asks for a human, has a complaint, or has a complex request you cannot resolve.',
-    parameters: {
-      type: 'object',
-      properties: {
-        reason: { type: 'string', description: 'Why handing off' },
-      },
-      required: ['reason'],
+}
+
+const HANDOFF_TOOL: LLMTool = {
+  name: 'handoff_to_human',
+  description:
+    'Transfer the conversation to a human agent. Use when the customer is frustrated, explicitly asks for a human, has a complaint, or has a complex request you cannot resolve.',
+  parameters: {
+    type: 'object',
+    properties: {
+      reason: { type: 'string', description: 'Why handing off' },
     },
+    required: ['reason'],
   },
-]
+}
+
+// Build the tool set for this turn. With no agent (backward compatible) every
+// tool is on, exactly as before. With an agent, booking/payment/lead/media are
+// gated by its capability flags.
+function buildToolList(agent: Agent | null): LLMTool[] {
+  if (!agent) {
+    return [
+      SEARCH_KB_TOOL,
+      TAG_CONTACT_TOOL,
+      BOOK_APPOINTMENT_TOOL,
+      SEND_PAYMENT_LINK_TOOL,
+      HANDOFF_TOOL,
+    ]
+  }
+  const tools: LLMTool[] = [SEARCH_KB_TOOL, TAG_CONTACT_TOOL, HANDOFF_TOOL]
+  if (agent.booking_enabled) tools.push(BOOK_APPOINTMENT_TOOL)
+  if (agent.payment_enabled) tools.push(SEND_PAYMENT_LINK_TOOL)
+  tools.push(...buildAgentTools(agent)) // submit_lead + send_media, per flags
+  return tools
+}
 
 // ── Main entry point ──
 
@@ -133,6 +172,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
     toolsUsed: [],
     handoffRequested: false,
     tokensUsed: 0,
+    mediaToSend: [],
   }
 
   // Provider + key check (gemini or openai depending on LLM_PROVIDER)
@@ -148,12 +188,21 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
 
   const startedAt = Date.now()
   const toolsUsed: string[] = []
+  const mediaToSend: MediaItem[] = []
   let handoffRequested = false
   let totalTokens = 0
 
   try {
+    // Load the agent (capability flags). Null => legacy all-tools behaviour.
+    const agent = args.agentId ? await loadAgent(args.agentId) : null
+
     const history = await getConversationHistory(args.conversationId)
-    const systemPrompt = buildSystemPrompt(args.systemPromptOverride)
+
+    // System prompt = persona/override + (media catalog + lead rules) addon.
+    let systemPrompt = buildSystemPrompt(args.systemPromptOverride)
+    if (agent) systemPrompt += await buildAgentSystemAddon(agent)
+
+    const tools = buildToolList(agent)
 
     // Build the running turns array (conversation so far) in the
     // provider-agnostic format. callLLM() converts this to whatever the
@@ -167,7 +216,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
 
     // Tool-call loop — max 4 iterations to prevent runaway
     for (let iter = 0; iter < 4; iter++) {
-      const resp = await callLLM(systemPrompt, turns, TOOLS)
+      const resp = await callLLM(systemPrompt, turns, tools)
       totalTokens += resp.tokens
 
       // Did the model ask to call a tool?
@@ -176,12 +225,14 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
         toolsUsed.push(toolCall.name)
 
         // Execute the requested tool
-        const toolResult = await executeTool(toolCall, args)
+        const toolOut = await executeTool(toolCall, args, agent)
+
+        if (toolOut.media) mediaToSend.push(toolOut.media)
 
         if (toolCall.name === 'handoff_to_human') {
           handoffRequested = true
           finalReply =
-            toolResult ||
+            toolOut.result ||
             'Let me connect you with a team member who can help further.'
           break
         }
@@ -190,7 +241,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
         turns.push({ role: 'model', toolCall })
         turns.push({
           role: 'tool',
-          toolResult: { name: toolCall.name, result: toolResult },
+          toolResult: { name: toolCall.name, result: toolOut.result },
         })
         // Loop again so the model can use the tool result to answer
         continue
@@ -227,6 +278,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
       toolsUsed,
       handoffRequested,
       tokensUsed: totalTokens,
+      mediaToSend,
     }
   } catch (err) {
     console.error('[agent/engine] error:', err)
@@ -241,66 +293,89 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
   }
 }
 
-// ── Gemini API call ──
-
 // ── Tool execution ──
+
+interface ToolExecResult {
+  result: string
+  media?: MediaItem
+}
 
 async function executeTool(
   toolCall: { name: string; args: Record<string, unknown> },
   args: RunAgentArgs,
-): Promise<string> {
+  agent: Agent | null,
+): Promise<ToolExecResult> {
   try {
+    // Capability tools (submit_lead / send_media) are handled by the
+    // capability layer, which also returns any media to deliver.
+    if (agent) {
+      const capOut = await handleCapabilityTool(
+        agent,
+        args.conversationId,
+        args.customerPhone,
+        toolCall.name,
+        toolCall.args,
+      )
+      if (capOut) return { result: capOut.result, media: capOut.media }
+    }
+
     switch (toolCall.name) {
       case 'search_knowledge_base': {
         const query = String(toolCall.args.query || args.inboundText)
-        return await searchKnowledgeBase({
-          tenantId: args.tenantId,
-          journeyId: args.journeyId,
-          query,
-        })
+        return {
+          result: await searchKnowledgeBase({
+            tenantId: args.tenantId,
+            journeyId: args.journeyId,
+            query,
+          }),
+        }
       }
 
       case 'book_appointment': {
-        return await bookAppointment({
-          tenantId: args.tenantId,
-          contactId: args.contactId,
-          conversationId: args.conversationId,
-          customerName: String(toolCall.args.customer_name || ''),
-          customerPhone: String(toolCall.args.customer_phone || ''),
-          service: String(toolCall.args.service || 'Consultation'),
-          preferredDate: toolCall.args.preferred_date ? String(toolCall.args.preferred_date) : undefined,
-        })
+        return {
+          result: await bookAppointment({
+            tenantId: args.tenantId,
+            contactId: args.contactId,
+            conversationId: args.conversationId,
+            customerName: String(toolCall.args.customer_name || ''),
+            customerPhone: String(toolCall.args.customer_phone || ''),
+            service: String(toolCall.args.service || 'Consultation'),
+            preferredDate: toolCall.args.preferred_date ? String(toolCall.args.preferred_date) : undefined,
+          }),
+        }
       }
 
       case 'send_payment_link': {
-        return await sendPaymentLink({
-          tenantId: args.tenantId,
-          contactId: args.contactId,
-          conversationId: args.conversationId,
-          amountRupees: Number(toolCall.args.amount_rupees || 0),
-          description: String(toolCall.args.description || 'Payment'),
-          customerPhone: args.customerPhone,
-        })
+        return {
+          result: await sendPaymentLink({
+            tenantId: args.tenantId,
+            contactId: args.contactId,
+            conversationId: args.conversationId,
+            amountRupees: Number(toolCall.args.amount_rupees || 0),
+            description: String(toolCall.args.description || 'Payment'),
+            customerPhone: args.customerPhone,
+          }),
+        }
       }
 
       case 'tag_contact': {
         const tag = String(toolCall.args.tag || '').trim()
-        if (!tag) return 'No tag provided'
+        if (!tag) return { result: 'No tag provided' }
         await applyTag(args.tenantId, args.contactId, tag)
-        return `Tagged customer as "${tag}"`
+        return { result: `Tagged customer as "${tag}"` }
       }
 
       case 'handoff_to_human': {
         const reason = String(toolCall.args.reason || 'Customer needs human help')
-        return `Connecting you with a team member now. (${reason})`
+        return { result: `Connecting you with a team member now. (${reason})` }
       }
 
       default:
-        return `Unknown tool: ${toolCall.name}`
+        return { result: `Unknown tool: ${toolCall.name}` }
     }
   } catch (err) {
     console.error('[agent/engine] tool error:', err)
-    return 'Tool execution failed.'
+    return { result: 'Tool execution failed.' }
   }
 }
 

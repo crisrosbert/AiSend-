@@ -1,31 +1,23 @@
 // src/lib/agent/engine-capabilities.ts
 //
-// The capability layer that turns one engine into many agents. This module:
-//   1. Loads an agent row (identity + capability flags) by widget/agent id
-//   2. Builds the tool set the AI is allowed to use, gated by those flags
-//   3. Injects the media catalog into the system prompt
-//   4. Handles the three new tools: show_lead_form, submit_lead, send_media
+// The capability layer for the multi-agent engine. Reads an agent's row
+// (capability flags) and turns lead-form + media into AI tools that are
+// only present when the agent has them enabled.
 //
-// The engine (src/lib/agent/engine.ts) calls loadAgent() once per turn, then
-// buildAgentTools() to get the tool schema, and dispatches tool calls to
-// handleCapabilityTool(). Nothing here is agent-specific — behaviour is data.
+// engine.ts imports: loadAgent, buildAgentTools, buildAgentSystemAddon,
+//                    handleCapabilityTool, type Agent
 //
-// Depends on:
-//   - ./tools/lead-form-tools  (saveLead, buildLeadFormFields)
-//   - ./tools/media-tools       (getAgentMedia, describeMediaForPrompt, resolveMedia)
+// This keeps engine.ts clean — all the per-capability logic lives here.
 
 import { createClient } from '@supabase/supabase-js'
-import {
-  saveLead,
-  buildLeadFormFields,
-  type SaveLeadArgs,
-} from './tools/lead-form-tools'
+import type { LLMTool } from '@/lib/agent/llm-provider'
+import { saveLead, buildLeadFormFields } from '@/lib/agent/tools/lead-form-tools'
 import {
   getAgentMedia,
   describeMediaForPrompt,
   resolveMedia,
   type MediaItem,
-} from './tools/media-tools'
+} from '@/lib/agent/tools/media-tools'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -39,7 +31,7 @@ function db() {
   return _client
 }
 
-// ── The agent record (mirrors the agents table) ──
+// ── The Agent shape (matches the agents table) ──
 export interface Agent {
   id: string
   tenant_id: string
@@ -58,212 +50,150 @@ export interface Agent {
   is_active: boolean
 }
 
-// Load an agent by its own id, or fall back to the widget_config link.
-export async function loadAgent(opts: {
-  agentId?: string
-  widgetConfigId?: string
-}): Promise<Agent | null> {
+// Load an agent row by id. Returns null if not found (engine falls back
+// to legacy all-tools behaviour).
+export async function loadAgent(agentId: string): Promise<Agent | null> {
   try {
-    let agentId = opts.agentId
-    if (!agentId && opts.widgetConfigId) {
-      const { data: wc } = await db()
-        .from('widget_configs')
-        .select('agent_id')
-        .eq('id', opts.widgetConfigId)
-        .maybeSingle()
-      agentId = wc?.agent_id
-    }
-    if (!agentId) return null
-
-    const { data, error } = await db()
+    const { data } = await db()
       .from('agents')
       .select('*')
       .eq('id', agentId)
-      .eq('is_active', true)
       .maybeSingle()
-    if (error || !data) return null
-    return data as Agent
+    if (!data) return null
+
+    // lead_form_fields may come back as JSONB (already array) or string
+    let fields = data.lead_form_fields
+    if (typeof fields === 'string') {
+      try { fields = JSON.parse(fields) } catch { fields = ['first_name', 'last_name', 'phone', 'email'] }
+    }
+
+    return {
+      ...data,
+      lead_form_fields: Array.isArray(fields) ? fields : ['first_name', 'last_name', 'phone', 'email'],
+    } as Agent
   } catch (err) {
-    console.error('[engine] loadAgent error:', err)
+    console.error('[engine-capabilities] loadAgent error:', err)
     return null
   }
 }
 
-// ── Tool schemas (Anthropic tool-use format) ──
-// Only the tools an agent is allowed to use are returned, so the model can
-// never call a capability the tenant disabled.
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ToolSchema = Record<string, any>
-
-const LEAD_FORM_TOOL = (fields: string[]): ToolSchema => ({
-  name: 'show_lead_form',
-  description:
-    'Display a short form to capture the customer\'s contact details. ' +
-    'Call this when the customer shows buying intent or asks to be contacted. ' +
-    'The form renders in the chat widget; do not ask for the fields in text as well.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      reason: {
-        type: 'string',
-        description:
-          'One short sentence shown above the form, e.g. "Share your details and our team will call you back."',
-      },
-    },
-    required: ['reason'],
-  },
-})
-
-const SUBMIT_LEAD_TOOL: ToolSchema = {
+// ── Capability tools (only added when the agent has the flag on) ──
+const SUBMIT_LEAD_TOOL: LLMTool = {
   name: 'submit_lead',
   description:
-    'Save the contact details the customer typed into the lead form. ' +
-    'Only call this after the customer has actually submitted the form.',
-  input_schema: {
+    'Show the customer a lead-capture form to collect their contact details. Use this when the customer shows real interest (asks about pricing, wants a demo, wants to be contacted) and you want to capture them as a lead. The form appears in the chat for them to fill.',
+  parameters: {
     type: 'object',
     properties: {
-      first_name: { type: 'string' },
-      last_name: { type: 'string' },
-      phone: { type: 'string' },
-      email: { type: 'string' },
-      company_name: { type: 'string' },
+      reason: { type: 'string', description: 'Why you are showing the form now (internal note)' },
     },
     required: [],
   },
 }
 
-const SEND_MEDIA_TOOL: ToolSchema = {
+const SEND_MEDIA_TOOL: LLMTool = {
   name: 'send_media',
   description:
-    'Send an image, PDF, brochure, or video to the customer in chat. ' +
-    'Pass the media id (preferred) or an exact title from the available media list. ' +
-    'Only send media that is genuinely relevant to what the customer asked.',
-  input_schema: {
+    'Send the customer an image, PDF, brochure, or video from the available media list. Use the media id or title. Use this when the customer wants to see something visual — a brochure, floor plan, product photo, price list PDF, or video.',
+  parameters: {
     type: 'object',
     properties: {
-      id_or_title: {
-        type: 'string',
-        description: 'The media id from the available-media list, or its exact title.',
-      },
+      media: { type: 'string', description: 'The id or title of the media item to send' },
     },
-    required: ['id_or_title'],
+    required: ['media'],
   },
 }
 
-// Build the allowed tool set for an agent based on its capability flags.
-export function buildAgentTools(agent: Agent): ToolSchema[] {
-  const tools: ToolSchema[] = []
-  if (agent.lead_form_enabled) {
-    tools.push(LEAD_FORM_TOOL(agent.lead_form_fields))
-    tools.push(SUBMIT_LEAD_TOOL)
-  }
-  if (agent.media_enabled) {
-    tools.push(SEND_MEDIA_TOOL)
-  }
-  // booking_enabled / payment_enabled tools plug in the same way here.
+// Build the capability tools for this agent, gated by flags.
+export function buildAgentTools(agent: Agent): LLMTool[] {
+  const tools: LLMTool[] = []
+  if (agent.lead_form_enabled) tools.push(SUBMIT_LEAD_TOOL)
+  if (agent.media_enabled) tools.push(SEND_MEDIA_TOOL)
   return tools
 }
 
-// Build the extra system-prompt text an agent needs at runtime:
-//   - the persona
-//   - the media catalog (so the AI knows what it can send)
-//   - a gate-mode instruction if the lead form must come first
+// Build the system-prompt addon: media catalog + lead-form guidance.
 export async function buildAgentSystemAddon(agent: Agent): Promise<string> {
-  let addon = agent.persona ? agent.persona.trim() : ''
+  let addon = ''
 
-  if (agent.media_enabled) {
-    const media = await getAgentMedia(agent.id)
-    addon += describeMediaForPrompt(media)
+  // Lead form rules
+  if (agent.lead_form_enabled) {
+    if (agent.lead_form_mode === 'gate') {
+      addon += `\n[Lead capture — GATE mode]: Before helping in detail, call submit_lead to show the contact form. Politely explain you'll capture their details so the team can assist them properly.`
+    } else {
+      addon += `\n[Lead capture — PROGRESSIVE mode]: Chat naturally first. Once the customer shows genuine interest (asks about pricing, a demo, or wants to be contacted), call submit_lead to show the contact form. Don't ask for the form too early — earn it.`
+    }
   }
 
-  if (agent.lead_form_enabled && agent.lead_form_mode === 'gate') {
-    addon +=
-      '\n\n[Lead capture — GATE mode]: Before answering detailed questions, ' +
-      'greet the customer and call show_lead_form to collect their details. ' +
-      'Keep it friendly and explain the team will follow up.'
-  } else if (agent.lead_form_enabled) {
-    addon +=
-      '\n\n[Lead capture — PROGRESSIVE mode]: Help the customer first. ' +
-      'Once they show real interest or ask to be contacted, call show_lead_form.'
+  // Media catalog
+  if (agent.media_enabled) {
+    const media = await getAgentMedia(agent.id)
+    if (media.length > 0) {
+      addon += describeMediaForPrompt(media)
+      addon += `\n[When the customer wants to see any of the above, call send_media with its id.]`
+    }
   }
 
   return addon
 }
 
-// ── Tool dispatch ──
-// The engine passes any tool call whose name matches a capability tool here.
-// Returns either a text result to feed back to the model, or a widget marker
-// the front-end acts on (rendered form / media bubble).
-
+// ── Capability tool execution ──
 export interface CapabilityToolResult {
-  // Text the model sees as the tool result.
-  toolResult: string
-  // Optional side-channel the widget renders (form to show, media to display).
-  widget?:
-    | { type: 'lead_form'; reason: string; fields: ReturnType<typeof buildLeadFormFields> }
-    | { type: 'media'; item: MediaItem }
+  result: string
+  media?: MediaItem
+  showLeadForm?: { fields: Array<{ key: string; label: string; type: string; required: boolean }> }
 }
 
+// Handle submit_lead / send_media. Returns null if the tool isn't a
+// capability tool (so the engine falls through to its own switch).
 export async function handleCapabilityTool(
   agent: Agent,
   conversationId: string,
+  _customerPhone: string,
   toolName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  input: Record<string, any>,
+  toolArgs: Record<string, unknown>,
 ): Promise<CapabilityToolResult | null> {
-  switch (toolName) {
-    case 'show_lead_form': {
-      if (!agent.lead_form_enabled) {
-        return { toolResult: 'Lead form is not enabled for this agent.' }
-      }
-      return {
-        toolResult:
-          'The lead form is now shown to the customer. Wait for them to submit it before doing anything else.',
-        widget: {
-          type: 'lead_form',
-          reason: String(input.reason || 'Share your details and our team will reach out.'),
-          fields: buildLeadFormFields(agent.lead_form_fields),
-        },
-      }
+  // submit_lead → tell the widget to render the form
+  if (toolName === 'submit_lead') {
+    const fields = buildLeadFormFields(agent.lead_form_fields)
+    return {
+      result:
+        'The contact form is now shown to the customer. Ask them to fill it in so the team can reach out. Once submitted, thank them warmly.',
+      showLeadForm: { fields },
     }
-
-    case 'submit_lead': {
-      if (!agent.lead_form_enabled) {
-        return { toolResult: 'Lead form is not enabled for this agent.' }
-      }
-      const args: SaveLeadArgs = {
-        tenantId: agent.tenant_id,
-        agentId: agent.id,
-        conversationId,
-        firstName: input.first_name,
-        lastName: input.last_name,
-        phone: input.phone,
-        email: input.email,
-        companyName: input.company_name,
-      }
-      const result = await saveLead(args)
-      return { toolResult: result }
-    }
-
-    case 'send_media': {
-      if (!agent.media_enabled) {
-        return { toolResult: 'Media is not enabled for this agent.' }
-      }
-      const item = await resolveMedia(agent.id, String(input.id_or_title || ''))
-      if (!item) {
-        return {
-          toolResult:
-            'No matching media found. Tell the customer you\'ll share it shortly and continue.',
-        }
-      }
-      return {
-        toolResult: `Sent "${item.title}" to the customer. Add a brief sentence introducing it.`,
-        widget: { type: 'media', item },
-      }
-    }
-
-    default:
-      return null // not a capability tool — let the engine handle it
   }
+
+  // send_media → resolve the item and return it for delivery
+  if (toolName === 'send_media') {
+    const idOrTitle = String(toolArgs.media || '')
+    const item = await resolveMedia(agent.id, idOrTitle)
+    if (!item) {
+      return { result: `Could not find that media item. Tell the customer you'll share it shortly.` }
+    }
+    return {
+      result: `Sending "${item.title}" to the customer now. Briefly introduce it in your reply.`,
+      media: item,
+    }
+  }
+
+  return null
+}
+
+// Save a lead form submission (called by the widget route when the
+// customer submits the form).
+export async function submitLeadForm(
+  agent: Agent,
+  conversationId: string,
+  values: Record<string, string>,
+): Promise<string> {
+  return saveLead({
+    tenantId: agent.tenant_id,
+    agentId: agent.id,
+    conversationId,
+    firstName: values.first_name,
+    lastName: values.last_name,
+    phone: values.phone,
+    email: values.email,
+    companyName: values.company_name,
+  })
 }

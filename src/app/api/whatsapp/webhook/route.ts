@@ -243,7 +243,8 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           contact,
           config.user_id,
           decryptedAccessToken,
-          phoneNumberId
+          phoneNumberId , config.ads_agent_enabled ?? false,
+      config.ads_agent_id ?? null,
         )
       }
     }
@@ -523,6 +524,8 @@ async function processMessage(
   userId: string,
   accessToken: string,
   phoneNumberId: string
+  adsAgentEnabled: boolean,
+  adsAgentId: string | null,
 ) {
   const senderPhone = normalizePhone(message.from)
   const contactName = contact.profile.name
@@ -635,6 +638,28 @@ async function processMessage(
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
   const inboundText = contentText ?? message.text?.body ?? ''
+
+// ── ADS AI MODULE (separate, sellable, gated per client) ──
+// If this client bought the ads agent AND this is an ad lead,
+// the AI module handles it and we SKIP the normal journey path.
+const referral = message.referral ?? null
+const isAdLead = !!(referral && (referral.source_id || referral.source_type === 'ad'))
+if (adsAgentEnabled && adsAgentId && isAdLead) {
+  const handled = await handleAdLead({
+    tenantId: userId,
+    agentId: adsAgentId,
+    conversationId: conversation.id,
+    contactId: contactRecord.id,
+    customerPhone: senderPhone,
+    contactName,
+    inboundText,
+    phoneNumberId,
+    accessToken,
+    referral: referral as MetaReferral,
+  })
+  if (handled) return   // AI answered — skip journeys + automations
+}
+
 
   // ── JOURNEY FIRST ──
   // The journey produces the customer-facing auto-reply, so we run it

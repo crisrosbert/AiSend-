@@ -1,7 +1,7 @@
 // src/app/api/widget/config/route.ts
 //
 // Public GET endpoint the widget.js calls on load to fetch appearance
-// + behavior settings. Identified by ?org=<user_id>.
+// + behavior settings. Identified by ?org=<user_id> and optional ?agent=<agent_id>.
 // Returns only safe, public fields (no secrets).
 
 import { NextResponse } from 'next/server'
@@ -32,22 +32,24 @@ export async function OPTIONS() {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
- const org = searchParams.get('org')
-const agent = searchParams.get('agent')
+    const org = searchParams.get('org')
+    const agent = searchParams.get('agent')
 
-let configQuery = db()
-  .from('widget_configs')
-  .select('*')
-  .eq('is_active', true)
+    let configQuery = db()
+      .from('widget_configs')
+      .select('*')
+      .eq('is_active', true)
 
-// Prefer resolving by agent_id (multi-agent). Fall back to org.
-if (agent) {
-  configQuery = configQuery.eq('agent_id', agent)
-} else {
-  configQuery = configQuery.eq('org_user_id', org)
-}
+    // Prefer resolving by agent_id (multi-agent). Fall back to the
+    // tenant's legacy null-agent row so org-only embeds still work
+    // even when multiple agent configs exist.
+    if (agent) {
+      configQuery = configQuery.eq('agent_id', agent)
+    } else {
+      configQuery = configQuery.eq('org_user_id', org).is('agent_id', null)
+    }
 
-const { data: config } = await configQuery.maybeSingle()
+    const { data: config } = await configQuery.maybeSingle()
 
     if (!config) {
       return NextResponse.json(

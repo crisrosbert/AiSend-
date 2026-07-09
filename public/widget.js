@@ -11,6 +11,7 @@
   // ── Read config from the script tag ──
   var scriptTag = document.currentScript ||
     document.querySelector('script[data-org]');
+  var AGENT_ID = script.getAttribute('data-agent') || null;
   if (!scriptTag) return;
 
   var ORG_ID = scriptTag.getAttribute('data-org');

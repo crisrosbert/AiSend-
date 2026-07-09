@@ -32,21 +32,22 @@ export async function OPTIONS() {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
-    const org = searchParams.get('org')
+ const org = searchParams.get('org')
+const agent = searchParams.get('agent')
 
-    if (!org) {
-      return NextResponse.json(
-        { error: 'org parameter required' },
-        { status: 400, headers: CORS },
-      )
-    }
+let configQuery = db()
+  .from('widget_configs')
+  .select('*')
+  .eq('is_active', true)
 
-    const { data: config } = await db()
-      .from('widget_configs')
-      .select('bot_name, bubble_message, welcome_message, primary_color, trigger_delay_seconds, business_phone, is_active')
-      .eq('org_user_id', org)
-      .eq('is_active', true)
-      .maybeSingle()
+// Prefer resolving by agent_id (multi-agent). Fall back to org.
+if (agent) {
+  configQuery = configQuery.eq('agent_id', agent)
+} else {
+  configQuery = configQuery.eq('org_user_id', org)
+}
+
+const { data: config } = await configQuery.maybeSingle()
 
     if (!config) {
       return NextResponse.json(

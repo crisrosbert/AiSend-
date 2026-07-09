@@ -272,8 +272,7 @@ const result = await runAgent({
         .eq('id', conversationId)
     }
 
-    // 8. Return reply
-// 8. Return reply
+   // 8. Return reply
     return NextResponse.json(
       {
         reply,
@@ -287,7 +286,8 @@ const result = await runAgent({
         business_phone: config.business_phone,
       },
       { headers: CORS },
-    ) catch (err) {
+    )
+  } catch (err) {
     console.error('[widget/message] error:', err)
     return NextResponse.json(
       { reply: 'Sorry, I had trouble there. Please try again.' },

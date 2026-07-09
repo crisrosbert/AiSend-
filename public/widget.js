@@ -1,5 +1,6 @@
 /* AiSend Website Chat Widget
- * Embed: <script src="https://app.performancemktg.net/widget.js" data-org="USER_ID"></script>
+ * Embed (single agent):  <script src=".../widget.js" data-org="USER_ID"></script>
+ * Embed (multi-agent):   <script src=".../widget.js" data-org="USER_ID" data-agent="AGENT_ID"></script>
  *
  * Renders a floating chat button, shows a notification bubble after a
  * delay, and opens an in-page chat panel powered by your AI agent.
@@ -11,18 +12,13 @@
   // ── Read config from the script tag ──
   var scriptTag = document.currentScript ||
     document.querySelector('script[data-org]');
-  var AISEND_SCRIPT = document.currentScript || (function () {
-  var tags = document.getElementsByTagName('script');
-  for (var i = tags.length - 1; i >= 0; i--) {
-    if (tags[i].src && tags[i].src.indexOf('widget.js') !== -1) return tags[i];
-  }
-  return tags[tags.length - 1];
-})();
-var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
   if (!scriptTag) return;
 
   var ORG_ID = scriptTag.getAttribute('data-org');
   if (!ORG_ID) { console.error('[AiSend] data-org is required'); return; }
+
+  // Optional agent id — when present, this widget runs a specific agent.
+  var AGENT_ID = scriptTag.getAttribute('data-agent') || null;
 
   // Derive API base from the script src
   var API_BASE = (function () {
@@ -34,8 +30,8 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
     }
   })();
 
-  // ── Visitor ID (persistent across sessions) ──
-  var VISITOR_KEY = 'aisend_visitor_' + ORG_ID;
+  // ── Visitor ID (persistent across sessions, per agent) ──
+  var VISITOR_KEY = 'aisend_visitor_' + ORG_ID + (AGENT_ID ? '_' + AGENT_ID : '');
   var visitorId = localStorage.getItem(VISITOR_KEY);
   if (!visitorId) {
     visitorId = 'v_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -55,8 +51,10 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
   var messages = []; // {role:'user'|'bot', text}
   var bubbleShown = false;
 
-  // ── Fetch config, then build UI ──
-  fetch(API_BASE + '/api/widget/config?org=' + encodeURIComponent(ORG_ID))
+  // ── Fetch config (by agent if provided, else org), then build UI ──
+  var configUrl = API_BASE + '/api/widget/config?org=' + encodeURIComponent(ORG_ID) +
+    (AGENT_ID ? '&agent=' + encodeURIComponent(AGENT_ID) : '');
+  fetch(configUrl)
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (c) {
       if (c) { for (var k in c) if (c[k] != null) config[k] = c[k]; }
@@ -66,13 +64,11 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
 
   function buildWidget() {
     injectStyles();
-
     // ── Floating button ──
     var btn = el('div', 'aisend-btn');
     btn.innerHTML = chatIcon();
     btn.onclick = togglePanel;
     document.body.appendChild(btn);
-
     // ── Notification bubble (after delay) ──
     setTimeout(function () {
       if (!isOpen && !bubbleShown) {
@@ -87,11 +83,9 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
         };
         bubble.onclick = function () { bubble.remove(); togglePanel(); };
         document.body.appendChild(bubble);
-        // auto-dismiss after 15s
         setTimeout(function () { if (bubble.parentNode) bubble.remove(); }, 15000);
       }
     }, (config.trigger_delay_seconds || 10) * 1000);
-
     // ── Chat panel (hidden initially) ──
     var panel = el('div', 'aisend-panel');
     panel.id = 'aisend-panel';
@@ -116,14 +110,11 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
         '<button class="aisend-send" id="aisend-send">' + sendIcon() + '</button>' +
       '</div>';
     document.body.appendChild(panel);
-
     document.getElementById('aisend-close').onclick = togglePanel;
     document.getElementById('aisend-send').onclick = sendMessage;
     document.getElementById('aisend-input').addEventListener('keypress', function (e) {
       if (e.key === 'Enter') sendMessage();
     });
-
-    // Set theme color
     document.documentElement.style.setProperty('--aisend-primary', config.primary_color);
   }
 
@@ -131,12 +122,9 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
     var panel = document.getElementById('aisend-panel');
     isOpen = !isOpen;
     panel.style.display = isOpen ? 'flex' : 'none';
-    // Remove any bubble
     var b = document.querySelector('.aisend-bubble');
     if (b) b.remove();
-
     if (isOpen && messages.length === 0) {
-      // Show welcome message
       addMessage('bot', config.welcome_message);
     }
     if (isOpen) {
@@ -152,15 +140,14 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
     var text = (input.value || '').trim();
     if (!text) return;
     input.value = '';
-
     addMessage('user', text);
     showTyping();
-
     fetch(API_BASE + '/api/widget/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         org_id: ORG_ID,
+        agent_id: AGENT_ID,
         visitor_id: visitorId,
         message: text,
         page_url: window.location.href,
@@ -171,7 +158,10 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
       .then(function (data) {
         hideTyping();
         addMessage('bot', data.reply || 'Sorry, please try again.');
-        // If handoff requested and we have a phone, show WhatsApp button
+        // Render any media the AI sent (images, PDFs, videos)
+        if (data.media && data.media.length > 0) {
+          data.media.forEach(function (m) { addMediaCard(m); });
+        }
         if (data.handoff && data.business_phone) {
           addWhatsAppButton(data.business_phone, text);
         }
@@ -188,6 +178,40 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
     var msg = el('div', 'aisend-msg aisend-msg-' + role);
     msg.innerHTML = '<div class="aisend-bubble-msg">' + esc(text) + '</div>';
     container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function addMediaCard(m) {
+    var container = document.getElementById('aisend-messages');
+    var card = el('div', 'aisend-media-card');
+    if (m.type === 'image') {
+      var img = document.createElement('img');
+      img.src = m.url; img.alt = m.title || ''; img.className = 'aisend-media-img';
+      img.onclick = function () { window.open(m.url, '_blank'); };
+      card.appendChild(img);
+      if (m.title) { var cap = el('div', 'aisend-media-cap'); cap.textContent = m.title; card.appendChild(cap); }
+    } else if (m.type === 'video') {
+      var vid = (m.url.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/) || [])[1];
+      var a = document.createElement('a');
+      a.href = m.url; a.target = '_blank'; a.className = 'aisend-media-video';
+      if (vid) {
+        var thumb = document.createElement('img');
+        thumb.src = 'https://img.youtube.com/vi/' + vid + '/hqdefault.jpg';
+        thumb.className = 'aisend-media-img';
+        a.appendChild(thumb);
+      }
+      var play = el('div', 'aisend-media-cap'); play.textContent = '▶ ' + (m.title || 'Watch video');
+      a.appendChild(play);
+      card.appendChild(a);
+    } else {
+      var a2 = document.createElement('a');
+      a2.href = m.url; a2.target = '_blank'; a2.className = 'aisend-media-file';
+      a2.innerHTML = '<span class="aisend-media-fileicon">📄</span>' +
+        '<span class="aisend-media-filetext">' + esc(m.title || 'Download') +
+        '<br><small>' + esc(m.type === 'pdf' ? 'PDF' : m.type) + ' • tap to open</small></span>';
+      card.appendChild(a2);
+    }
+    container.appendChild(card);
     container.scrollTop = container.scrollHeight;
   }
 
@@ -232,7 +256,6 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
   function sendIcon() {
     return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z" fill="#fff"/></svg>';
   }
-
   function injectStyles() {
     var css =
       ':root{--aisend-primary:' + config.primary_color + '}' +
@@ -259,7 +282,14 @@ var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
       '.aisend-msg-bot{align-self:flex-start}' +
       '.aisend-bubble-msg{padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}' +
       '.aisend-msg-user .aisend-bubble-msg{background:var(--aisend-primary);color:#fff;border-bottom-right-radius:4px}' +
-      '.aisend-msg-bot .aisend-bubble-msg{background:#fff;color:#222;border:1px solid #e5e9 ;border-bottom-left-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.05)}' +
+      '.aisend-msg-bot .aisend-bubble-msg{background:#fff;color:#222;border:1px solid #e5e9ee;border-bottom-left-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.05)}' +
+      '.aisend-media-card{align-self:flex-start;max-width:80%;margin:2px 0}' +
+      '.aisend-media-img{width:100%;border-radius:10px;cursor:pointer;display:block}' +
+      '.aisend-media-cap{font-size:12px;color:#555;margin-top:3px;padding:0 2px}' +
+      '.aisend-media-video{display:block;text-decoration:none}' +
+      '.aisend-media-file{display:flex;align-items:center;gap:10px;padding:12px;background:#fff;border:1px solid #e7ece9;border-radius:10px;text-decoration:none;color:#0c1f17}' +
+      '.aisend-media-fileicon{font-size:24px}' +
+      '.aisend-media-filetext{font-size:13px;font-weight:600;line-height:1.3}' +
       '.aisend-input-row{display:flex;padding:12px;gap:8px;border-top:1px solid #eef1f4;background:#fff}' +
       '.aisend-input{flex:1;border:1px solid #dde2e8;border-radius:22px;padding:10px 16px;font-size:14px;outline:none;font-family:inherit}' +
       '.aisend-input:focus{border-color:var(--aisend-primary)}' +

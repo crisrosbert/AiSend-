@@ -219,17 +219,18 @@ export async function POST(req: Request) {
     }
 
     // 6. Call the AI engine
-    const result = await runAgent({
-      tenantId: org_id,
-      orgId: null,
-      verticalConfigId: null,
-      conversationId,
-      contactId,
-      customerPhone: `web_${String(visitor_id).slice(0, 12)}`,
-      inboundText: message.trim(),
-      journeyId: config.journey_id ?? undefined,
-      systemPromptOverride: systemPrompt,
-    })
+const result = await runAgent({
+  tenantId: org_id,
+  orgId: null,
+  verticalConfigId: null,
+  conversationId,
+  contactId,
+  customerPhone: `web_${String(visitor_id).slice(0, 12)}`,
+  inboundText: message.trim(),
+  journeyId: config.journey_id ?? undefined,
+  systemPromptOverride: systemPrompt,
+  agentId: config.agent_id ?? undefined,
+})
 
     const aiFailed = !result.reply
     const reply =

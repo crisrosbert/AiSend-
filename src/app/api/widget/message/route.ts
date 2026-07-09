@@ -1,11 +1,10 @@
 // src/app/api/widget/message/route.ts
 //
 // Public endpoint the website widget POSTs visitor messages to.
-// No auth — identified by org_id + visitor_id.
-//
-// Hardened version: every insert is checked, errors are logged with a
-// clear label so failures show the exact cause in Vercel logs instead
-// of a cryptic "Cannot read properties of null".
+// Multi-agent: resolves the widget config by agent_id when the embed
+// provides data-agent; otherwise falls back to the tenant's legacy
+// (agent_id IS NULL) row. This keeps old org-only embeds (Kalosa)
+// working even when multiple agent configs exist for the same tenant.
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -36,7 +35,7 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}))
-    const { org_id, visitor_id, message, page_url, page_title } = body
+    const { org_id, agent_id, visitor_id, message, page_url, page_title } = body
 
     if (!org_id || !visitor_id || !message?.trim()) {
       return NextResponse.json(
@@ -45,13 +44,18 @@ export async function POST(req: Request) {
       )
     }
 
-    // 1. Load widget config
-    const { data: config, error: configErr } = await db()
+    // 1. Load widget config — by agent_id if provided, else the tenant's
+    //    legacy (null-agent) row. This prevents matching multiple rows.
+    let cfgQuery = db()
       .from('widget_configs')
       .select('*')
-      .eq('org_user_id', org_id)
       .eq('is_active', true)
-      .maybeSingle()
+    if (agent_id) {
+      cfgQuery = cfgQuery.eq('agent_id', agent_id)
+    } else {
+      cfgQuery = cfgQuery.eq('org_user_id', org_id).is('agent_id', null)
+    }
+    const { data: config, error: configErr } = await cfgQuery.maybeSingle()
 
     if (configErr) {
       console.error('[widget/message] config error:', configErr.message)
@@ -88,7 +92,6 @@ export async function POST(req: Request) {
     if (!conversationId) {
       const visitorPhone = `web_${String(visitor_id).slice(0, 12)}`
 
-      // Try to find an existing contact with this phone first (avoid dup)
       const { data: existingContact } = await db()
         .from('contacts')
         .select('id')
@@ -108,7 +111,6 @@ export async function POST(req: Request) {
           })
           .select('id')
           .single()
-
         if (contactErr || !contact) {
           console.error('[widget/message] CONTACT insert failed:', contactErr?.message, contactErr?.details)
           return NextResponse.json(
@@ -119,7 +121,6 @@ export async function POST(req: Request) {
         contactId = contact.id
       }
 
-      // Check for an existing open conversation for this contact
       const { data: existingConv } = await db()
         .from('conversations')
         .select('id')
@@ -140,7 +141,6 @@ export async function POST(req: Request) {
           })
           .select('id')
           .single()
-
         if (convErr || !conv) {
           console.error('[widget/message] CONVERSATION insert failed:', convErr?.message, convErr?.details)
           return NextResponse.json(
@@ -151,7 +151,6 @@ export async function POST(req: Request) {
         conversationId = conv.id
       }
 
-      // Upsert the widget session
       if (session?.id) {
         await db()
           .from('widget_sessions')
@@ -207,7 +206,8 @@ export async function POST(req: Request) {
       })
       .eq('id', conversationId)
 
-    // 5. Load persona for the linked journey
+    // 5. Load persona for the linked journey (legacy path). When an agent
+    //    is set, the engine loads the agent's own persona via agentId.
     let systemPrompt: string | undefined
     if (config.journey_id) {
       const { data: persona } = await db()
@@ -219,18 +219,18 @@ export async function POST(req: Request) {
     }
 
     // 6. Call the AI engine
-const result = await runAgent({
-  tenantId: org_id,
-  orgId: null,
-  verticalConfigId: null,
-  conversationId,
-  contactId,
-  customerPhone: `web_${String(visitor_id).slice(0, 12)}`,
-  inboundText: message.trim(),
-  journeyId: config.journey_id ?? undefined,
-  systemPromptOverride: systemPrompt,
-  agentId: config.agent_id ?? undefined,
-})
+    const result = await runAgent({
+      tenantId: org_id,
+      orgId: null,
+      verticalConfigId: null,
+      conversationId,
+      contactId,
+      customerPhone: `web_${String(visitor_id).slice(0, 12)}`,
+      inboundText: message.trim(),
+      journeyId: config.journey_id ?? undefined,
+      systemPromptOverride: systemPrompt,
+      agentId: config.agent_id ?? undefined,
+    })
 
     const aiFailed = !result.reply
     const reply =
@@ -256,8 +256,7 @@ const result = await runAgent({
       })
       .eq('id', conversationId)
 
-    // 7b. If the AI failed (empty reply) OR requested handoff, flag the
-    // conversation so the clinic sees it in the inbox and follows up.
+    // 7b. Flag for human follow-up if the AI failed or asked for handoff
     if (aiFailed || result.handoffRequested) {
       await db()
         .from('conversations')
@@ -272,11 +271,13 @@ const result = await runAgent({
         .eq('id', conversationId)
     }
 
-   // 8. Return reply
+    // 8. Return reply + any media the AI chose to send
     return NextResponse.json(
       {
         reply,
-        media: (result.mediaToSend || []).map((m) => ({
+        media: (result.mediaToSend || []).map((m: {
+          media_type: string; title: string; url: string; description: string | null
+        }) => ({
           type: m.media_type,
           title: m.title,
           url: m.url,

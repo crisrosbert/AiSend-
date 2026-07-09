@@ -6,7 +6,7 @@ import { normalizePhone, phonesMatch } from '@/lib/whatsapp/phone-utils'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { runJourneysForInbound } from '@/lib/journeys/runner'
-
+import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _adminClient: any = null
@@ -19,6 +19,26 @@ function supabaseAdmin() {
   }
   return _adminClient
 }
+
+interface WhatsAppMessage {
+  id: string
+  from: string
+  // ...existing fields... meta ads
+  context?: { id: string }
+  referral?: {
+    source_url?: string
+    source_id?: string
+    source_type?: string
+    headline?: string
+    body?: string
+    ctwa_clid?: string
+  }
+}
+
+
+
+
+
 
 interface WhatsAppMessage {
   id: string

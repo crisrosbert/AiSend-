@@ -11,7 +11,14 @@
   // ── Read config from the script tag ──
   var scriptTag = document.currentScript ||
     document.querySelector('script[data-org]');
-  var AGENT_ID = script.getAttribute('data-agent') || null;
+  var AISEND_SCRIPT = document.currentScript || (function () {
+  var tags = document.getElementsByTagName('script');
+  for (var i = tags.length - 1; i >= 0; i--) {
+    if (tags[i].src && tags[i].src.indexOf('widget.js') !== -1) return tags[i];
+  }
+  return tags[tags.length - 1];
+})();
+var AGENT_ID = AISEND_SCRIPT.getAttribute('data-agent') || null;
   if (!scriptTag) return;
 
   var ORG_ID = scriptTag.getAttribute('data-org');

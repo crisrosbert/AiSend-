@@ -273,15 +273,21 @@ const result = await runAgent({
     }
 
     // 8. Return reply
+// 8. Return reply
     return NextResponse.json(
       {
         reply,
+        media: (result.mediaToSend || []).map((m) => ({
+          type: m.media_type,
+          title: m.title,
+          url: m.url,
+          description: m.description,
+        })),
         handoff: result.handoffRequested,
         business_phone: config.business_phone,
       },
       { headers: CORS },
-    )
-  } catch (err) {
+    ) catch (err) {
     console.error('[widget/message] error:', err)
     return NextResponse.json(
       { reply: 'Sorry, I had trouble there. Please try again.' },

@@ -129,3 +129,66 @@ export async function filterOptedInContacts(
   }
   return { allowed, blocked }
 }
+
+/**
+ * PHONE-based broadcast guard (for routes that work with phone numbers
+ * rather than contactIds, like the WhatsApp broadcast route).
+ *
+ * Given the phones a user wants to broadcast to, returns which are
+ * allowed vs blocked. Strictness:
+ *   - mode 'block_opted_out' (default): blocks ONLY phones whose contact
+ *     is opted_out. Honors STOP (legally required) without breaking
+ *     sends to not-yet-tagged contacts.
+ *   - mode 'require_opted_in': allows ONLY phones whose contact is
+ *     opted_in. Strictest — use once your warm contacts are tagged.
+ *
+ * Matching is done on the raw phone plus its digits, to tolerate small
+ * format differences between the broadcast list and the contacts table.
+ */
+export async function filterBroadcastPhones(
+  userId: string,
+  phones: string[],
+  mode: 'block_opted_out' | 'require_opted_in' = 'block_opted_out',
+): Promise<{
+  allowed: string[]
+  blocked: { phone: string; reason: string }[]
+}> {
+  if (phones.length === 0) return { allowed: [], blocked: [] }
+
+  // Pull this user's contacts with their opt-in status.
+  const { data: rows, error } = await db()
+    .from('contacts')
+    .select('phone, opt_in_status')
+    .eq('user_id', userId)
+
+  if (error) {
+    // Fail closed only for the strict mode; for block_opted_out we can't
+    // safely block, so allow (STOP handling still happened at inbound).
+    if (mode === 'require_opted_in') {
+      return { allowed: [], blocked: phones.map((p) => ({ phone: p, reason: 'consent check failed' })) }
+    }
+    return { allowed: phones, blocked: [] }
+  }
+
+  const digits = (s: string) => (s || '').replace(/\D/g, '')
+  // Build a status map keyed by digit-only phone.
+  const statusByDigits = new Map<string, string>()
+  for (const r of (rows || []) as { phone: string; opt_in_status: string }[]) {
+    statusByDigits.set(digits(r.phone), r.opt_in_status)
+  }
+
+  const allowed: string[] = []
+  const blocked: { phone: string; reason: string }[] = []
+  for (const p of phones) {
+    const status = statusByDigits.get(digits(p)) // may be undefined (not a known contact)
+    if (mode === 'require_opted_in') {
+      if (status === 'opted_in') allowed.push(p)
+      else blocked.push({ phone: p, reason: `not opted in (${status ?? 'unknown'})` })
+    } else {
+      // block_opted_out
+      if (status === 'opted_out') blocked.push({ phone: p, reason: 'opted out' })
+      else allowed.push(p)
+    }
+  }
+  return { allowed, blocked }
+}

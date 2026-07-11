@@ -20,36 +20,15 @@ import {
   priceForCategory,
   deductCredits,
 } from '@/lib/billing/credits'
+import { filterBroadcastPhones } from '@/lib/optin/manager'
 
 interface BroadcastResult {
   phone: string
-  status: 'sent' | 'failed'
+  status: 'sent' | 'failed' | 'skipped'
   whatsapp_message_id?: string
   error?: string
 }
 
-/**
- * Two input shapes are accepted:
- *
- *   NEW (preferred — supports per-recipient variable substitution):
- *     {
- *       recipients: Array<{ phone: string; params: string[] }>,
- *       template_name, template_language
- *     }
- *
- *   LEGACY (all phones receive the same params — kept so existing
- *   callers don't break):
- *     {
- *       phone_numbers: string[],
- *       template_params: string[],
- *       template_name, template_language
- *     }
- *
- * Previous implementation only supported the legacy shape, and the
- * sending hook was forced to ship every batch with `templateParams[0]`
- * — meaning every recipient got contact-0's personalization. The new
- * shape is what actually fixes that.
- */
 interface NewRecipient {
   phone: string
   params?: string[]
@@ -58,24 +37,17 @@ interface NewRecipient {
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
-
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser()
-
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    // Per-user broadcast budget. Note: this limits how often a user
-    // can *start* a campaign, not how many messages go out inside
-    // one — the fan-out loop below runs without additional gating.
     const limit = checkRateLimit(`broadcast:${user.id}`, RATE_LIMITS.broadcast)
     if (!limit.success) {
       return rateLimitResponse(limit)
     }
-
     const body = await request.json()
     const {
       recipients: newRecipients,
@@ -84,8 +56,6 @@ export async function POST(request: Request) {
       template_language,
       template_params,
     } = body
-
-    // Normalize to a list of {phone, params} regardless of shape.
     let recipients: NewRecipient[]
     if (Array.isArray(newRecipients) && newRecipients.length > 0) {
       recipients = newRecipients
@@ -106,7 +76,6 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
-
     if (!template_name) {
       return NextResponse.json(
         { error: 'template_name is required' },
@@ -114,12 +83,43 @@ export async function POST(request: Request) {
       )
     }
 
+    // ── OPT-IN GUARD (compliance safety net) ──────────────────────
+    // Filter out recipients who have opted out (replied STOP). This is
+    // the legally-required, number-protecting step. Default mode blocks
+    // ONLY opted-out contacts so it won't accidentally block untagged
+    // contacts. To tighten to "opted-in only", change 'block_opted_out'
+    // to 'require_opted_in' below (do this once warm contacts are tagged).
+    const optinGuard = await filterBroadcastPhones(
+      user.id,
+      recipients.map((r) => r.phone),
+      'block_opted_out',
+    )
+    const blockedSet = new Set(optinGuard.blocked.map((b) => b.phone))
+    const skippedResults: BroadcastResult[] = optinGuard.blocked.map((b) => ({
+      phone: b.phone,
+      status: 'skipped',
+      error: `Skipped: ${b.reason}`,
+    }))
+    // Keep only recipients that passed the guard.
+    recipients = recipients.filter((r) => !blockedSet.has(r.phone))
+
+    if (recipients.length === 0) {
+      return NextResponse.json({
+        success: true,
+        total: skippedResults.length,
+        sent: 0,
+        failed: 0,
+        skipped: skippedResults.length,
+        results: skippedResults,
+        message: 'All recipients were skipped (opted out or not eligible).',
+      })
+    }
+
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
       .select('*')
       .eq('user_id', user.id)
       .single()
-
     if (configError || !config) {
       return NextResponse.json(
         {
@@ -129,18 +129,8 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
-
     const accessToken = decrypt(config.access_token)
 
-    // ── Wallet pre-flight ──────────────────────────────────────────
-    // Resolve the org + price per message (by template category) up
-    // front. We block the whole broadcast if the wallet can't cover at
-    // least one message — partial sends with a drained wallet are worse
-    // UX than a clean "top up" error. Per-message deduction still
-    // happens inside the loop (so a mid-broadcast failure doesn't
-    // charge for messages Meta rejected).
-    //
-    // service messages (price 0) skip all of this — nothing to charge.
     const orgId = await getOrgIdForUser(supabase, user.id)
     const category = await getTemplateCategory(
       supabase,
@@ -149,7 +139,6 @@ export async function POST(request: Request) {
       template_language || undefined,
     )
     const unitPrice = priceForCategory(category)
-
     if (unitPrice > 0) {
       if (!orgId) {
         return NextResponse.json(
@@ -176,15 +165,14 @@ export async function POST(request: Request) {
       }
     }
 
-    const results: BroadcastResult[] = []
+    // Start results with the skipped (opted-out) rows so the caller
+    // sees a full accounting of every phone they submitted.
+    const results: BroadcastResult[] = [...skippedResults]
     let sentCount = 0
     let failedCount = 0
     let totalCharged = 0
     let stoppedForCredits = false
-
     for (const recipient of recipients) {
-      // If a prior iteration drained the wallet, stop sending and mark
-      // the rest as failed rather than firing messages we can't bill.
       if (stoppedForCredits) {
         results.push({
           phone: recipient.phone,
@@ -194,9 +182,7 @@ export async function POST(request: Request) {
         failedCount++
         continue
       }
-
       const sanitized = sanitizePhoneForMeta(recipient.phone)
-
       if (!isValidE164(sanitized)) {
         results.push({
           phone: recipient.phone,
@@ -206,13 +192,9 @@ export async function POST(request: Request) {
         failedCount++
         continue
       }
-
-      // Retry with phone variants on "not in allowed list" so numbers
-      // that differ only in a trunk-prefix 0 still reach recipients.
       const variants = phoneVariants(sanitized)
       let sentMessageId: string | null = null
       let lastError: string | null = null
-
       for (const variant of variants) {
         try {
           const result = await sendTemplateMessage({
@@ -234,15 +216,9 @@ export async function POST(request: Request) {
             break
           }
           lastError = errorMessage
-          // retry with next variant
         }
       }
-
       if (sentMessageId) {
-        // Bill the wallet for this delivered message. We charge AFTER
-        // Meta accepted it, so rejected sends are never billed. If the
-        // debit fails for insufficient funds, the message already went
-        // out (we honor it) but we stop the rest of the broadcast.
         if (unitPrice > 0 && orgId) {
           const deb = await deductCredits(supabase, {
             orgId,
@@ -257,7 +233,6 @@ export async function POST(request: Request) {
             stoppedForCredits = true
           }
         }
-
         results.push({
           phone: recipient.phone,
           status: 'sent',
@@ -277,12 +252,12 @@ export async function POST(request: Request) {
         failedCount++
       }
     }
-
     return NextResponse.json({
       success: true,
-      total: recipients.length,
+      total: recipients.length + skippedResults.length,
       sent: sentCount,
       failed: failedCount,
+      skipped: skippedResults.length,
       results,
       billing: {
         category,

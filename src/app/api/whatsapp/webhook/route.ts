@@ -7,7 +7,7 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { runJourneysForInbound } from '@/lib/journeys/runner'
 import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
-
+import { handleInboundConsent } from '@/lib/optin/manager'
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _adminClient: any = null
@@ -514,7 +514,16 @@ async function processMessage(
   }
   await flagBroadcastReplyIfAny(userId, contactRecord.id)
   const inboundText = contentText ?? message.text?.body ?? ''
-
+// ── OPT-IN / OPT-OUT (compliance) ──
+// Honor STOP/START immediately. If the message was a consent
+// keyword, record it and stop — don't run agents/journeys on it.
+const consentHandled = await handleInboundConsent({
+  userId,
+  contactId: contactRecord.id,
+  phone: senderPhone,
+  inboundText,
+})
+if (consentHandled) return
   // ── ADS AI MODULE (separate, sellable, gated per client) ──
   // If this client bought the ads agent AND this is an ad lead, the AI
   // module handles it and we SKIP the normal journey/automation path.

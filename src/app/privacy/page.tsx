@@ -1,8 +1,8 @@
 import LegalShell from '../(marketing)/legal-shell'
 
 export const metadata = {
-  title: 'Privacy Policy — Clickstream WA',
-  description: 'How Clickstream WA collects, uses, and protects your data.',
+  title: 'Privacy Policy — AiSend',
+  description: 'How AiSend collects, uses, and protects your data.',
 }
 
 /**
@@ -18,7 +18,7 @@ export default function PrivacyPage() {
   return (
     <LegalShell title="Privacy Policy" subtitle="Last updated: June 2026">
       <p>
-        This Privacy Policy explains how <strong>Clickstream WA</strong> (&quot;Clickstream&quot;,
+        This Privacy Policy explains how <strong>AiSend</strong> (&quot;AiSend&quot;,
         &quot;we&quot;, &quot;us&quot;) collects, uses, shares, and protects information when you use our
         WhatsApp marketing and engagement platform (the &quot;Service&quot;) available at
         ai-send-henna.vercel.app and related domains. By using the Service, you agree to this Policy.
@@ -26,7 +26,7 @@ export default function PrivacyPage() {
 
       <h2>1. Who we are</h2>
       <p>
-        Clickstream WA provides software that lets businesses send and receive messages, run
+        AiSend provides software that lets businesses send and receive messages, run
         campaigns, automate replies, and manage customers on the WhatsApp Business Platform, using
         the Official WhatsApp Business API provided by Meta Platforms, Inc.
       </p>

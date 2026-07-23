@@ -18,7 +18,7 @@ import {
  * /api/whatsapp/profile (GET load, POST json update, POST multipart for
  * the photo). Lives inside the WhatsApp Config tab.
  *
- * Note: the bold DISPLAY NAME (e.g. "Clickstream") is set + approved in
+ * Note: the bold DISPLAY NAME (e.g. "AiSend") is set + approved in
  * Meta WhatsApp Manager, not here — Meta requires manual review for it.
  */
 

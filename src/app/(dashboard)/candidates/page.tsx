@@ -79,6 +79,9 @@ export default function CandidatesPage() {
   const [open, setOpen] = useState<Candidate | null>(null);
 
   const load = useCallback(async () => {
+    // Yield one microtask so setState is never called synchronously
+    // inside the mounting effect (avoids cascading-render warnings).
+    await Promise.resolve();
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
@@ -98,7 +101,11 @@ export default function CandidatesPage() {
     setLoading(false);
   }, [supabase, stage, niche]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Defer to a macrotask so no setState runs synchronously in the effect.
+    const t = setTimeout(() => { void load(); }, 0);
+    return () => clearTimeout(t);
+  }, [load]);
 
   // 🧠 AGENTIC CONCEPT — HUMAN AUTHORITY / OVERRIDE
   // The agent can screen and advance stages, but ONLY a human can set

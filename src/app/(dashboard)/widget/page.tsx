@@ -159,7 +159,7 @@ export default function WidgetSettingsPage() {
           {/* Embed code — most important, at top */}
           <Card title="Embed code" icon={<Copy className="size-4" />} accent="#10b981">
             <p className="text-xs text-slate-500 mb-2">
-              Paste this into your website's HTML, just before the closing &lt;/body&gt; tag.
+              Paste this into your website&apos;s HTML, just before the closing &lt;/body&gt; tag.
             </p>
             <div className="relative">
               <code className="block rounded-lg bg-[#0c1f17] p-3 pr-12 text-[11px] text-emerald-300 font-mono break-all">

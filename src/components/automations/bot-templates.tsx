@@ -139,7 +139,7 @@ export function BotTemplates({ onCreated }: { onCreated?: () => void }) {
   const [creatingId, setCreatingId] = useState<string | null>(null);
   const [createdIds, setCreatedIds] = useState<Set<string>>(new Set());
 
-  const useTemplate = async (tpl: BotTemplate) => {
+  const applyTemplate = async (tpl: BotTemplate) => {
     setCreatingId(tpl.id);
     try {
       const res = await fetch('/api/automations', {
@@ -243,7 +243,7 @@ export function BotTemplates({ onCreated }: { onCreated?: () => void }) {
                   Triggers on: {tpl.trigger_keywords.slice(0, 3).join(', ')}…
                 </p>
                 <button
-                  onClick={() => useTemplate(tpl)}
+                  onClick={() => applyTemplate(tpl)}
                   disabled={creatingId === tpl.id || created}
                   className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-colors disabled:opacity-60 ${
                     created

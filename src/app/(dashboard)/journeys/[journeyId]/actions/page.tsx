@@ -162,7 +162,7 @@ export default function ActionsPage() {
                 External actions
               </h2>
               <p className="mt-1 text-xs text-slate-500 max-w-xl">
-                Connect your AI agent to APIs. When a customer's intent matches the keywords,
+                Connect your AI agent to APIs. When a customer&apos;s intent matches the keywords,
                 this action fires and the response feeds back into the conversation.
               </p>
             </div>

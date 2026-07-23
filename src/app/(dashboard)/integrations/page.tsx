@@ -1,5 +1,9 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any --
+ * Integration configs are provider-specific JSON blobs; shapes are
+ * validated by each provider adapter, not statically. */
+
 import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -237,7 +241,7 @@ export default function IntegrationsPage() {
           }
           setConnections(map);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error loading connections:", err);
         setDbMode("local");
         loadLocalConnections();

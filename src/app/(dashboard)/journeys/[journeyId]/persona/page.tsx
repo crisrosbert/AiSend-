@@ -301,7 +301,7 @@ export default function PersonaPage() {
           <div className="border-t border-[#e7ece9] bg-amber-50 px-5 py-2.5">
             <p className="text-[11px] text-amber-700">
               <strong>Note:</strong> Editing raw mode overrides the compiled output from sections.
-              Switching back to Sections won't lose your raw edits, but Recompile will.
+              Switching back to Sections won&apos;t lose your raw edits, but Recompile will.
             </p>
           </div>
         </div>

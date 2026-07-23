@@ -1,27 +1,25 @@
 import type { Metadata, Viewport } from "next";
-import { Sora, Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const sora = Sora({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-});
-
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
+/**
+ * Fonts are loaded at runtime via <link> with display=swap instead of
+ * next/font/google. next/font downloads fonts from Google at BUILD
+ * time, which breaks `next build` on restricted CI networks and
+ * offline machines. The <link> approach never fails a build, and the
+ * CSS fallback stack in globals.css keeps text readable if the font
+ * CDN is unreachable at runtime.
+ */
+const FONTS_HREF =
+  "https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap";
 
 export const metadata: Metadata = {
   title: {
-    default: "Clickstream WA — WhatsApp CRM",
-    template: "%s — Clickstream WA",
+    default: "AiSend — WhatsApp CRM",
+    template: "%s — AiSend",
   },
   description:
-    "Clickstream WA — The smartest WhatsApp CRM for Indian businesses. Manage conversations, broadcast campaigns, and automate follow-ups.",
+    "AiSend — The smartest WhatsApp CRM for Indian businesses. Manage conversations, broadcast campaigns, and automate follow-ups.",
   robots: { index: false, follow: false },
   icons: { icon: [{ url: "/icon" }] },
 };
@@ -35,7 +33,16 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${sora.variable} ${jakarta.variable} h-full antialiased`}>
+    <html lang="en" className="h-full antialiased">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link rel="stylesheet" href={FONTS_HREF} />
+      </head>
       <body className="min-h-full bg-[#f4f7f5] text-[#0c1f17]" style={{ fontFamily: "var(--font-sans)" }}>
         {children}
         <Toaster

@@ -48,15 +48,28 @@ export async function GET() {
     }
 
     // Get whatsapp connection status for each org owner
-    const ownerIds = (orgs || []).map((o: any) => o.owner_id)
+    const ownerIds = (orgs || []).map((o: { owner_id: string }) => o.owner_id)
     const { data: waConfigs } = await supabase
       .from('whatsapp_config')
       .select('user_id, status, phone_number_id')
       .in('user_id', ownerIds)
 
     // Merge whatsapp status
-    const clients = (orgs || []).map((org: any) => {
-      const waConfig = waConfigs?.find((w: any) => w.user_id === org.owner_id)
+    type OrgRow = {
+      id: string
+      name: string | null
+      slug: string | null
+      plan: string | null
+      status: string | null
+      whatsapp_connected: boolean | null
+      created_at: string
+      owner_id: string
+      profiles?: { full_name: string | null; email: string | null } | null
+    }
+    type WaRow = { user_id: string; status: string | null; phone_number_id: string | null }
+
+    const clients = ((orgs || []) as unknown as OrgRow[]).map((org) => {
+      const waConfig = (waConfigs as WaRow[] | null)?.find((w) => w.user_id === org.owner_id)
       return {
         id: org.id,
         name: org.name,

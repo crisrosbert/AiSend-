@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Conversation } from "@/types";
 
@@ -22,9 +22,11 @@ export function useTotalUnread(): number {
   // events can adjust the total in O(1) without refetching.
   const countsRef = useRef<Map<string, number>>(new Map());
 
-  // Stable, unique channel name for THIS hook instance. Generated once.
+  // Stable, unique channel name for THIS hook instance. useId() is
+  // deterministic and render-pure (unlike Math.random() during render).
+  const instanceId = useId();
   const channelNameRef = useRef<string>(
-    `total-unread-${Math.random().toString(36).slice(2)}`,
+    `total-unread-${instanceId.replace(/[^a-zA-Z0-9_-]/g, "")}`,
   );
 
   useEffect(() => {

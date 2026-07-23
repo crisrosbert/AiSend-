@@ -8,6 +8,7 @@ import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { runJourneysForInbound } from '@/lib/journeys/runner'
 import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
 import { handleInboundConsent } from '@/lib/optin/manager'
+import { handleHiringLead } from '@/lib/hiring-agent/handler'
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _adminClient: any = null
@@ -20,7 +21,6 @@ function supabaseAdmin() {
   }
   return _adminClient
 }
-
 interface WhatsAppMessage {
   id: string
   from: string
@@ -46,7 +46,6 @@ interface WhatsAppMessage {
     ctwa_clid?: string
   }
 }
-
 interface WhatsAppWebhookEntry {
   id: string
   changes: Array<{
@@ -79,7 +78,6 @@ interface WhatsAppWebhookEntry {
     field: string
   }>
 }
-
 // GET - Webhook verification
 export async function GET(request: Request) {
   try {
@@ -149,7 +147,6 @@ export async function GET(request: Request) {
     )
   }
 }
-
 // POST - Receive messages
 export async function POST(request: Request) {
   const rawBody = await request.text()
@@ -171,7 +168,6 @@ export async function POST(request: Request) {
   }
   return NextResponse.json({ status: 'received' }, { status: 200 })
 }
-
 async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
   if (!body.entry) return
   for (const entry of body.entry) {
@@ -212,12 +208,13 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           phoneNumberId,
           config.ads_agent_enabled ?? false,
           config.ads_agent_id ?? null,
+          config.hiring_agent_enabled ?? false,
+          config.hiring_agent_id ?? null,
         )
       }
     }
   }
 }
-
 const RECIPIENT_STATUS_LADDER = [
   'pending',
   'sent',
@@ -242,7 +239,6 @@ function isValidStatusTransition(current: string, incoming: string): boolean {
   if (ci < 0) return true
   return ii > ci
 }
-
 async function handleTemplateStatusUpdate(value: {
   message_template_id?: number | string
   message_template_name?: string
@@ -299,7 +295,6 @@ async function handleTemplateStatusUpdate(value: {
     }
   }
 }
-
 async function handleStatusUpdate(status: {
   id: string
   status: string
@@ -337,7 +332,6 @@ async function handleStatusUpdate(status: {
     console.error('Error updating broadcast recipient status:', recUpdateErr)
   }
 }
-
 async function flagBroadcastReplyIfAny(userId: string, contactId: string) {
   try {
     const { data: recs, error } = await supabaseAdmin()
@@ -361,7 +355,6 @@ async function flagBroadcastReplyIfAny(userId: string, contactId: string) {
     console.error('flagBroadcastReplyIfAny failed:', err)
   }
 }
-
 async function lookupInternalIdByMetaId(
   metaId: string,
   conversationId: string
@@ -378,7 +371,6 @@ async function lookupInternalIdByMetaId(
   }
   return data?.id ?? null
 }
-
 async function handleReaction(
   message: WhatsAppMessage,
   conversationId: string,
@@ -425,7 +417,6 @@ async function handleReaction(
     console.error('[webhook] reaction upsert failed:', upsertError.message)
   }
 }
-
 async function processMessage(
   message: WhatsAppMessage,
   contact: { profile: { name: string }; wa_id: string },
@@ -434,6 +425,8 @@ async function processMessage(
   phoneNumberId: string,
   adsAgentEnabled: boolean,
   adsAgentId: string | null,
+  hiringAgentEnabled: boolean,
+  hiringAgentId: string | null,
 ) {
   const senderPhone = normalizePhone(message.from)
   const contactName = contact.profile.name
@@ -514,16 +507,16 @@ async function processMessage(
   }
   await flagBroadcastReplyIfAny(userId, contactRecord.id)
   const inboundText = contentText ?? message.text?.body ?? ''
-// ── OPT-IN / OPT-OUT (compliance) ──
-// Honor STOP/START immediately. If the message was a consent
-// keyword, record it and stop — don't run agents/journeys on it.
-const consentHandled = await handleInboundConsent({
-  userId,
-  contactId: contactRecord.id,
-  phone: senderPhone,
-  inboundText,
-})
-if (consentHandled) return
+  // ── OPT-IN / OPT-OUT (compliance) ──
+  // Honor STOP/START immediately. If the message was a consent keyword,
+  // record it and stop — don't run agents/journeys on it.
+  const consentHandled = await handleInboundConsent({
+    userId,
+    contactId: contactRecord.id,
+    phone: senderPhone,
+    inboundText,
+  })
+  if (consentHandled) return
   // ── ADS AI MODULE (separate, sellable, gated per client) ──
   // If this client bought the ads agent AND this is an ad lead, the AI
   // module handles it and we SKIP the normal journey/automation path.
@@ -541,6 +534,23 @@ if (consentHandled) return
       phoneNumberId,
       accessToken,
       referral: referral as MetaReferral,
+    })
+    if (handled) return
+  }
+  // ── HIRING AGENT MODULE ──
+  // PERCEPTION + ARBITRATION: if this number is running a hiring campaign,
+  // candidate messages go to the recruiter agent instead of the sales flows.
+  if (hiringAgentEnabled && hiringAgentId) {
+    const handled = await handleHiringLead({
+      tenantId: userId,
+      agentId: hiringAgentId,
+      conversationId: conversation.id,
+      contactId: contactRecord.id,
+      customerPhone: senderPhone,
+      contactName,
+      inboundText,
+      phoneNumberId,
+      accessToken,
     })
     if (handled) return
   }
@@ -582,7 +592,6 @@ if (consentHandled) return
     ),
   )
 }
-
 async function parseMessageContent(
   message: WhatsAppMessage,
   accessToken: string
@@ -646,14 +655,12 @@ async function parseMessageContent(
       return { contentText: `[Unsupported message type: ${message.type}]`, mediaUrl: null, mediaType: null }
   }
 }
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ContactRow = any
 interface ContactOutcome {
   contact: ContactRow
   wasCreated: boolean
 }
-
 async function findOrCreateContact(
   userId: string,
   phone: string,
@@ -688,7 +695,6 @@ async function findOrCreateContact(
   }
   return { contact: newContact, wasCreated: true }
 }
-
 async function findOrCreateConversation(userId: string, contactId: string) {
   const { data: existing, error: findError } = await supabaseAdmin()
     .from('conversations')

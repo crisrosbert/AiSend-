@@ -39,7 +39,7 @@ export default function LegalShell({
         <div className="ls-wrap" style={{ maxWidth: 1180, display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: INK }}>
             <div style={{ width: 32, height: 32, borderRadius: 9, background: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700 }}>C</div>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>Clickstream <span style={{ color: BRAND }}>WA</span></span>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>AiSend <span style={{ color: BRAND }}>WA</span></span>
           </Link>
           <Link href="/" style={{ color: '#46584f', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>← Back to home</Link>
         </div>
@@ -61,7 +61,7 @@ export default function LegalShell({
       {/* footer */}
       <footer style={{ borderTop: '1px solid #eef2f0', padding: '28px 0' }}>
         <div className="ls-wrap" style={{ maxWidth: 1180, display: 'flex', flexWrap: 'wrap', gap: 18, justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#9aa8a0' }}>
-          <span>© {new Date().getFullYear()} Clickstream WA. Made in India.</span>
+          <span>© {new Date().getFullYear()} AiSend. Made in India.</span>
           <span style={{ display: 'flex', gap: 22 }}>
             <Link href="/privacy" style={{ color: '#46584f', textDecoration: 'none' }}>Privacy</Link>
             <Link href="/terms" style={{ color: '#46584f', textDecoration: 'none' }}>Terms</Link>

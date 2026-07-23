@@ -37,7 +37,7 @@ export default function ContactPage() {
           </div>
           <div style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 18 }}>
             <div style={{ fontSize: 13, color: '#6b7c73', marginBottom: 4 }}>Business</div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>Clickstream WA</div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>AiSend</div>
             <div style={{ fontSize: 13, color: '#6b7c73', marginTop: 2 }}>India</div>
           </div>
         </div>

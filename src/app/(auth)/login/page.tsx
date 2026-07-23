@@ -45,7 +45,7 @@ export default function LoginPage() {
             <MessageSquare className="h-5 w-5 text-white" />
           </div>
           <span className="font-display text-xl font-700 text-white tracking-tight">
-            Clickstream <span className="text-emerald-400">WA</span>
+            AiSend <span className="text-emerald-400">WA</span>
           </span>
         </div>
 
@@ -83,7 +83,7 @@ export default function LoginPage() {
         {/* Bottom */}
         <div className="relative">
           <p className="text-sm text-slate-600">
-            © 2026 Clickstream Performance Marketing. All rights reserved.
+            © 2026 AiSend Performance Marketing. All rights reserved.
           </p>
         </div>
       </div>
@@ -97,7 +97,7 @@ export default function LoginPage() {
               <MessageSquare className="h-5 w-5 text-white" />
             </div>
             <span className="font-display text-xl font-700 text-white">
-              Clickstream <span className="text-emerald-400">WA</span>
+              AiSend <span className="text-emerald-400">WA</span>
             </span>
           </div>
 

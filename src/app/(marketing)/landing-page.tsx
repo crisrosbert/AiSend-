@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 /**
- * Clickstream WA — public marketing landing page (v2).
+ * AiSend — public marketing landing page (v2).
  *
  * Original design (not a clone of any reference site). Premium dark
  * forest-green aesthetic with a warm-cream card accent, highlighted
@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react'
  * multi-city presence row. Fully responsive.
  *
  * Data source: WE3 Media (performancemktg.net) — the operating company
- * behind Clickstream WA. Only verifiable facts (contact, offices, stated
+ * behind AiSend. Only verifiable facts (contact, offices, stated
  * stats, WhatsApp focus) are used. Testimonials are clearly marked
  * placeholders to fill with real quotes — no invented proof.
  */
@@ -89,7 +89,7 @@ export default function LandingPage() {
             <div style={{ width: 34, height: 34, borderRadius: 9, background: LEAF, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(26,162,96,.4)' }}>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 2a10 10 0 0 0-8.5 15.3L2 22l4.8-1.5A10 10 0 1 0 12 2Z" fill="#fff" /></svg>
             </div>
-            <span className="disp" style={{ fontSize: 19, fontWeight: 800, color: '#fff' }}>Clickstream <span style={{ color: LEAF_BRIGHT }}>WA</span></span>
+            <span className="disp" style={{ fontSize: 19, fontWeight: 800, color: '#fff' }}>AiSend <span style={{ color: LEAF_BRIGHT }}>WA</span></span>
           </div>
           <nav className="navlinks">
             {[['Features', '#features'], ['How it works', '#how'], ['Why us', '#why'], ['Pricing', '#pricing']].map(([l, h]) => (
@@ -111,7 +111,7 @@ export default function LandingPage() {
               Turn WhatsApp chats into <span className="hl">paid orders.</span>
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.6, color: '#cfe5db', margin: '0 0 30px', maxWidth: 520 }}>
-              Broadcast offers, automate replies, and collect payments on the number your customers already message. Clickstream WA is the WhatsApp growth engine for Indian businesses — by the team at WE3 Media.
+              Broadcast offers, automate replies, and collect payments on the number your customers already message. AiSend is the WhatsApp growth engine for Indian businesses — by the team at WE3 Media.
             </p>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 28 }}>
               <Link href="/signup" className="btn btn-bright">Start free trial →</Link>
@@ -170,7 +170,7 @@ export default function LandingPage() {
             A late reply is a <span style={{ color: LEAF }}>lost sale.</span>
           </h2>
           <p style={{ fontSize: 18, lineHeight: 1.7, color: '#46584f', margin: 0 }}>
-            Your customer messaged ready to buy. You were busy — packing orders, with a client, on a call. By the time you replied, they bought from whoever answered first. Clickstream WA answers every message the moment it arrives, sends offers to thousands at once, and collects payment right inside the chat.
+            Your customer messaged ready to buy. You were busy — packing orders, with a client, on a call. By the time you replied, they bought from whoever answered first. AiSend answers every message the moment it arrives, sends offers to thousands at once, and collects payment right inside the chat.
           </p>
         </div>
       </section>
@@ -228,7 +228,7 @@ export default function LandingPage() {
       <section id="why" className="sec" style={{ padding: '80px 0', background: FOREST, color: '#fff' }}>
         <div className="w" style={{ maxWidth: 880 }}>
           <div style={{ textAlign: 'center', marginBottom: 38 }}>
-            <span className="pill" style={{ marginBottom: 14 }}>Why Clickstream WA</span>
+            <span className="pill" style={{ marginBottom: 14 }}>Why AiSend</span>
             <h2 className="disp" style={{ fontSize: 34, fontWeight: 800, margin: 0 }}>Built by marketers, not just coders</h2>
             <p style={{ fontSize: 16, color: '#bfe0d2', margin: '12px auto 0', maxWidth: 560 }}>
               Backed by WE3 Media — 10+ years running performance campaigns for 100+ businesses. You get the software and a team that knows how to sell.
@@ -236,7 +236,7 @@ export default function LandingPage() {
           </div>
           <div style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 16, overflow: 'hidden' }}>
             <div className="cmp-row" style={{ padding: '14px 18px', fontSize: 13, fontWeight: 700, color: '#9cc4b4', borderBottom: '1px solid rgba(255,255,255,.1)' }}>
-              <div>What matters</div><div style={{ textAlign: 'center', color: LEAF_BRIGHT }}>Clickstream WA</div><div style={{ textAlign: 'center' }}>Generic tools</div>
+              <div>What matters</div><div style={{ textAlign: 'center', color: LEAF_BRIGHT }}>AiSend</div><div style={{ textAlign: 'center' }}>Generic tools</div>
             </div>
             {[
               'Official WhatsApp Business API',
@@ -339,7 +339,7 @@ export default function LandingPage() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
               <div style={{ width: 30, height: 30, borderRadius: 8, background: LEAF, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800 }}>C</div>
-              <span className="disp" style={{ fontSize: 17, fontWeight: 800, color: '#fff' }}>Clickstream WA</span>
+              <span className="disp" style={{ fontSize: 17, fontWeight: 800, color: '#fff' }}>AiSend</span>
             </div>
             <p style={{ fontSize: 13.5, lineHeight: 1.6, margin: 0, color: '#9cc4b4', maxWidth: 300 }}>
               WhatsApp marketing & engagement for Indian businesses. A product by WE3 Media. Built on the Official WhatsApp Business API.
@@ -369,7 +369,7 @@ export default function LandingPage() {
         </div>
         <div className="w" style={{ marginTop: 34, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,.1)', fontSize: 12.5, color: '#7fa899', display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' }}>
           <span>© {new Date().getFullYear()} WE3 Media. All rights reserved.</span>
-          <span>WhatsApp is a trademark of Meta Platforms, Inc. Clickstream WA is an independent product.</span>
+          <span>WhatsApp is a trademark of Meta Platforms, Inc. AiSend is an independent product.</span>
         </div>
       </footer>
     </div>

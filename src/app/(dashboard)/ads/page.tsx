@@ -140,7 +140,7 @@ export default function AdsAgentPage() {
       <div>
         <h3 className="text-sm font-bold text-[#0c1f17] mb-3">Ad leads ({leads.length})</h3>
         {leads.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#e7ece9] bg-white p-8 text-center text-sm text-slate-400">No ad leads yet. They'll appear here once your ads are live.</div>
+          <div className="rounded-2xl border border-dashed border-[#e7ece9] bg-white p-8 text-center text-sm text-slate-400">No ad leads yet. They&apos;ll appear here once your ads are live.</div>
         ) : (
           <div className="space-y-2">
             {leads.map((l) => (

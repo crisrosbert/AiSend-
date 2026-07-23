@@ -218,7 +218,7 @@ export default function SignupPage() {
               <Input
                 id="businessName"
                 type="text"
-                placeholder="Clickstream Marketing"
+                placeholder="AiSend Marketing"
                 value={businessName}
                 onChange={(e) => handleBusinessNameChange(e.target.value)}
                 required

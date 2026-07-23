@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   Users, CheckCircle, XCircle, MessageSquare,
@@ -22,7 +22,6 @@ interface Client {
 
 export default function AdminPage() {
   const [clients, setClients] = useState<Client[]>([]);
-  const [filtered, setFiltered] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -61,7 +60,6 @@ export default function AdminPage() {
 
       if (!orgs || orgs.length === 0) {
         setClients([]);
-        setFiltered([]);
         setLoading(false);
         return;
       }
@@ -98,22 +96,20 @@ export default function AdminPage() {
       });
 
       setClients(clientList);
-      setFiltered(clientList);
       setLoading(false);
     })();
   }, []);
 
-  useEffect(() => {
+  // Derived data — computed during render instead of via a state-sync
+  // effect (avoids a cascading re-render on every search keystroke).
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    setFiltered(
-      !q
-        ? clients
-        : clients.filter(
-            (c) =>
-              c.name?.toLowerCase().includes(q) ||
-              c.email?.toLowerCase().includes(q) ||
-              c.slug?.toLowerCase().includes(q)
-          )
+    if (!q) return clients;
+    return clients.filter(
+      (c) =>
+        c.name?.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q) ||
+        c.slug?.toLowerCase().includes(q)
     );
   }, [search, clients]);
 
@@ -165,7 +161,7 @@ export default function AdminPage() {
             </div>
             <div>
               <h1 className="text-lg font-semibold">Admin Dashboard</h1>
-              <p className="text-xs text-slate-400">Clickstream WA — Client Management</p>
+              <p className="text-xs text-slate-400">AiSend — Client Management</p>
             </div>
           </div>
           <button

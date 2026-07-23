@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any --
+ * Node config drafts are schema-less by design: each node type
+ * stores different keys, validated server-side on save. */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -18,10 +21,14 @@ interface NodeConfigDrawerProps {
 
 export function NodeConfigDrawer({ node, open, onClose, onSave }: NodeConfigDrawerProps) {
   const [draft, setDraft] = useState<Record<string, any>>({});
-
-  useEffect(() => {
-    if (node) setDraft({ ...node.data });
-  }, [node]);
+  // Reset the draft when a different node is selected. Adjusting state
+  // during render (instead of in an effect) avoids an extra re-render
+  // and the react-hooks/set-state-in-effect lint error.
+  const [prevNodeId, setPrevNodeId] = useState<string | null>(null);
+  if (node && node.id !== prevNodeId) {
+    setPrevNodeId(node.id);
+    setDraft({ ...node.data });
+  }
 
   if (!node) return null;
 

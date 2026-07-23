@@ -15,8 +15,8 @@
   --brand-50:#ecfdf5;
   --brand-100:#d1fae5;
   --radius:0.75rem;
-  --font-display: var(--font-display, 'Sora', sans-serif);
-  --font-sans: var(--font-sans, 'Plus Jakarta Sans', sans-serif);
+  --font-display: 'Sora', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
 @theme inline {

@@ -122,7 +122,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <Link
             href={href("dashboard")}
             className="flex items-center justify-center"
-            title="Clickstream WA"
+            title="AiSend"
           >
             {/* AiSensy-style lightning bolt logo mark */}
             <div

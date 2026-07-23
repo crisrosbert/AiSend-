@@ -533,7 +533,7 @@ function CanvasInner() {
                               }}
                               className="w-full text-left rounded-lg px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 truncate block font-medium"
                             >
-                              "{pText}"
+                              &quot;{pText}&quot;
                             </button>
                           ))}
                         </div>
@@ -764,15 +764,16 @@ function InlineDrawerOverlayConfig({
   const [tagName, setTagName] = useState("");
   const [endpoint, setEndpoint] = useState("");
   const [method, setMethod] = useState("POST");
-
-  useEffect(() => {
-    if (node) {
-      setText((node.data?.text as string) || "");
-      setTagName((node.data?.tagName as string) || "");
-      setEndpoint((node.data?.endpoint as string) || "");
-      setMethod((node.data?.method as string) || "POST");
-    }
-  }, [node]);
+  // Reset fields when a different node is selected — done during
+  // render (React's recommended pattern) instead of via an effect.
+  const [prevNodeId, setPrevNodeId] = useState<string | null>(null);
+  if (node && node.id !== prevNodeId) {
+    setPrevNodeId(node.id);
+    setText((node.data?.text as string) || "");
+    setTagName((node.data?.tagName as string) || "");
+    setEndpoint((node.data?.endpoint as string) || "");
+    setMethod((node.data?.method as string) || "POST");
+  }
 
   if (!open || !node) return null;
 

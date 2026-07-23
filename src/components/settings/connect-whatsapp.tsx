@@ -23,9 +23,18 @@ import { Card, CardContent } from '@/components/ui/card'
  * is correct and goes live unchanged once Meta approves.
  */
 
+type FBLoginResponse = { authResponse?: { code?: string } }
+type FBSdk = {
+  init: (opts: Record<string, unknown>) => void
+  login: (
+    cb: (response: FBLoginResponse) => void,
+    opts?: Record<string, unknown>,
+  ) => void
+}
+
 declare global {
   interface Window {
-    FB?: any
+    FB?: FBSdk
     fbAsyncInit?: () => void
   }
 }
@@ -65,7 +74,7 @@ export function ConnectWhatsApp({ onConnected }: { onConnected?: () => void }) {
       setSdkReady(true)
     } else {
       window.fbAsyncInit = () => {
-        window.FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: 'v21.0' })
+        window.FB?.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: 'v21.0' })
         setSdkReady(true)
       }
       const id = 'facebook-jssdk'
@@ -91,7 +100,7 @@ export function ConnectWhatsApp({ onConnected }: { onConnected?: () => void }) {
     sessionInfo.current = {}
 
     window.FB.login(
-      (response: any) => {
+      (response: FBLoginResponse) => {
         const code = response?.authResponse?.code
         if (!code) {
           setWorking(false)

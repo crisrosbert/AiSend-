@@ -100,7 +100,7 @@ export function CreditsPurchaseModal({ open, onClose, currentBalance, onSuccess 
           key: data.keyId,
           amount: data.order.amount,
           currency: data.order.currency,
-          name: "Clickstream WA",
+          name: "AiSend",
           description: `Conversation credits recharge ₹${amount}`,
           order_id: data.order.id,
           theme: { color: "#16a34a" },

@@ -224,7 +224,7 @@ export default function BrainPage() {
             </h2>
             <p className="mt-1 text-xs text-slate-500 max-w-xl">
               Add files, URLs, and FAQ pairs your AI agent can reference when replying.
-              These ground the agent's answers in your actual business content.
+              These ground the agent&apos;s answers in your actual business content.
             </p>
           </div>
         </div>
@@ -322,7 +322,7 @@ export default function BrainPage() {
               </Field>
               <p className="text-[11px] text-amber-600 flex items-center gap-1.5">
                 <AlertCircle className="size-3" />
-                URL crawling happens in background — status will show "Processing" until ready.
+                URL crawling happens in background — status will show &quot;Processing&quot; until ready.
               </p>
             </div>
           )}

@@ -47,15 +47,12 @@ export default function DashboardPage() {
   const { profile } = useAuth();
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null);
   const [activity, setActivity] = useState<ActivityItem[] | null>(null);
-  const [series, setSeries] = useState<ConversationsSeriesPoint[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [series, setSeries] = useState<ConversationsSeriesPoint[] | null>(null); const [loading, setLoading] = useState(true); 
+  // Real WhatsApp connection state for THIS user (was hardcoded before). const [waConfig, setWaConfig] = useState<WaConfigState | null>(null);
+  
 
-  useEffect(() => {
-    const db = createClient();
-    void loadMetrics(db).then(setMetrics).catch(console.error).finally(() => setLoading(false));
-    void loadActivity(db, 6).then(setActivity).catch(console.error);
-    void loadConversationsSeries(db, 7).then(setSeries).catch(console.error);
-  }, []);
+useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetrics).catch(console.error).finally(() => setLoading(false)); void loadActivity(db, 6).then(setActivity).catch(console.error); void loadConversationsSeries(db, 7).then(setSeries).catch(console.error); // Fetch this user's own WhatsApp config — never show another tenant's. void fetch("/api/whatsapp/config") .then((r) => r.json()) .then((j: WaConfigState) => setWaConfig(j)) .catch(console.error); }, []);
+                 
 
   const businessName = profile?.business_name || "Your Business";
   const incomingSpark = series?.map((s) => s.incoming) ?? [];

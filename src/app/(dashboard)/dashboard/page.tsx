@@ -54,7 +54,7 @@ export default function DashboardPage() {
 useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetrics).catch(console.error).finally(() => setLoading(false)); void loadActivity(db, 6).then(setActivity).catch(console.error); void loadConversationsSeries(db, 7).then(setSeries).catch(console.error); // Fetch this user's own WhatsApp config — never show another tenant's. void fetch("/api/whatsapp/config") .then((r) => r.json()) .then((j: WaConfigState) => setWaConfig(j)) .catch(console.error); }, []);
                  
 
-  const businessName = profile?.business_name || "Your Business";
+  const businessName = profile?.business_name || "Your Business"; const waConnected = waConfig?.connected === true; const waPhone = waConfig?.phone_info?.display_phone_number; const waQuality = waConfig?.phone_info?.quality_rating;
   const incomingSpark = series?.map((s) => s.incoming) ?? [];
   const outgoingSpark = series?.map((s) => s.outgoing) ?? [];
 
@@ -96,18 +96,38 @@ useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetric
       <div className="cwa-grid">
         {/* LEFT */}
         <div className="cwa-left">
-          <div className="cwa-card cwa-stats cwa-fade cwa-d2">
-            <div className="cwa-stat"><span className="cwa-stat-label">API Status</span><span className="cwa-badge cwa-badge-green">● LIVE</span></div>
-            <div className="cwa-stat"><span className="cwa-stat-label">Quality Rating</span><span className="cwa-badge cwa-badge-green">HIGH</span></div>
-            <div className="cwa-stat"><span className="cwa-stat-label">Messaging Limit</span><span className="cwa-stat-big">1K</span></div>
-            <div className="cwa-stat"><span className="cwa-stat-label">Quota Left</span><span className="cwa-stat-big">250</span></div>
-          </div>
+        <div className="cwa-card cwa-stats cwa-fade cwa-d2">
+        <div className="cwa-stat">
+          <span className="cwa-stat-label">API Status</span>
+          {waConfig === null ? (
+            <span className="cwa-badge cwa-badge-muted">CHECKING…</span>
+          ) : waConnected ? (
+            <span className="cwa-badge cwa-badge-green">● LIVE</span>
+          ) : (
+            <span className="cwa-badge cwa-badge-red">NOT CONNECTED</span>
+          )}
+        </div>
+        <div className="cwa-stat">
+          <span className="cwa-stat-label">Quality Rating</span>
+          <span className={`cwa-badge ${waQuality ? "cwa-badge-green" : "cwa-badge-muted"}`}>
+            {waQuality ?? "—"}
+          </span>
+        </div>
+        <div className="cwa-stat">
+          <span className="cwa-stat-label">Messaging Limit</span>
+          <span className="cwa-stat-big">{waConnected ? "1K" : "—"}</span>
+        </div>
+        <div className="cwa-stat">
+          <span className="cwa-stat-label">Conversations</span>
+          <span className="cwa-stat-big">{metrics?.messagesSentToday.current ?? 0}</span>
+        </div>
+      </div>
 
           <div className="cwa-card cwa-steps-card cwa-fade cwa-d3">
             <div className="cwa-steps-head"><Crown size={20} className="cwa-bag" /><h3>Complete the steps &amp; win 200 Conversation Credits</h3></div>
             <div className="cwa-steps">
               <div className="cwa-track"><div className="cwa-track-fill" /></div>
-              <Step state="done" title="Get API Live" />
+             <Step state={waConnected ? "done" : "pending"} title="Get API Live" />
               <Step state="pending" title="Business Verified" desc="KYC" />
               <Step state="pending" title="Recharge Credits" />
               <Step state="pending" title="Spend ₹500" />
@@ -170,7 +190,9 @@ useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetric
             <div className="cwa-profile-pic">{businessName.charAt(0).toUpperCase()}</div>
             <div className="cwa-profile-meta">
               <div className="cwa-ptag">{businessName.toUpperCase()}</div>
-              <div className="cwa-num">+91 87964 37535</div>
+           <div className="cwa-num">
+            {waPhone ?? (waConfig === null ? "…" : "Not connected")}
+          </div>
               <small>wa.clickstream.com/{profile?.slug || "yourbiz"}</small>
             </div>
           </div>

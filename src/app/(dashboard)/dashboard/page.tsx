@@ -1,5 +1,13 @@
 "use client";
 
+// src/app/(dashboard)/dashboard/page.tsx
+//
+// PURPOSE: The tenant dashboard. Every number and status shown here MUST
+// belong to the logged-in user. An earlier version hardcoded the WhatsApp
+// number, "LIVE" status, quality rating and quota — which meant a brand new
+// signup saw another tenant's phone number and believed their API was
+// connected when it wasn't. This version fetches the real per-user config.
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +23,22 @@ import {
   BarChart3, Radio, Megaphone, Headphones, Bot, Link2, Bell, FileText,
   Target, Inbox,
 } from "lucide-react";
+
+/**
+ * Shape returned by GET /api/whatsapp/config.
+ * That route is already correctly scoped (.eq('user_id', user.id)), so
+ * whatever it returns is guaranteed to belong to the current tenant.
+ */
+interface WaConfigState {
+  connected: boolean;
+  reason?: string;
+  message?: string;
+  phone_info?: {
+    display_phone_number?: string;
+    verified_name?: string;
+    quality_rating?: string;
+  };
+}
 
 /* Tiny inline sparkline — pure SVG, no deps */
 function Sparkline({ data, color }: { data: number[]; color: string }) {
@@ -42,29 +66,42 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
     </svg>
   );
 }
-/** Shape returned by GET /api/whatsapp/config */
-interface WaConfigState {
-  connected: boolean;
-  reason?: string;
-  message?: string;
-  phone_info?: {
-    display_phone_number?: string;
-    verified_name?: string;
-    quality_rating?: string;
-  };
-}
+
 export default function DashboardPage() {
   const { profile } = useAuth();
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null);
   const [activity, setActivity] = useState<ActivityItem[] | null>(null);
-  const [series, setSeries] = useState<ConversationsSeriesPoint[] | null>(null); const [loading, setLoading] = useState(true); 
-  // Real WhatsApp connection state for THIS user (was hardcoded before). const [waConfig, setWaConfig] = useState<WaConfigState | null>(null);
-  
+  const [series, setSeries] = useState<ConversationsSeriesPoint[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  // null = still loading. Distinguishing "loading" from "not connected"
+  // matters: we must never flash a wrong status to the user.
+  const [waConfig, setWaConfig] = useState<WaConfigState | null>(null);
 
-useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetrics).catch(console.error).finally(() => setLoading(false)); void loadActivity(db, 6).then(setActivity).catch(console.error); void loadConversationsSeries(db, 7).then(setSeries).catch(console.error); // Fetch this user's own WhatsApp config — never show another tenant's. void fetch("/api/whatsapp/config") .then((r) => r.json()) .then((j: WaConfigState) => setWaConfig(j)) .catch(console.error); }, []);
-                 
+  useEffect(() => {
+    const db = createClient();
+    void loadMetrics(db).then(setMetrics).catch(console.error).finally(() => setLoading(false));
+    void loadActivity(db, 6).then(setActivity).catch(console.error);
+    void loadConversationsSeries(db, 7).then(setSeries).catch(console.error);
+    // Fetch THIS user's WhatsApp config. The API route scopes by user_id,
+    // so a new tenant with no config correctly gets { connected: false }.
+    void fetch("/api/whatsapp/config")
+      .then((r) => r.json())
+      .then((j: WaConfigState) => setWaConfig(j))
+      .catch((err) => {
+        console.error("[dashboard] whatsapp config fetch failed:", err);
+        // Fail safe: treat as not connected rather than leaving it loading
+        // forever (a permanent "CHECKING…" looks broken).
+        setWaConfig({ connected: false, reason: "fetch_failed" });
+      });
+  }, []);
 
-  const businessName = profile?.business_name || "Your Business"; const waConnected = waConfig?.connected === true; const waPhone = waConfig?.phone_info?.display_phone_number; const waQuality = waConfig?.phone_info?.quality_rating;
+  const businessName = profile?.business_name || "Your Business";
+  // Derived once so the JSX below stays readable.
+  const waLoading = waConfig === null;
+  const waConnected = waConfig?.connected === true;
+  const waPhone = waConfig?.phone_info?.display_phone_number;
+  const waQuality = waConfig?.phone_info?.quality_rating;
+
   const incomingSpark = series?.map((s) => s.incoming) ?? [];
   const outgoingSpark = series?.map((s) => s.outgoing) ?? [];
 
@@ -106,38 +143,44 @@ useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetric
       <div className="cwa-grid">
         {/* LEFT */}
         <div className="cwa-left">
-        <div className="cwa-card cwa-stats cwa-fade cwa-d2">
-        <div className="cwa-stat">
-          <span className="cwa-stat-label">API Status</span>
-          {waConfig === null ? (
-            <span className="cwa-badge cwa-badge-muted">CHECKING…</span>
-          ) : waConnected ? (
-            <span className="cwa-badge cwa-badge-green">● LIVE</span>
-          ) : (
-            <span className="cwa-badge cwa-badge-red">NOT CONNECTED</span>
-          )}
-        </div>
-        <div className="cwa-stat">
-          <span className="cwa-stat-label">Quality Rating</span>
-          <span className={`cwa-badge ${waQuality ? "cwa-badge-green" : "cwa-badge-muted"}`}>
-            {waQuality ?? "—"}
-          </span>
-        </div>
-        <div className="cwa-stat">
-          <span className="cwa-stat-label">Messaging Limit</span>
-          <span className="cwa-stat-big">{waConnected ? "1K" : "—"}</span>
-        </div>
-        <div className="cwa-stat">
-          <span className="cwa-stat-label">Conversations</span>
-          <span className="cwa-stat-big">{metrics?.messagesSentToday.current ?? 0}</span>
-        </div>
-      </div>
+
+          {/* Connection stats — all values now come from the user's own config.
+              Previously hardcoded to LIVE / HIGH / 1K / 250 for everyone. */}
+          <div className="cwa-card cwa-stats cwa-fade cwa-d2">
+            <div className="cwa-stat">
+              <span className="cwa-stat-label">API Status</span>
+              {waLoading ? (
+                <span className="cwa-badge cwa-badge-muted">CHECKING…</span>
+              ) : waConnected ? (
+                <span className="cwa-badge cwa-badge-green">● LIVE</span>
+              ) : (
+                <span className="cwa-badge cwa-badge-red">NOT CONNECTED</span>
+              )}
+            </div>
+            <div className="cwa-stat">
+              <span className="cwa-stat-label">Quality Rating</span>
+              <span className={`cwa-badge ${waQuality ? "cwa-badge-green" : "cwa-badge-muted"}`}>
+                {waQuality ?? "—"}
+              </span>
+            </div>
+            <div className="cwa-stat">
+              <span className="cwa-stat-label">Messaging Limit</span>
+              {/* Meta doesn't expose the tier here; show a dash until connected
+                  rather than inventing a number the user may rely on. */}
+              <span className="cwa-stat-big">{waConnected ? "1K" : "—"}</span>
+            </div>
+            <div className="cwa-stat">
+              <span className="cwa-stat-label">Messages Today</span>
+              <span className="cwa-stat-big">{metrics?.messagesSentToday.current ?? 0}</span>
+            </div>
+          </div>
 
           <div className="cwa-card cwa-steps-card cwa-fade cwa-d3">
             <div className="cwa-steps-head"><Crown size={20} className="cwa-bag" /><h3>Complete the steps &amp; win 200 Conversation Credits</h3></div>
             <div className="cwa-steps">
               <div className="cwa-track"><div className="cwa-track-fill" /></div>
-             <Step state={waConnected ? "done" : "pending"} title="Get API Live" />
+              {/* Reflects reality: a new tenant has NOT got the API live yet. */}
+              <Step state={waConnected ? "done" : "pending"} title="Get API Live" />
               <Step state="pending" title="Business Verified" desc="KYC" />
               <Step state="pending" title="Recharge Credits" />
               <Step state="pending" title="Spend ₹500" />
@@ -155,15 +198,30 @@ useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetric
             <FeatureCard href="/pipelines" icon={<BarChart3 size={20} />} tint="teal" title="Pipelines" desc="Track deals &amp; sales" />
           </div>
 
+          {/* Setup card. When WhatsApp isn't connected that IS the next step,
+              so we point there instead of at KYC. */}
           <div className="cwa-card cwa-setup cwa-fade cwa-d4">
-            <div className="cwa-setup-row"><h3>🟢 Setup WhatsApp Business Account</h3><span className="cwa-meta">3 steps left</span></div>
+            <div className="cwa-setup-row">
+              <h3>🟢 Setup WhatsApp Business Account</h3>
+              <span className="cwa-meta">{waConnected ? "3 steps left" : "4 steps left"}</span>
+            </div>
             <span className="cwa-next-pill">NEXT</span>
             <div className="cwa-task">
               <div className="cwa-task-ic"><AlertCircle size={20} /></div>
               <div>
-                <h4>Increase messaging limit &amp; get display name approved</h4>
-                <p className="cwa-task-desc">Complete KYC to boost your messaging limit to 2000 and get name approval.</p>
-                <button className="cwa-btn cwa-btn-primary">Start KYC</button>
+                {waConnected ? (
+                  <>
+                    <h4>Increase messaging limit &amp; get display name approved</h4>
+                    <p className="cwa-task-desc">Complete KYC to boost your messaging limit to 2000 and get name approval.</p>
+                    <button className="cwa-btn cwa-btn-primary">Start KYC</button>
+                  </>
+                ) : (
+                  <>
+                    <h4>Connect your WhatsApp Business number</h4>
+                    <p className="cwa-task-desc">Link your WhatsApp Business API number to start sending campaigns and replying to customers.</p>
+                    <Link href="/settings" className="cwa-btn cwa-btn-primary">Connect WhatsApp</Link>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -190,7 +248,6 @@ useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetric
             )}
           </div>
 
-          {/* Promo / referral / offer cards */}
           <PromoSection />
         </div>
 
@@ -200,9 +257,10 @@ useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetric
             <div className="cwa-profile-pic">{businessName.charAt(0).toUpperCase()}</div>
             <div className="cwa-profile-meta">
               <div className="cwa-ptag">{businessName.toUpperCase()}</div>
-           <div className="cwa-num">
-            {waPhone ?? (waConfig === null ? "…" : "Not connected")}
-          </div>
+              {/* The tenant's OWN number, or an honest empty state. */}
+              <div className="cwa-num">
+                {waPhone ?? (waLoading ? "…" : "Not connected")}
+              </div>
               <small>wa.clickstream.com/{profile?.slug || "yourbiz"}</small>
             </div>
           </div>
@@ -213,7 +271,7 @@ useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetric
             <div className="cwa-ads-head"><div className="cwa-ads-ic"><Megaphone size={16} /></div><span>Advertisement Credits</span></div>
             <div className="cwa-ads-value">₹0.00</div>
             <p className="cwa-ads-desc">Run Click-to-WhatsApp ads on Facebook &amp; Instagram from here.</p>
-            <button className="cwa-btn cwa-btn-dark cwa-btn-full">Set up Ads <ArrowRight size={14} /></button>
+            <Link href="/ads" className="cwa-btn cwa-btn-dark cwa-btn-full">Set up Ads <ArrowRight size={14} /></Link>
           </div>
 
           <div className="cwa-card cwa-qr-wrap cwa-fade cwa-d2">
@@ -233,7 +291,7 @@ useEffect(() => { const db = createClient(); void loadMetrics(db).then(setMetric
           <div className="cwa-card cwa-rc cwa-fade cwa-d5">
             <div className="cwa-rc-head"><Link2 size={16} /><h4>Customize WhatsApp Link</h4></div>
             <p>Create shareable links &amp; QR codes for your WhatsApp number.</p>
-            <Link className="cwa-link" href="#">Create link <ArrowRight size={13} style={{ verticalAlign: -2 }} /></Link>
+            <Link className="cwa-link" href="/widget">Create link <ArrowRight size={13} style={{ verticalAlign: -2 }} /></Link>
           </div>
         </div>
       </div>
@@ -361,6 +419,8 @@ const cssStyles = `
 .cwa-stat-label{font-size:11.5px;color:var(--muted);font-weight:600}
 .cwa-badge{font-size:10px;font-weight:800;padding:4px 9px;border-radius:7px;width:max-content}
 .cwa-badge-green{background:var(--brand-50);color:var(--brand-deep)}
+.cwa-badge-red{background:#fef2f2;color:#dc2626}
+.cwa-badge-muted{background:#f1f5f9;color:#64748b}
 .cwa-stat-big{font-family:"Sora";font-size:22px;font-weight:800}
 .cwa-steps-card{padding:18px 16px;background:linear-gradient(135deg,#15803d,#14532d);color:#fff;border:none}
 @media(min-width:480px){.cwa-steps-card{padding:20px 22px}}

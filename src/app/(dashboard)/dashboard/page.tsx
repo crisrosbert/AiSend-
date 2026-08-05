@@ -42,7 +42,17 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
     </svg>
   );
 }
-
+/** Shape returned by GET /api/whatsapp/config */
+interface WaConfigState {
+  connected: boolean;
+  reason?: string;
+  message?: string;
+  phone_info?: {
+    display_phone_number?: string;
+    verified_name?: string;
+    quality_rating?: string;
+  };
+}
 export default function DashboardPage() {
   const { profile } = useAuth();
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null);

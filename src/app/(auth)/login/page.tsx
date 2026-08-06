@@ -1,184 +1,206 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+// src/app/(auth)/login/page.tsx
+//
+// The mirror of /signup: same canvas, same three doors. Anyone who
+// created an account with Google or Facebook has to find that same
+// button here, or their account simply looks gone to them.
+//
+// This page also renders the failure messages from /auth/callback,
+// which redirects here with ?error=… when a provider hands back a
+// refusal instead of a code.
+
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { MessageSquare, ArrowRight, Zap } from "lucide-react";
+import { SocialAuthButtons } from "@/components/auth/social-auth-buttons";
+import { authCss } from "@/components/auth/auth-styles";
+import {
+  AlertCircle, ArrowRight, BadgeCheck, Bot, Eye, EyeOff, Loader2,
+  MessageSquare, Sparkles, Zap,
+} from "lucide-react";
 
 export default function LoginPage() {
+  // useSearchParams suspends during prerender, so the form lives inside
+  // its own boundary rather than opting the whole route into dynamic
+  // rendering.
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const supabase = useMemo(() => createClient(), []);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dismissedUrlError, setDismissedUrlError] = useState(false);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  const supabase = createClient();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // /auth/callback redirects here with ?error=… when a provider refuses.
+  // A fresh attempt supersedes it, so it is dropped on the next action
+  // rather than lingering above an unrelated failure.
+  const urlError = searchParams.get("error");
+  const visibleError = error ?? (dismissedUrlError ? null : urlError);
+
+  function reportError(message: string) {
+    setDismissedUrlError(true);
+    setError(message);
+  }
+
+  async function handleLogin(event: React.FormEvent) {
+    event.preventDefault();
     setError(null);
+    setDismissedUrlError(true);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setError(error.message);
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) {
+      reportError(
+        /invalid login credentials/i.test(signInError.message)
+          ? "That email and password don't match. Check both, or reset your password."
+          : signInError.message,
+      );
       setLoading(false);
       return;
     }
-    router.push("/dashboard");
-  };
+
+    // Middleware routes them onward to their own workspace if they have
+    // a slug, so a single destination is enough here.
+    router.push(searchParams.get("next") || "/dashboard");
+  }
 
   return (
-    <div className="flex min-h-screen bg-[#0a0a0f]">
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden">
-        {/* Background effects */}
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/40 via-transparent to-transparent" />
-        <div className="absolute top-1/3 -left-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-0 w-60 h-60 bg-emerald-400/5 rounded-full blur-3xl" />
+    <div className="au">
+      <style>{authCss}</style>
 
-        {/* Logo */}
-        <div className="relative flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500">
-            <MessageSquare className="h-5 w-5 text-white" />
+      {/* ── Left: the pitch ── */}
+      <aside className="au-pitch">
+        <div className="au-brand">
+          <span className="au-logo"><MessageSquare size={18} /></span>
+          AiSend
+        </div>
+
+        <div className="au-pitch-body">
+          <span className="au-badge"><Zap size={12} /> Official WhatsApp Business API</span>
+          <h1>
+            Welcome back to<br />your<span className="au-accent"> growth engine.</span>
+          </h1>
+          <p className="au-pitch-sub">
+            Your inbox, campaigns and AI agents have been running while you were
+            away. Pick up exactly where you left off.
+          </p>
+
+          <div className="au-quote">
+            <p>
+              &ldquo;We replaced three tools with this and answer customers in
+              minutes instead of days.&rdquo;
+            </p>
+            <cite>— A retail team using AiSend daily</cite>
           </div>
-          <span className="font-display text-xl font-700 text-white tracking-tight">
-            AiSend <span className="text-emerald-400">WA</span>
+
+          <ul className="au-benefits">
+            {[
+              { icon: <BadgeCheck size={15} />, title: "Everything stays in sync", body: "One number, one shared team inbox." },
+              { icon: <Bot size={15} />, title: "Agents keep working", body: "Leads captured while you're offline." },
+              { icon: <Sparkles size={15} />, title: "Nothing to reinstall", body: "Your setup is exactly as you left it." },
+            ].map((item) => (
+              <li key={item.title}>
+                <span className="au-benefit-ic">{item.icon}</span>
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>{item.body}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="au-pitch-foot">© {new Date().getFullYear()} AiSend. All rights reserved.</p>
+      </aside>
+
+      {/* ── Right: the form ── */}
+      <main className="au-panel">
+        <div className="au-panel-top">
+          <span className="au-brand mobile">
+            <span className="au-logo"><MessageSquare size={18} /></span>
+            AiSend
+          </span>
+          <span className="au-have-account">
+            New here? <Link href="/signup">Create an account</Link>
           </span>
         </div>
 
-        {/* Main content */}
-        <div className="relative space-y-8">
-          <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400">
-              <Zap className="h-3 w-3" />
-              Powered by WhatsApp Business API
+        <div className="au-form-wrap centered">
+          <header className="au-form-head">
+            <h2>Sign in</h2>
+            <p>Welcome back. Continue with a provider or use your email.</p>
+          </header>
+
+          {visibleError && (
+            <div className="au-error" role="alert">
+              <AlertCircle size={15} /> <span>{visibleError}</span>
             </div>
-            <h1 className="font-display text-5xl font-800 leading-tight text-white">
-              Your WhatsApp<br />
-              <span className="text-emerald-400">Growth Engine</span>
-            </h1>
-            <p className="text-lg text-slate-400 leading-relaxed max-w-sm">
-              Send broadcasts, manage conversations, and automate follow-ups — all from one powerful dashboard.
-            </p>
-          </div>
+          )}
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { value: "10x", label: "Faster Outreach" },
-              { value: "98%", label: "Delivery Rate" },
-              { value: "3min", label: "Setup Time" },
-            ].map((stat) => (
-              <div key={stat.label} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 text-center">
-                <p className="font-display text-2xl font-700 text-emerald-400">{stat.value}</p>
-                <p className="text-xs text-slate-500 mt-1">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+          <SocialAuthButtons intent="login" onError={reportError} />
 
-        {/* Bottom */}
-        <div className="relative">
-          <p className="text-sm text-slate-600">
-            © 2026 AiSend Performance Marketing. All rights reserved.
-          </p>
-        </div>
-      </div>
+          <div className="au-divider"><span>or sign in with email</span></div>
 
-      {/* Right panel — login form */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm space-y-8">
-          {/* Mobile logo */}
-          <div className="flex lg:hidden items-center gap-3 justify-center">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500">
-              <MessageSquare className="h-5 w-5 text-white" />
-            </div>
-            <span className="font-display text-xl font-700 text-white">
-              AiSend <span className="text-emerald-400">WA</span>
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            <h2 className="font-display text-3xl font-700 text-white">Welcome back</h2>
-            <p className="text-slate-400">Sign in to your CRM dashboard</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-5">
-            {error && (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-slate-300">
-                Email address
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-11 border-slate-800 bg-slate-900 text-white placeholder:text-slate-600 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20 rounded-xl"
+          <form onSubmit={handleLogin} className="au-form" noValidate>
+            <div className="au-field">
+              <label htmlFor="email">Email address</label>
+              <input
+                id="email" name="email" type="email" autoComplete="email"
+                placeholder="you@company.com" value={email}
+                onChange={(e) => setEmail(e.target.value)} required
               />
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-sm font-medium text-slate-300">
-                  Password
-                </Label>
-                <Link href="/forgot-password" className="text-xs text-emerald-500 hover:text-emerald-400">
-                  Forgot password?
-                </Link>
+            <div className="au-field">
+              <div className="au-field-row">
+                <label htmlFor="password">Password</label>
+                <Link href="/forgot-password">Forgot password?</Link>
               </div>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="h-11 border-slate-800 bg-slate-900 text-white placeholder:text-slate-600 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20 rounded-xl"
-              />
+              <div className="au-password">
+                <input
+                  id="password" name="password" autoComplete="current-password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Your password" value={password}
+                  onChange={(e) => setPassword(e.target.value)} required
+                />
+                <button
+                  type="button" className="au-reveal"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
-            <Button
+            <button
               type="submit"
-              disabled={loading}
-              className="h-11 w-full rounded-xl bg-emerald-500 text-white font-medium hover:bg-emerald-400 disabled:opacity-50 transition-all duration-200 group"
+              className="au-btn au-btn-primary au-btn-full"
+              disabled={loading || !email || !password}
             >
-              {loading ? (
-                "Signing in..."
-              ) : (
-                <span className="flex items-center gap-2">
-                  Sign in
-                  <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-                </span>
-              )}
-            </Button>
+              {loading ? <><Loader2 size={16} className="au-spin" /> Signing in…</>
+                       : <>Sign in <ArrowRight size={16} /></>}
+            </button>
           </form>
 
-          <p className="text-center text-sm text-slate-500">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="font-medium text-emerald-500 hover:text-emerald-400">
-              Get started free
-            </Link>
-          </p>
-
-          <p className="text-center text-xs text-slate-700">
-            By signing in, you agree to our{" "}
-            <a href="https://performancemktg.net/privacy-policy/" target="_blank" className="text-slate-600 hover:text-slate-400">
-              Privacy Policy
-            </a>
+          <p className="au-switch">
+            Don&apos;t have an account? <Link href="/signup">Get started free</Link>
           </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag } from '@/types';
@@ -15,14 +16,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Search, Plus, Upload, MoreHorizontal, Pencil, Trash2, Loader2,
-  Users, ChevronLeft, ChevronRight, Phone, Mail, Building2,
-  MessageSquare, Filter, UserCheck, ShieldOff, ShieldCheck,
+  ChevronLeft, ChevronRight, ChevronDown, Mail, MessageSquare, Filter,
+  ShieldOff, ShieldCheck, Send, Bot, UserPlus, Radio, Download,
+  ExternalLink, X,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 interface ContactWithTags extends Contact {
   tags?: Tag[];
@@ -32,31 +34,47 @@ interface ContactWithTags extends Contact {
 
 type OptOutFilter = 'all' | 'active' | 'opted_out';
 
-function StatCard({
-  icon, label, value, accent,
-}: {
-  icon: React.ReactNode; label: string; value: number;
-  accent: 'emerald' | 'blue' | 'amber' | 'purple' | 'red';
-}) {
-  const colors: Record<string, string> = {
-    emerald: 'bg-emerald-50 text-emerald-600',
-    blue: 'bg-blue-50 text-blue-600',
-    amber: 'bg-amber-50 text-amber-600',
-    purple: 'bg-purple-50 text-purple-600',
-    red: 'bg-red-50 text-red-600',
-  };
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-[#e7ece9] bg-white px-4 py-3">
-      <div className={`flex size-8 items-center justify-center rounded-lg ${colors[accent]}`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-lg font-bold text-[#0c1f17]">{value.toLocaleString()}</p>
-        <p className="text-xs text-slate-500">{label}</p>
-      </div>
-    </div>
-  );
-}
+/** The "What would you like to do next?" cards, mirroring AiSensy's quick guide. */
+const NEXT_ACTIONS = [
+  {
+    href: '/broadcasts/new',
+    icon: Send,
+    tint: 'bg-emerald-50 text-emerald-600',
+    title: 'Launch Broadcast Campaign',
+    badge: { label: 'POPULAR', className: 'bg-amber-100 text-amber-700' },
+    description: 'Reach your WhatsApp audience with offers, updates and alerts.',
+  },
+  {
+    href: '/agents',
+    icon: Bot,
+    tint: 'bg-violet-50 text-violet-600',
+    title: 'Create AI Agent',
+    badge: { label: 'AI', className: 'bg-violet-100 text-violet-700' },
+    description: 'Qualify leads, answer questions and close sales automatically.',
+  },
+  {
+    href: '/ads',
+    icon: Radio,
+    tint: 'bg-emerald-50 text-emerald-600',
+    title: 'Launch WhatsApp Ads',
+    badge: { label: 'NEW', className: 'bg-amber-100 text-amber-700' },
+    description: 'Publish scroll-stopping offers and click-to-WhatsApp ads.',
+  },
+  {
+    href: '/leads',
+    icon: UserPlus,
+    tint: 'bg-blue-50 text-blue-600',
+    title: 'Capture Leads',
+    badge: null,
+    description: 'Capture high-intent leads and follow up instantly on WhatsApp.',
+  },
+] as const;
+
+/** This project's DropdownMenuTrigger renders its own element, so it is styled
+ *  directly rather than wrapping a <Button> via asChild. */
+const OUTLINE_TRIGGER =
+  'flex h-8 items-center gap-1 rounded-md border border-emerald-500 bg-white px-3 ' +
+  'text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50';
 
 export default function ContactsPage() {
   const supabase = createClient();
@@ -66,9 +84,12 @@ export default function ContactsPage() {
   const [optedOutCount, setOptedOutCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(25);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [optOutFilter, setOptOutFilter] = useState<OptOutFilter>('active');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [tagsMap, setTagsMap] = useState<Record<string, Tag>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -81,9 +102,19 @@ export default function ContactsPage() {
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContactWithTags | null>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [togglingOptOut, setTogglingOptOut] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  // Debounce search so typing doesn't fire a query per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const fetchTags = useCallback(async () => {
     const { data } = await supabase.from('tags').select('*').order('name');
@@ -101,53 +132,64 @@ export default function ContactsPage() {
       .from('contacts')
       .select('*, contact_tags(tag_id)', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      .range(page * pageSize, (page + 1) * pageSize - 1);
 
-    if (search.trim()) {
-      query = query.or(
-        `name.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%`,
-      );
+    if (debouncedSearch.trim()) {
+      const term = debouncedSearch.replace(/[%,]/g, '');
+      query = query.or(`name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%`);
     }
 
-    // Opt-out filter
-    if (optOutFilter === 'active') {
-      query = query.is('opted_out_at', null);
-    } else if (optOutFilter === 'opted_out') {
-      query = query.not('opted_out_at', 'is', null);
-    }
+    if (optOutFilter === 'active') query = query.is('opted_out_at', null);
+    else if (optOutFilter === 'opted_out') query = query.not('opted_out_at', 'is', null);
 
     const { data, count, error } = await query;
     if (error) { toast.error(error.message); setLoading(false); return; }
 
-    // Count opted-out separately for stats
     const { count: ooCount } = await supabase
       .from('contacts')
       .select('id', { count: 'exact', head: true })
       .not('opted_out_at', 'is', null);
     setOptedOutCount(ooCount ?? 0);
 
-    const enriched: ContactWithTags[] = (data ?? []).map((c) => ({
+    setContacts((data ?? []).map((c) => ({
       ...c,
       tags: ((c.contact_tags as { tag_id: string }[]) ?? [])
         .map((ct) => tagsMap[ct.tag_id])
         .filter(Boolean),
-    }));
-
-    setContacts(enriched);
+    })));
     setTotalCount(count ?? 0);
     setLoading(false);
-  }, [supabase, page, search, optOutFilter, tagsMap]);
+  }, [supabase, page, pageSize, debouncedSearch, optOutFilter, tagsMap]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchTags(); }, [fetchTags]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
 
-  const displayContacts = tagFilter
-    ? contacts.filter((c) => c.tags?.some((t) => t.id === tagFilter))
-    : contacts;
+  const displayContacts = useMemo(
+    () => (tagFilter ? contacts.filter((c) => c.tags?.some((t) => t.id === tagFilter)) : contacts),
+    [contacts, tagFilter],
+  );
 
-  // ── Opt-out toggle ────────────────────────────────────────────────
+  const allOnPageSelected =
+    displayContacts.length > 0 && displayContacts.every((c) => selectedIds.has(c.id));
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) displayContacts.forEach((c) => next.delete(c.id));
+      else displayContacts.forEach((c) => next.add(c.id));
+      return next;
+    });
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function toggleOptOut(contact: ContactWithTags) {
     const action = contact.opted_out_at ? 'opt_in' : 'opt_out';
     setTogglingOptOut(contact.id);
@@ -182,14 +224,6 @@ export default function ContactsPage() {
     setEditContact(contact); setEditContactTags(ct ?? []); setFormOpen(true);
   }
 
-  function openDetail(contactId: string) {
-    setDetailContactId(contactId); setDetailOpen(true);
-  }
-
-  function confirmDelete(contact: ContactWithTags) {
-    setDeleteTarget(contact); setDeleteConfirmOpen(true);
-  }
-
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -197,308 +231,492 @@ export default function ContactsPage() {
     setDeleting(false);
     if (error) { toast.error('Failed to delete contact'); return; }
     toast.success('Contact deleted');
-    setDeleteConfirmOpen(false); setDeleteTarget(null); fetchContacts();
+    setDeleteTarget(null);
+    fetchContacts();
   }
 
-  function toggleSelect(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+  async function handleBulkDelete() {
+    setDeleting(true);
+    const ids = [...selectedIds];
+    const { error } = await supabase.from('contacts').delete().in('id', ids);
+    setDeleting(false);
+    if (error) { toast.error('Failed to delete contacts'); return; }
+    toast.success(`${ids.length} contact${ids.length !== 1 ? 's' : ''} deleted`);
+    setSelectedIds(new Set());
+    setBulkDeleteOpen(false);
+    fetchContacts();
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  const hasPrev = page > 0;
-  const hasNext = (page + 1) * PAGE_SIZE < totalCount;
-  const taggedCount = contacts.filter((c) => c.tags && c.tags.length > 0).length;
-  const withEmailCount = contacts.filter((c) => c.email).length;
+  /** Export every contact matching the current filters, not just this page. */
+  async function handleExport() {
+    setExporting(true);
+    try {
+      let query = supabase
+        .from('contacts')
+        .select('phone, name, email, company, opted_out_at, created_at')
+        .order('created_at', { ascending: false });
+
+      if (optOutFilter === 'active') query = query.is('opted_out_at', null);
+      else if (optOutFilter === 'opted_out') query = query.not('opted_out_at', 'is', null);
+
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      if (!data?.length) { toast.error('Nothing to export'); return; }
+
+      const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const csv = [
+        ['phone', 'name', 'email', 'company', 'status', 'created_at'].map(escape).join(','),
+        ...data.map((c) => [
+          c.phone, c.name, c.email, c.company,
+          c.opted_out_at ? 'Opted out' : 'Active',
+          c.created_at,
+        ].map(escape).join(',')),
+      ].join('\r\n');
+
+      const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${data.length} contacts exported`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const rangeStart = totalCount === 0 ? 0 : page * pageSize + 1;
+  const rangeEnd = Math.min((page + 1) * pageSize, totalCount);
+  const activeFilterCount = (tagFilter ? 1 : 0) + (optOutFilter !== 'active' ? 1 : 0);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#0c1f17]">Contacts</h1>
-          <p className="mt-1 text-sm text-slate-500">Your customer list — segment, message, and grow.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)}
-            className="border-[#e7ece9] bg-white text-slate-600 hover:bg-slate-50">
-            <Upload className="size-4" /> Import CSV
-          </Button>
-          <Button onClick={openAddForm} className="bg-emerald-500 hover:bg-emerald-600 text-white">
-            <Plus className="size-4" /> Add Contact
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard icon={<Users className="size-4" />} label="Total Contacts" value={totalCount} accent="emerald" />
-        <StatCard icon={<UserCheck className="size-4" />} label="Tagged" value={taggedCount} accent="blue" />
-        <StatCard icon={<Mail className="size-4" />} label="With Email" value={withEmailCount} accent="amber" />
-        <StatCard icon={<ShieldOff className="size-4" />} label="Opted Out" value={optedOutCount} accent="red" />
-      </div>
-
-      {/* Opt-out filter tabs */}
-      <div className="flex items-center gap-1 rounded-xl border border-[#e7ece9] bg-white p-1.5 w-fit shadow-sm">
-        {([
-          { value: 'active',    label: 'Active',     icon: ShieldCheck },
-          { value: 'all',       label: 'All',         icon: Users },
-          { value: 'opted_out', label: 'Opted Out',   icon: ShieldOff },
-        ] as { value: OptOutFilter; label: string; icon: typeof Users }[]).map((tab) => {
-          const active = optOutFilter === tab.value;
-          const Icon = tab.icon;
-          return (
+    <div className="space-y-5">
+      {/* ── Quick guide ── */}
+      <div className="grid gap-4 rounded-2xl border border-[#e7ece9] bg-white p-5 lg:grid-cols-[minmax(0,280px)_1fr]">
+        <div className="lg:border-r lg:border-[#e7ece9] lg:pr-5">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            Contacts quick guide
+          </p>
+          <h2 className="mt-1.5 text-base font-bold text-[#0c1f17]">
+            Grow and organise your audience
+          </h2>
+          <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+            Import contacts, create audiences and launch campaigns, all from one place.
+          </p>
+          <div className="mt-3 flex flex-col gap-1.5">
             <button
-              key={tab.value}
-              onClick={() => { setOptOutFilter(tab.value); setPage(0); }}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all ${
-                active ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:bg-emerald-50 hover:text-emerald-700'
-              }`}
+              onClick={() => setImportOpen(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:underline"
             >
-              <Icon className="size-3.5" />
-              {tab.label}
-              {tab.value === 'opted_out' && optedOutCount > 0 && (
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                  active ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'
-                }`}>
-                  {optedOutCount}
-                </span>
-              )}
+              Import contacts from Excel or CSV <ExternalLink className="size-3" />
             </button>
-          );
-        })}
+            <Link
+              href="/broadcasts/new"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:underline"
+            >
+              Send your first broadcast <ExternalLink className="size-3" />
+            </Link>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-bold text-[#0c1f17]">What would you like to do next?</h3>
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+            {NEXT_ACTIONS.map((action) => (
+              <Link
+                key={action.title}
+                href={action.href}
+                className="flex items-start gap-3 rounded-xl border border-[#e7ece9] bg-white p-3 transition-all hover:border-emerald-300 hover:shadow-sm"
+              >
+                <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${action.tint}`}>
+                  <action.icon className="size-[18px]" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[13px] font-semibold text-[#0c1f17]">{action.title}</span>
+                    {action.badge && (
+                      <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${action.badge.className}`}>
+                        {action.badge.label}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+                    {action.description}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Search + tag filter */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px]">
+      {/* ── Toolbar ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[220px] flex-1">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <Input
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Search by name, phone, or email..."
-            className="border-[#e7ece9] bg-white pl-10 text-[#0c1f17] placeholder:text-slate-400"
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name or mobile number"
+            className="border-[#e7ece9] bg-[#f4f6f5] pl-10 text-[#0c1f17] placeholder:text-slate-400"
           />
         </div>
-        {allTags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Filter className="size-4 text-slate-400" />
-            <button
-              onClick={() => setTagFilter(null)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                tagFilter === null ? 'bg-emerald-500 text-white' : 'bg-white border border-[#e7ece9] text-slate-500 hover:border-emerald-400'
-              }`}
+
+        <Button
+          variant="outline"
+          onClick={() => setShowFilters((v) => !v)}
+          className="relative border-[#e7ece9] bg-white text-slate-600 hover:bg-slate-50"
+        >
+          <Filter className="size-4" /> Filter
+          {activeFilterCount > 0 && (
+            <span className="ml-1 rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-white">
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
+
+        <div className="flex-1" />
+
+        <Button
+          size="sm"
+          disabled={selectedIds.size === 0}
+          onClick={() => toast.info('Select a template on the broadcast screen to message these contacts.')}
+          className="bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40"
+        >
+          BROADCAST {selectedIds.size > 0 && `(${selectedIds.size})`}
+        </Button>
+
+        <Button size="sm" variant="outline" onClick={openAddForm}
+          className="border-emerald-500 bg-white text-emerald-700 hover:bg-emerald-50">
+          <Plus className="size-4" /> Add Contact
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger className={OUTLINE_TRIGGER}>
+            Import <ChevronDown className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="border-[#e7ece9] bg-white">
+            <DropdownMenuItem onClick={() => setImportOpen(true)} className="text-slate-700 focus:bg-slate-100">
+              <Upload className="size-4" /> Import Contacts
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger className={OUTLINE_TRIGGER}>
+            Actions <ChevronDown className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="border-[#e7ece9] bg-white">
+            <DropdownMenuItem onClick={handleExport} disabled={exporting}
+              className="text-slate-700 focus:bg-slate-100">
+              {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              Export
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-[#e7ece9]" />
+            <DropdownMenuItem
+              disabled={selectedIds.size === 0}
+              onClick={() => setBulkDeleteOpen(true)}
+              className="text-red-600 focus:bg-red-50 focus:text-red-700"
             >
-              All
-            </button>
-            {allTags.slice(0, 5).map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTagFilter(tagFilter === t.id ? null : t.id)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors border ${
-                  tagFilter === t.id ? 'border-transparent text-white' : 'border-[#e7ece9] bg-white text-slate-500 hover:border-emerald-400'
-                }`}
-                style={tagFilter === t.id ? { background: t.color, borderColor: t.color } : {}}
-              >
-                {t.name}
-              </button>
-            ))}
-          </div>
-        )}
+              <Trash2 className="size-4" /> Delete selected
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Opted-out info banner */}
-      {optOutFilter === 'opted_out' && optedOutCount > 0 && (
-        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          <ShieldOff className="size-4 text-red-500 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-red-700">
-              {optedOutCount} contact{optedOutCount !== 1 ? 's have' : ' has'} opted out
-            </p>
-            <p className="mt-0.5 text-xs text-red-600">
-              These contacts replied STOP or were manually opted out. They are automatically
-              skipped in all broadcasts. You can re-subscribe them manually below if they request it.
-            </p>
+      {/* ── Filter panel ── */}
+      {showFilters && (
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-[#e7ece9] bg-white px-4 py-3">
+          <div className="flex items-center gap-1">
+            {([
+              { value: 'active', label: 'Active', icon: ShieldCheck },
+              { value: 'all', label: 'All', icon: Filter },
+              { value: 'opted_out', label: 'Opted Out', icon: ShieldOff },
+            ] as { value: OptOutFilter; label: string; icon: typeof Filter }[]).map((tab) => {
+              const active = optOutFilter === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => { setOptOutFilter(tab.value); setPage(0); }}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                    active ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:bg-emerald-50'
+                  }`}
+                >
+                  <tab.icon className="size-3.5" /> {tab.label}
+                  {tab.value === 'opted_out' && optedOutCount > 0 && (
+                    <span className={`rounded-full px-1.5 text-[10px] font-bold ${
+                      active ? 'bg-white/20' : 'bg-red-100 text-red-600'
+                    }`}>{optedOutCount}</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-        </div>
-      )}
 
-      {/* Contacts list */}
-      {loading ? (
-        <div className="flex h-40 items-center justify-center">
-          <Loader2 className="size-6 animate-spin text-emerald-500" />
-        </div>
-      ) : displayContacts.length === 0 ? (
-        <div className="flex h-40 flex-col items-center justify-center rounded-xl border border-dashed border-[#e7ece9]">
-          <p className="text-sm font-medium text-slate-600">
-            {optOutFilter === 'opted_out' ? 'No opted-out contacts' : 'No contacts found'}
-          </p>
-          {optOutFilter !== 'opted_out' && (
-            <p className="mt-1 text-xs text-slate-400">Add contacts or import a CSV to get started.</p>
+          {allTags.length > 0 && (
+            <>
+              <span className="h-5 w-px bg-[#e7ece9]" />
+              <div className="flex flex-wrap items-center gap-1.5">
+                {allTags.slice(0, 8).map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setTagFilter(tagFilter === t.id ? null : t.id)}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                      tagFilter === t.id ? 'border-transparent text-white' : 'border-[#e7ece9] bg-white text-slate-500 hover:border-emerald-400'
+                    }`}
+                    style={tagFilter === t.id ? { background: t.color, borderColor: t.color } : {}}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {activeFilterCount > 0 && (
+            <button
+              onClick={() => { setTagFilter(null); setOptOutFilter('active'); setPage(0); }}
+              className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700"
+            >
+              <X className="size-3.5" /> Clear
+            </button>
           )}
         </div>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-[#e7ece9] bg-white">
-          {displayContacts.map((contact, idx) => {
-            const isOptedOut = !!contact.opted_out_at;
-            const isToggling = togglingOptOut === contact.id;
-            return (
-              <div
-                key={contact.id}
-                className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50 ${
-                  idx !== 0 ? 'border-t border-[#f0f4f2]' : ''
-                }`}
-              >
-                {/* Select checkbox */}
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(contact.id)}
-                  onChange={() => toggleSelect(contact.id)}
-                  className="size-4 rounded border-[#e7ece9] text-emerald-500 accent-emerald-500 shrink-0"
-                />
-
-                {/* Avatar */}
-                <div
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-                  style={{ background: isOptedOut ? '#94a3b8' : '#10b981' }}
-                >
-                  {(contact.name ?? contact.phone)?.[0]?.toUpperCase() ?? '?'}
-                </div>
-
-                {/* Info */}
-                <div className="min-w-0 flex-1 cursor-pointer" onClick={() => openDetail(contact.id)}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-sm font-semibold ${isOptedOut ? 'text-slate-400' : 'text-[#0c1f17]'}`}>
-                      {contact.name ?? '—'}
-                    </span>
-
-                    {/* Opted-out badge */}
-                    {isOptedOut && (
-                      <span className="flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">
-                        <ShieldOff className="size-2.5" />
-                        OPTED OUT
-                        {contact.opt_out_keyword && (
-                          <span className="opacity-70">via {contact.opt_out_keyword.toUpperCase()}</span>
-                        )}
-                      </span>
-                    )}
-
-                    {/* Tags */}
-                    {contact.tags?.slice(0, 3).map((tag) => (
-                      <span
-                        key={tag.id}
-                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
-                        style={{ background: tag.color }}
-                      >
-                        {tag.name}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-3 text-xs text-slate-500">
-                    {contact.phone && (
-                      <span className="flex items-center gap-1">
-                        <Phone className="size-3" />{contact.phone}
-                      </span>
-                    )}
-                    {contact.email && (
-                      <span className="hidden sm:flex items-center gap-1">
-                        <Mail className="size-3" />{contact.email}
-                      </span>
-                    )}
-                    {contact.company && (
-                      <span className="hidden md:flex items-center gap-1">
-                        <Building2 className="size-3" />{contact.company}
-                      </span>
-                    )}
-                    {isOptedOut && contact.opted_out_at && (
-                      <span className="text-red-400">
-                        Opted out {new Date(contact.opted_out_at).toLocaleDateString()}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex shrink-0 items-center gap-1">
-                  {/* Opt-out / Re-subscribe toggle */}
-                  <button
-                    onClick={() => toggleOptOut(contact)}
-                    disabled={isToggling}
-                    title={isOptedOut ? 'Re-subscribe this contact' : 'Opt this contact out'}
-                    className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-                      isOptedOut
-                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                        : 'bg-slate-50 text-slate-500 hover:bg-red-50 hover:text-red-600'
-                    }`}
-                  >
-                    {isToggling ? (
-                      <Loader2 className="size-3 animate-spin" />
-                    ) : isOptedOut ? (
-                      <><ShieldCheck className="size-3" /> Re-subscribe</>
-                    ) : (
-                      <ShieldOff className="size-3" />
-                    )}
-                  </button>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger className="flex size-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
-                      <MoreHorizontal className="size-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-white border-[#e7ece9]">
-                      <DropdownMenuItem
-                        onClick={(e) => { e.stopPropagation(); openDetail(contact.id); }}
-                        className="text-slate-700 focus:bg-slate-100"
-                      >
-                        <MessageSquare className="size-4" /> View Chat
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={(e) => { e.stopPropagation(); openEditForm(contact); }}
-                        className="text-slate-700 focus:bg-slate-100"
-                      >
-                        <Pencil className="size-4" /> Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator className="bg-[#e7ece9]" />
-                      <DropdownMenuItem
-                        className="text-red-600 focus:bg-red-50 focus:text-red-700"
-                        onClick={(e) => { e.stopPropagation(); confirmDelete(contact); }}
-                      >
-                        <Trash2 className="size-4" /> Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            );
-          })}
-        </div>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-slate-500">
-            Showing <span className="font-semibold text-slate-700">
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)}
-            </span> of <span className="font-semibold text-slate-700">{totalCount}</span>
+      {/* ── Selection banner ── */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5">
+          <p className="text-sm font-semibold text-emerald-800">
+            {selectedIds.size} selected
           </p>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={!hasPrev}
-              onClick={() => setPage((p) => p - 1)} className="border-[#e7ece9]">
-              <ChevronLeft className="size-4" />
-            </Button>
-            <span className="text-xs text-slate-500">Page {page + 1} of {totalPages}</span>
-            <Button variant="outline" size="sm" disabled={!hasNext}
-              onClick={() => setPage((p) => p + 1)} className="border-[#e7ece9]">
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-xs font-semibold text-emerald-700 hover:underline"
+          >
+            Clear selection
+          </button>
         </div>
       )}
 
-      {/* Modals */}
+      {/* ── Table ── */}
+      <div className="overflow-hidden rounded-xl border border-[#e7ece9] bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="border-b border-[#e7ece9] bg-[#f7faf8]">
+              <tr>
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={allOnPageSelected}
+                    onChange={toggleSelectAll}
+                    aria-label="Select all contacts on this page"
+                    className="size-4 rounded border-[#e7ece9] accent-emerald-500"
+                  />
+                </th>
+                {['Name', 'Mobile Number', 'Tags', 'Email', 'Company', 'Status', 'Created', ''].map((h, i) => (
+                  <th key={i} className="px-3 py-3 text-left text-xs font-bold text-emerald-800">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={9} className="py-16 text-center">
+                    <Loader2 className="mx-auto size-6 animate-spin text-emerald-500" />
+                  </td>
+                </tr>
+              ) : displayContacts.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-16 text-center">
+                    <p className="text-sm font-medium text-slate-600">
+                      {optOutFilter === 'opted_out' ? 'No opted-out contacts' : 'No contacts found'}
+                    </p>
+                    {optOutFilter !== 'opted_out' && (
+                      <p className="mt-1 text-xs text-slate-400">
+                        Add a contact or import an Excel/CSV file to get started.
+                      </p>
+                    )}
+                  </td>
+                </tr>
+              ) : (
+                displayContacts.map((contact) => {
+                  const isOptedOut = !!contact.opted_out_at;
+                  const isToggling = togglingOptOut === contact.id;
+                  return (
+                    <tr key={contact.id} className="border-b border-[#f0f4f2] transition-colors last:border-0 hover:bg-slate-50/70">
+                      <td className="px-4 py-2.5">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(contact.id)}
+                          onChange={() => toggleSelect(contact.id)}
+                          aria-label={`Select ${contact.name ?? contact.phone}`}
+                          className="size-4 rounded border-[#e7ece9] accent-emerald-500"
+                        />
+                      </td>
+
+                      <td className="px-3 py-2.5">
+                        <button
+                          onClick={() => { setDetailContactId(contact.id); setDetailOpen(true); }}
+                          className="flex items-center gap-2.5 text-left"
+                        >
+                          <span
+                            className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                            style={{ background: isOptedOut ? '#94a3b8' : '#10b981' }}
+                          >
+                            {(contact.name ?? contact.phone)?.[0]?.toUpperCase() ?? '?'}
+                          </span>
+                          <span className={`font-semibold ${isOptedOut ? 'text-slate-400' : 'text-[#0c1f17]'} hover:underline`}>
+                            {contact.name ?? '—'}
+                          </span>
+                        </button>
+                      </td>
+
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{contact.phone}</td>
+
+                      <td className="px-3 py-2.5">
+                        <div className="flex flex-wrap gap-1">
+                          {contact.tags?.slice(0, 2).map((tag) => (
+                            <span key={tag.id}
+                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                              style={{ background: tag.color }}>
+                              {tag.name}
+                            </span>
+                          ))}
+                          {(contact.tags?.length ?? 0) > 2 && (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                              +{(contact.tags?.length ?? 0) - 2}
+                            </span>
+                          )}
+                          {!contact.tags?.length && <span className="text-xs text-slate-300">—</span>}
+                        </div>
+                      </td>
+
+                      <td className="max-w-[180px] truncate px-3 py-2.5 text-slate-600">
+                        {contact.email ?? <span className="text-slate-300">—</span>}
+                      </td>
+
+                      <td className="max-w-[160px] truncate px-3 py-2.5 text-slate-600">
+                        {contact.company ?? <span className="text-slate-300">—</span>}
+                      </td>
+
+                      <td className="px-3 py-2.5">
+                        {isOptedOut ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">
+                            <ShieldOff className="size-2.5" />
+                            OPTED OUT
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                            <ShieldCheck className="size-2.5" /> ACTIVE
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-400">
+                        {contact.created_at ? new Date(contact.created_at).toLocaleDateString() : '—'}
+                      </td>
+
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => toggleOptOut(contact)}
+                            disabled={isToggling}
+                            title={isOptedOut ? 'Re-subscribe this contact' : 'Opt this contact out'}
+                            className={`rounded-lg p-1.5 transition-colors ${
+                              isOptedOut
+                                ? 'text-emerald-600 hover:bg-emerald-50'
+                                : 'text-slate-400 hover:bg-red-50 hover:text-red-600'
+                            }`}
+                          >
+                            {isToggling ? <Loader2 className="size-4 animate-spin" />
+                              : isOptedOut ? <ShieldCheck className="size-4" />
+                              : <ShieldOff className="size-4" />}
+                          </button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className="flex size-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">
+                              <MoreHorizontal className="size-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="border-[#e7ece9] bg-white">
+                              <DropdownMenuItem
+                                onClick={() => { setDetailContactId(contact.id); setDetailOpen(true); }}
+                                className="text-slate-700 focus:bg-slate-100">
+                                <MessageSquare className="size-4" /> View Chat
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEditForm(contact)}
+                                className="text-slate-700 focus:bg-slate-100">
+                                <Pencil className="size-4" /> Edit
+                              </DropdownMenuItem>
+                              {contact.email && (
+                                <DropdownMenuItem
+                                  onClick={() => { window.location.href = `mailto:${contact.email}`; }}
+                                  className="text-slate-700 focus:bg-slate-100">
+                                  <Mail className="size-4" /> Send Email
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator className="bg-[#e7ece9]" />
+                              <DropdownMenuItem
+                                className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                                onClick={() => setDeleteTarget(contact)}>
+                                <Trash2 className="size-4" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Footer pagination ── */}
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#e7ece9] bg-white px-4 py-2.5">
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            aria-label="Previous page"
+            className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+
+          <span className="text-xs text-slate-600">
+            {rangeStart}-{rangeEnd} of {totalCount.toLocaleString()}
+          </span>
+
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            disabled={page + 1 >= totalPages}
+            aria-label="Next page"
+            className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <ChevronRight className="size-4" />
+          </button>
+
+          <select
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+            aria-label="Rows per page"
+            className="rounded-lg border border-[#e7ece9] bg-white px-2 py-1 text-xs text-slate-600 focus:border-emerald-500 focus:outline-none"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>{size} per page</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* ── Modals ── */}
       {formOpen && (
         <ContactForm
           open={formOpen}
@@ -523,27 +741,61 @@ export default function ContactsPage() {
           onImported={() => { setImportOpen(false); fetchContacts(); }}
         />
       )}
-      {deleteConfirmOpen && deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-[#e7ece9] bg-white p-6 shadow-xl">
-            <h3 className="text-base font-bold text-[#0c1f17]">Delete contact?</h3>
-            <p className="mt-2 text-sm text-slate-500">
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete contact?"
+          body={
+            <>
               <strong>{deleteTarget.name ?? deleteTarget.phone}</strong> and all associated data
               will be permanently deleted. This cannot be undone.
-            </p>
-            <div className="mt-5 flex gap-3">
-              <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}
-                className="flex-1 border-[#e7ece9]">
-                Cancel
-              </Button>
-              <Button onClick={handleDelete} disabled={deleting}
-                className="flex-1 bg-red-600 text-white hover:bg-red-700">
-                {deleting ? <Loader2 className="size-4 animate-spin" /> : 'Delete'}
-              </Button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          confirmLabel="Delete"
+          busy={deleting}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+        />
       )}
+
+      {bulkDeleteOpen && (
+        <ConfirmDialog
+          title={`Delete ${selectedIds.size} contacts?`}
+          body="These contacts and all their associated data will be permanently deleted. This cannot be undone."
+          confirmLabel={`Delete ${selectedIds.size}`}
+          busy={deleting}
+          onCancel={() => setBulkDeleteOpen(false)}
+          onConfirm={handleBulkDelete}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  title, body, confirmLabel, busy, onCancel, onConfirm,
+}: {
+  title: string;
+  body: React.ReactNode;
+  confirmLabel: string;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-xl border border-[#e7ece9] bg-white p-6 shadow-xl">
+        <h3 className="text-base font-bold text-[#0c1f17]">{title}</h3>
+        <p className="mt-2 text-sm text-slate-500">{body}</p>
+        <div className="mt-5 flex gap-3">
+          <Button variant="outline" onClick={onCancel} className="flex-1 border-[#e7ece9]">
+            Cancel
+          </Button>
+          <Button onClick={onConfirm} disabled={busy} className="flex-1 bg-red-600 text-white hover:bg-red-700">
+            {busy ? <Loader2 className="size-4 animate-spin" /> : confirmLabel}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

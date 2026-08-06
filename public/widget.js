@@ -20,13 +20,13 @@
   // Optional agent id — when present, this widget runs a specific agent.
   var AGENT_ID = scriptTag.getAttribute('data-agent') || null;
 
-  // Derive API base from the script src
+  // Derive the API base from wherever this script was actually served from,
+  // so the same file works on any deployment without being rebuilt.
   var API_BASE = (function () {
     try {
-      var u = new URL(scriptTag.src);
-      return u.origin;
+      return new URL(scriptTag.src, window.location.href).origin;
     } catch (e) {
-      return 'https://app.performancemktg.net';
+      return window.location.origin;
     }
   })();
 
@@ -50,6 +50,9 @@
   var isOpen = false;
   var messages = []; // {role:'user'|'bot', text}
   var bubbleShown = false;
+  // Once details are captured we never show the form again this session, even
+  // if the model calls submit_lead a second time.
+  var leadCaptured = localStorage.getItem(VISITOR_KEY + '_lead') === '1';
 
   // ── Fetch config (by agent if provided, else org), then build UI ──
   var configUrl = API_BASE + '/api/widget/config?org=' + encodeURIComponent(ORG_ID) +
@@ -165,6 +168,10 @@
         if (data.handoff && data.business_phone) {
           addWhatsAppButton(data.business_phone, text);
         }
+        // The AI decided it is time to ask for contact details.
+        if (data.lead_form && data.lead_form.fields && !leadCaptured) {
+          addLeadForm(data.lead_form.fields);
+        }
       })
       .catch(function () {
         hideTyping();
@@ -179,6 +186,128 @@
     msg.innerHTML = '<div class="aisend-bubble-msg">' + esc(text) + '</div>';
     container.appendChild(msg);
     container.scrollTop = container.scrollHeight;
+  }
+
+  // â”€â”€ Lead capture form â”€â”€
+  // Rendered inline in the transcript when the AI calls submit_lead. Kept in
+  // the message flow (rather than a modal) so the visitor never loses the
+  // conversation context that earned their interest.
+  function addLeadForm(fields) {
+    if (document.getElementById('aisend-lead-form')) return;
+
+    var container = document.getElementById('aisend-messages');
+    var wrap = el('div', 'aisend-lead');
+    wrap.id = 'aisend-lead-form';
+
+    var html = '<div class="aisend-lead-title">Share your details</div>' +
+      '<div class="aisend-lead-sub">Our team will get back to you shortly.</div>';
+
+    fields.forEach(function (f) {
+      html += '<input class="aisend-lead-input" data-key="' + esc(f.key) + '"' +
+        ' type="' + esc(f.type || 'text') + '"' +
+        ' placeholder="' + esc(f.label) + (f.required ? ' *' : '') + '"' +
+        (f.required ? ' required' : '') + ' />';
+    });
+
+    html += '<div class="aisend-lead-err" id="aisend-lead-err"></div>' +
+      '<button class="aisend-lead-btn" id="aisend-lead-submit">Submit</button>';
+
+    wrap.innerHTML = html;
+    container.appendChild(wrap);
+    container.scrollTop = container.scrollHeight;
+
+    document.getElementById('aisend-lead-submit').onclick = function () {
+      submitLeadForm(wrap, fields);
+    };
+    // Enter anywhere in the form submits it.
+    wrap.addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); submitLeadForm(wrap, fields); }
+    });
+  }
+
+  function submitLeadForm(wrap, fields) {
+    var button = document.getElementById('aisend-lead-submit');
+    var errorBox = document.getElementById('aisend-lead-err');
+    var values = {};
+    var missing = false;
+
+    wrap.querySelectorAll('.aisend-lead-input').forEach(function (input) {
+      var value = (input.value || '').trim();
+      values[input.getAttribute('data-key')] = value;
+      var required = fields.filter(function (f) {
+        return f.key === input.getAttribute('data-key');
+      })[0];
+      if (required && required.required && !value) {
+        input.classList.add('aisend-lead-invalid');
+        missing = true;
+      } else {
+        input.classList.remove('aisend-lead-invalid');
+      }
+    });
+
+    if (missing) { errorBox.textContent = 'Please fill in the required fields.'; return; }
+    if (!values.phone && !values.email) {
+      errorBox.textContent = 'Please add a phone number or email so we can reach you.';
+      return;
+    }
+
+    errorBox.textContent = '';
+    button.disabled = true;
+    button.textContent = 'Submittingâ€¦';
+
+    fetch(API_BASE + '/api/widget/lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        org_id: ORG_ID,
+        agent_id: AGENT_ID,
+        visitor_id: visitorId,
+        page_url: window.location.href,
+        fields: values
+      })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          button.disabled = false;
+          button.textContent = 'Submit';
+          errorBox.textContent = (res.data && res.data.error) || 'Could not save. Please try again.';
+          return;
+        }
+        leadCaptured = true;
+        try { localStorage.setItem(VISITOR_KEY + '_lead', '1'); } catch (e) { /* private mode */ }
+        wrap.innerHTML = '<div class="aisend-lead-done">âœ“ Thank you! Our team will contact you shortly.</div>';
+        // Let the AI acknowledge it in its own voice and carry on the chat.
+        sendSystemNote('The customer has submitted their contact details.');
+      })
+      .catch(function () {
+        button.disabled = false;
+        button.textContent = 'Submit';
+        errorBox.textContent = 'Network error. Please try again.';
+      });
+  }
+
+  // Tells the agent what happened without showing the note as a visitor message.
+  function sendSystemNote(note) {
+    showTyping();
+    fetch(API_BASE + '/api/widget/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        org_id: ORG_ID,
+        agent_id: AGENT_ID,
+        visitor_id: visitorId,
+        message: note,
+        page_url: window.location.href,
+        page_title: document.title
+      })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        hideTyping();
+        if (data.reply) addMessage('bot', data.reply);
+      })
+      .catch(function () { hideTyping(); });
   }
 
   function addMediaCard(m) {
@@ -265,6 +394,17 @@
       '.aisend-bubble-close{position:absolute;top:6px;right:10px;font-size:18px;color:#999;cursor:pointer;line-height:1}' +
       '.aisend-bubble-text{font-size:14px;color:#222;line-height:1.5;padding-right:12px;font-family:-apple-system,system-ui,sans-serif}' +
       '@keyframes aisendPop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}' +
+      /* Lead capture form */
+      '.aisend-lead{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin:8px 0;animation:aisendPop .25s ease}' +
+      '.aisend-lead-title{font-size:14px;font-weight:700;color:#111827;margin-bottom:2px}' +
+      '.aisend-lead-sub{font-size:12px;color:#6b7280;margin-bottom:10px}' +
+      '.aisend-lead-input{width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:9px;padding:9px 11px;font-size:13px;margin-bottom:7px;outline:none;font-family:inherit;color:#111827;background:#fff}' +
+      '.aisend-lead-input:focus{border-color:var(--aisend-primary)}' +
+      '.aisend-lead-invalid{border-color:#ef4444;background:#fef2f2}' +
+      '.aisend-lead-err{font-size:11.5px;color:#dc2626;min-height:15px;margin-bottom:4px}' +
+      '.aisend-lead-btn{width:100%;border:0;border-radius:9px;padding:10px;background:var(--aisend-primary);color:#fff;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit}' +
+      '.aisend-lead-btn:disabled{opacity:.6;cursor:default}' +
+      '.aisend-lead-done{font-size:13px;font-weight:600;color:#047857;text-align:center;padding:6px 0}' +
       '.aisend-panel{position:fixed;bottom:20px;right:20px;width:370px;max-width:calc(100vw - 40px);height:560px;max-height:calc(100vh - 40px);background:#fff;border-radius:18px;box-shadow:0 12px 48px rgba(0,0,0,.24);z-index:999999;flex-direction:column;overflow:hidden;font-family:-apple-system,system-ui,sans-serif}' +
       '.aisend-header{background:var(--aisend-primary);padding:16px;display:flex;align-items:center;justify-content:space-between}' +
       '.aisend-header-info{display:flex;align-items:center;gap:10px}' +

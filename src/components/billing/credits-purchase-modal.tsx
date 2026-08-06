@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Loader2, Wallet, Zap, Info } from "lucide-react";
 import { toast } from "sonner";
+import { MIN_TOPUP_INR, bonusForAmount } from "@/lib/billing/plans";
 
 declare global {
   interface Window { Razorpay?: new (options: Record<string, unknown>) => { open: () => void } }
@@ -13,22 +14,22 @@ interface Props {
   open: boolean;
   onClose: () => void;
   currentBalance: number;
+  /** Pre-fill the amount field — used by the quick top-up buttons. */
+  initialAmount?: number;
   /** Called after a successful credit so the parent can refresh the balance. */
   onSuccess?: (newBalance: number) => void;
 }
 
 const PRESETS = [1000, 2500, 5000, 10000, 50000];
 
-/** Bonus tiers — mirror your CREDIT_PACKS in plans.ts. */
-function bonusFor(amount: number): number {
-  if (amount >= 5000) return Math.round(amount * 0.1); // 10%
-  if (amount >= 2500) return 200;
-  if (amount >= 1000) return 50;
-  return 0;
-}
-
-export function CreditsPurchaseModal({ open, onClose, currentBalance, onSuccess }: Props) {
-  const [amount, setAmount] = useState<number>(1000);
+export function CreditsPurchaseModal({
+  open,
+  onClose,
+  currentBalance,
+  initialAmount,
+  onSuccess,
+}: Props) {
+  const [amount, setAmount] = useState<number>(initialAmount ?? 1000);
   const [busy, setBusy] = useState(false);
   const [autoRecharge, setAutoRecharge] = useState(false);
   const [minAmount, setMinAmount] = useState<number>(500);
@@ -36,6 +37,13 @@ export function CreditsPurchaseModal({ open, onClose, currentBalance, onSuccess 
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
+
+  // Re-seed the amount each time the modal is opened from a quick
+  // top-up button, so "+₹2,500" opens showing ₹2,500 rather than
+  // whatever the user last typed.
+  useEffect(() => {
+    if (open && initialAmount) setAmount(initialAmount);
+  }, [open, initialAmount]);
 
   // Lock body scroll while open
   useEffect(() => {
@@ -52,7 +60,7 @@ export function CreditsPurchaseModal({ open, onClose, currentBalance, onSuccess 
 
   if (!open || !mounted) return null;
 
-  const bonus = bonusFor(amount);
+  const bonus = bonusForAmount(amount);
 
   async function loadRazorpayScript(): Promise<boolean> {
     if (window.Razorpay) return true;
@@ -66,7 +74,10 @@ export function CreditsPurchaseModal({ open, onClose, currentBalance, onSuccess 
   }
 
   async function handlePurchase() {
-    if (amount < 100) { toast.error("Minimum recharge is ₹100"); return; }
+    if (amount < MIN_TOPUP_INR) {
+      toast.error(`Minimum recharge is ₹${MIN_TOPUP_INR}`);
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch("/api/billing/recharge", {
@@ -152,11 +163,11 @@ export function CreditsPurchaseModal({ open, onClose, currentBalance, onSuccess 
           {/* Enter amount */}
           <div className="cc-card">
             <label className="cc-label">Enter Credit Amount</label>
-            <p className="cc-hint">Minimum purchase of ₹100 credits is allowed</p>
+            <p className="cc-hint">Minimum purchase is ₹{MIN_TOPUP_INR} of credits</p>
             <div className="cc-input-wrap">
               <span className="cc-rupee">₹</span>
               <input
-                type="number" min={100} value={amount}
+                type="number" min={MIN_TOPUP_INR} value={amount}
                 onChange={(e) => setAmount(Math.max(0, Number(e.target.value)))}
                 className="cc-input"
               />

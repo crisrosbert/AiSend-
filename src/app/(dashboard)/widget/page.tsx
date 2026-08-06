@@ -86,21 +86,41 @@ export default function WidgetSettingsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function save() {
+    async function save() {
     if (!userId) { toast.error("Please sign in again"); return; }
     setSaving(true);
     try {
-      const { error } = await supabase.from("widget_configs").upsert(
-        { org_user_id: userId, ...config, updated_at: new Date().toISOString() },
-        { onConflict: "org_user_id" },
-      );
-      if (error) toast.error("Couldn't save: " + error.message);
-      else toast.success("Widget settings saved");
+      // widget_configs stores one row per agent PLUS a legacy row with
+      // agent_id IS NULL for org-wide embeds, so org_user_id is not
+      // unique and there is nothing for ON CONFLICT to match — Postgres
+      // rejects an upsert here with 42P10. A composite (org_user_id,
+      // agent_id) key would not help either: NULL never equals NULL, so
+      // the org-wide row would never conflict and every save would
+      // silently insert a duplicate. Read the row, then update or insert.
+      const { data: existing, error: readError } = await supabase
+        .from("widget_configs")
+        .select("id")
+        .eq("org_user_id", userId)
+        .is("agent_id", null)
+        .maybeSingle();
+      if (readError) throw readError;
+
+      const payload = { ...config, updated_at: new Date().toISOString() };
+
+      const { error } = existing
+        ? await supabase.from("widget_configs").update(payload).eq("id", existing.id)
+        : await supabase
+            .from("widget_configs")
+            .insert({ ...payload, org_user_id: userId, agent_id: null });
+      if (error) throw error;
+
+      toast.success("Widget settings saved");
+    } catch (err) {
+      toast.error("Couldn't save: " + (err instanceof Error ? err.message : "unknown error"));
     } finally {
       setSaving(false);
     }
   }
-
   const embedCode = useMemo(
     () => `<script src="${origin}/widget.js" data-org="${userId}"></script>`,
     [origin, userId],

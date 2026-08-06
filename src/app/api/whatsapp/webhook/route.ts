@@ -8,7 +8,6 @@ import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { runJourneysForInbound } from '@/lib/journeys/runner'
 import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
 import { handleInboundConsent } from '@/lib/optin/manager'
-import { handleHiringLead } from '@/lib/hiring-agent/handler'
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _adminClient: any = null
@@ -208,8 +207,6 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           phoneNumberId,
           config.ads_agent_enabled ?? false,
           config.ads_agent_id ?? null,
-          config.hiring_agent_enabled ?? false,
-          config.hiring_agent_id ?? null,
         )
       }
     }
@@ -425,8 +422,6 @@ async function processMessage(
   phoneNumberId: string,
   adsAgentEnabled: boolean,
   adsAgentId: string | null,
-  hiringAgentEnabled: boolean,
-  hiringAgentId: string | null,
 ) {
   const senderPhone = normalizePhone(message.from)
   const contactName = contact.profile.name
@@ -537,24 +532,6 @@ async function processMessage(
     })
     if (handled) return
   }
-  // ── HIRING AGENT MODULE ──
-  // PERCEPTION + ARBITRATION: if this number is running a hiring campaign,
-  // candidate messages go to the recruiter agent instead of the sales flows.
-  if (hiringAgentEnabled && hiringAgentId) {
-    const handled = await handleHiringLead({
-      tenantId: userId,
-      agentId: hiringAgentId,
-      conversationId: conversation.id,
-      contactId: contactRecord.id,
-      customerPhone: senderPhone,
-      contactName,
-      inboundText,
-      phoneNumberId,
-      accessToken,
-    })
-    if (handled) return
-  }
-
   // ── JOURNEY FIRST ──
   try {
     await runJourneysForInbound({

@@ -3,10 +3,6 @@
 // OAuth landing strip. Google/Facebook send the browser back here with a
 // one-time `code`; this route trades it for a session cookie and then
 // forwards the user into the app.
-//
-// Without this handler the social buttons would bounce the user to a URL
-// that sets no session, and they would silently end up back on /login —
-// which reads as "my Google account doesn't work here".
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'

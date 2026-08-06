@@ -13,7 +13,7 @@
 // There is only ONE agent engine. A template is just a bundle of
 // defaults — a persona string plus capability flags — so "Use this
 // Agent" is literally an INSERT into the `agents` table. See
-// src/lib/agents/templates.ts, which owns that mapping.
+// src/lib/agent/templates.ts, which owns that mapping.
 //
 // ── ON THE MISSING STATS ─────────────────────────────────────────────
 // An earlier design showed Conversations / Leads / Spend on each card.
@@ -28,7 +28,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
   Bot, Loader2, Save, Plus, Image as ImageIcon, Brain, X, Sparkles,
-  Search, Check, Copy,
+  Search, Check, Copy, Globe,
 } from "lucide-react";
 import {
   AGENT_TEMPLATES,
@@ -79,6 +79,14 @@ export default function AgentsPage() {
   // that one card shows a spinner.
   const [applying, setApplying] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // "Train from your website" — the URL box in the drawer, plus what
+  // came back from the last run so we can show the user what happened.
+  const [trainUrl, setTrainUrl] = useState("");
+  const [training, setTraining] = useState(false);
+  const [trainResult, setTrainResult] = useState<
+    { title: string; chunks: number } | null
+  >(null);
 
   /* ── load ─────────────────────────────────────────────────────── */
 
@@ -186,6 +194,56 @@ export default function AgentsPage() {
       setTab("mine");
       setEditing(data);
     } finally { setApplying(null); }
+  }
+
+  /**
+   * "Train from your website" — reads one page and does two things:
+   *
+   *   • Stores it as knowledge (chunked into agent_kb_chunks) so the
+   *     agent can quote real facts. This is saved immediately.
+   *   • Drafts a persona from the page, which we drop into the textarea
+   *     WITHOUT saving.
+   *
+   * The persona is deliberately left unsaved. A model reading a website
+   * will invent delivery times and refund terms; a human has to read it
+   * before it can start telling customers anything.
+   */
+  async function trainFromUrl() {
+    if (!editing) return;
+    if (!trainUrl.trim()) { toast.error("Paste your website address first"); return; }
+
+    setTraining(true);
+    setTrainResult(null);
+    try {
+      const res = await fetch("/api/agent/train-from-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_id: editing.id, url: trainUrl.trim() }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) { toast.error(data.error || "Could not read that page"); return; }
+
+      setTrainResult({ title: data.title, chunks: data.chunks ?? 0 });
+
+      // Only replace the persona if the model actually produced one.
+      // A failed draft must never wipe the template's wording.
+      if (data.persona) {
+        setEditing((prev) => (prev ? { ...prev, persona: data.persona } : prev));
+        toast.success("Persona drafted — read it, edit it, then Save agent");
+      } else {
+        toast.success(`Knowledge added from ${data.title}`);
+      }
+
+      // The route creates a journey when the agent had none, so refresh
+      // the list to pick up the new journey_id (the Knowledge button
+      // needs it to link anywhere useful).
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Training failed");
+    } finally {
+      setTraining(false);
+    }
   }
 
   /** Copy the embed snippet for a specific agent. */
@@ -300,7 +358,10 @@ export default function AgentsPage() {
                 </div>
 
                 <div className="ag-card-actions">
-                  <button className="ag-btn ag-btn-primary ag-btn-sm" onClick={() => setEditing(agent)}>
+                  <button
+                    className="ag-btn ag-btn-primary ag-btn-sm"
+                    onClick={() => { setTrainUrl(""); setTrainResult(null); setEditing(agent); }}
+                  >
                     Configure
                   </button>
                   <a className="ag-icon-btn" href="/media" title="Media library"><ImageIcon size={15} /></a>
@@ -427,6 +488,51 @@ export default function AgentsPage() {
                 onChange={(e) => setEditing({ ...editing, industry: e.target.value })}
               />
             </Field>
+
+            {/* ── Train from website ──
+                Sits directly above Persona because that is the field it
+                fills in. Putting it lower would leave people editing a
+                persona that is about to be replaced. */}
+            <div className="ag-drawer-section"><Globe size={14} /> Train from your website</div>
+            <div className="ag-train">
+              <p className="ag-train-lead">
+                Paste a page — your homepage, About or FAQ. We read it, save it as
+                knowledge the agent can quote, and draft a persona for you to review.
+              </p>
+              <div className="ag-train-row">
+                <input
+                  className="ag-input"
+                  type="url"
+                  placeholder="https://yourbusiness.com"
+                  value={trainUrl}
+                  onChange={(e) => setTrainUrl(e.target.value)}
+                  disabled={training}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void trainFromUrl(); } }}
+                />
+                <button
+                  type="button"
+                  className="ag-btn ag-btn-primary"
+                  onClick={trainFromUrl}
+                  disabled={training || !trainUrl.trim()}
+                >
+                  {training
+                    ? <><Loader2 size={15} className="ag-spin" /> Reading…</>
+                    : <><Sparkles size={15} /> Train</>}
+                </button>
+              </div>
+
+              {trainResult && (
+                <p className="ag-train-done">
+                  <Check size={13} /> Added <strong>{trainResult.title}</strong> —{" "}
+                  {trainResult.chunks} passage{trainResult.chunks === 1 ? "" : "s"} indexed.
+                </p>
+              )}
+
+              <p className="ag-hint">
+                The draft persona is not saved until you press Save agent. Read it
+                first — anything it gets wrong, your customers will hear.
+              </p>
+            </div>
 
             <Field
               label="Persona"
@@ -632,6 +738,15 @@ const css = `
 .ag-knob{position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#fff;
   transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.22)}
 .ag-toggle.on .ag-knob{left:20px}
+.ag-train{display:flex;flex-direction:column;gap:9px;padding:14px;border:1px solid var(--line);
+  border-radius:14px;background:var(--lime-soft);margin-bottom:16px}
+.ag-train-lead{font-size:12px;color:#4b5563;margin:0;line-height:1.5}
+.ag-train-row{display:flex;gap:8px}
+.ag-train-row .ag-input{flex:1;background:var(--surface)}
+.ag-train-row .ag-btn{flex-shrink:0}
+.ag-train-done{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#3f6212;margin:0;font-weight:600}
+.ag-train-done svg{flex-shrink:0}
+.ag-train .ag-hint{color:#6b7280}
 .ag-save{margin-top:24px}
 
 @media(prefers-reduced-motion:reduce){.ag *{transition:none!important;animation:none!important}}

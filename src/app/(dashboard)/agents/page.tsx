@@ -156,7 +156,7 @@ export default function AgentsPage() {
             {/* Embed code */}
             <div className="mt-2">
               <code className="block rounded bg-[#0c1f17] p-2 text-[9px] text-emerald-300 font-mono break-all">
-                {`<script src="https://app.performancemktg.net/widget.js" data-org="${userId}" data-agent="${a.id}"></script>`}
+                {`<script src="${typeof window === 'undefined' ? '' : window.location.origin}/widget.js" data-org="${userId}" data-agent="${a.id}"></script>`}
               </code>
             </div>
           </div>

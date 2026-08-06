@@ -285,6 +285,11 @@ export async function POST(req: Request) {
         })),
         handoff: result.handoffRequested,
         business_phone: config.business_phone,
+        // Present when the AI decided to ask for contact details. The widget
+        // renders these as a form and POSTs the result to /api/widget/lead.
+        lead_form: result.showLeadForm
+          ? { fields: result.showLeadForm.fields, conversation_id: conversationId }
+          : null,
       },
       { headers: CORS },
     )

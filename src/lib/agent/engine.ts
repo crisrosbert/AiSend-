@@ -68,6 +68,16 @@ export interface AgentResult {
   // NEW: media the AI chose to send. flow-engine sends each of these to the
   // customer as a separate WhatsApp media message, in order, after `reply`.
   mediaToSend: MediaItem[]
+  // Set when the AI called submit_lead. The website widget renders these
+  // fields as a form; WhatsApp callers ignore it and keep chatting normally.
+  showLeadForm?: { fields: LeadFormField[] }
+}
+
+export interface LeadFormField {
+  key: string
+  label: string
+  type: string
+  required: boolean
 }
 
 // ── Base tools (always available) ──
@@ -190,6 +200,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
   const toolsUsed: string[] = []
   const mediaToSend: MediaItem[] = []
   let handoffRequested = false
+  let showLeadForm: { fields: LeadFormField[] } | undefined
   let totalTokens = 0
 
   try {
@@ -228,6 +239,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
         const toolOut = await executeTool(toolCall, args, agent)
 
         if (toolOut.media) mediaToSend.push(toolOut.media)
+        if (toolOut.showLeadForm) showLeadForm = toolOut.showLeadForm
 
         if (toolCall.name === 'handoff_to_human') {
           handoffRequested = true
@@ -279,6 +291,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
       handoffRequested,
       tokensUsed: totalTokens,
       mediaToSend,
+      showLeadForm,
     }
   } catch (err) {
     console.error('[agent/engine] error:', err)
@@ -298,6 +311,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
 interface ToolExecResult {
   result: string
   media?: MediaItem
+  showLeadForm?: { fields: LeadFormField[] }
 }
 
 async function executeTool(
@@ -316,7 +330,15 @@ async function executeTool(
         toolCall.name,
         toolCall.args,
       )
-      if (capOut) return { result: capOut.result, media: capOut.media }
+      // showLeadForm must be forwarded, not dropped — it is the only signal
+      // that tells the website widget to render the contact form.
+      if (capOut) {
+        return {
+          result: capOut.result,
+          media: capOut.media,
+          showLeadForm: capOut.showLeadForm,
+        }
+      }
     }
 
     switch (toolCall.name) {

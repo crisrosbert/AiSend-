@@ -35,7 +35,7 @@ import {
   TEMPLATE_CATEGORIES,
   agentRowFromTemplate,
   type AgentTemplate,
-} from "@/lib/agents/templates";
+} from "@/lib/agent/templates";
 
 /** Mirrors the columns of the `agents` table this page reads/writes. */
 interface Agent {

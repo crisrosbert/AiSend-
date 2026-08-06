@@ -1,7 +1,8 @@
 // src/lib/billing/plans.ts
 // Single source of truth for subscription plans + credit packs.
-// Mirrors AiSensy: a monthly platform subscription PLUS a prepaid
-// conversation-credit wallet that covers Meta's per-conversation cost.
+// The commercial model is two-part: a monthly platform subscription for
+// seats/limits/features, PLUS a prepaid conversation-credit wallet that
+// covers Meta's per-message cost.
 
 export interface Plan {
   id: string;
@@ -76,7 +77,38 @@ export const PLANS: Plan[] = [
   },
 ];
 
-// Prepaid credit packs (the wallet recharge options, like AiSensy's "Buy More")
+// ── Wallet top-ups ────────────────────────────────────────────────
+// Bonus tiers live here so the quick-top-up buttons, the custom-amount
+// modal and any server-side validation all agree on what a given rupee
+// amount earns. Changing a tier is a one-line change in one file.
+
+export const MIN_TOPUP_INR = 100;
+
+interface BonusTier {
+  /** Applies once the top-up reaches this amount. */
+  from: number;
+  /** Flat bonus in INR, or a fraction of the top-up. */
+  flat?: number;
+  rate?: number;
+}
+
+const BONUS_TIERS: BonusTier[] = [
+  { from: 5000, rate: 0.1 },
+  { from: 2500, flat: 200 },
+  { from: 1000, flat: 50 },
+];
+
+/** Bonus credits earned on a top-up of `amount` INR. */
+export function bonusForAmount(amount: number): number {
+  const value = Number(amount) || 0;
+  for (const tier of BONUS_TIERS) {
+    if (value >= tier.from) {
+      return tier.flat ?? Math.round(value * (tier.rate ?? 0));
+    }
+  }
+  return 0;
+}
+
 export interface CreditPack {
   id: string;
   amount: number;   // INR added to wallet
@@ -84,12 +116,17 @@ export interface CreditPack {
   label: string;
 }
 
-export const CREDIT_PACKS: CreditPack[] = [
-  { id: 'pack_500', amount: 500, bonus: 0, label: '₹500' },
-  { id: 'pack_1000', amount: 1000, bonus: 50, label: '₹1,000 + ₹50 bonus' },
-  { id: 'pack_2500', amount: 2500, bonus: 200, label: '₹2,500 + ₹200 bonus' },
-  { id: 'pack_5000', amount: 5000, bonus: 500, label: '₹5,000 + ₹500 bonus' },
-];
+function pack(amount: number): CreditPack {
+  const bonus = bonusForAmount(amount);
+  return {
+    id: `pack_${amount}`,
+    amount,
+    bonus,
+    label: bonus > 0 ? `₹${amount.toLocaleString('en-IN')} + ₹${bonus} free` : `₹${amount.toLocaleString('en-IN')}`,
+  };
+}
+
+export const CREDIT_PACKS: CreditPack[] = [500, 1000, 2500, 5000].map(pack);
 
 // Meta's approximate per-conversation cost in India (INR).
 // These are indicative — update from Meta's official rate card.

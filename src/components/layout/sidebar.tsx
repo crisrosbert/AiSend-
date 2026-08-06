@@ -20,6 +20,7 @@ import {
   GitBranch,
   CalendarCheck,
   Globe,
+  Bot,
 } from "lucide-react";
 import {
   Avatar,
@@ -36,6 +37,10 @@ import {
 
 const navItems = [
   { path: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  // AI Agents sits high in the list on purpose: it is the feature we
+  // want people to find, and burying it below Bookings guarantees they
+  // never will.
+  { path: "agents",    label: "AI Agents",  icon: Bot },
   { path: "inbox",     label: "Live Chat",  icon: MessageSquare },
   { path: "recent",    label: "Recent",     icon: History },
   { path: "contacts",  label: "Contacts",   icon: Users },
@@ -124,7 +129,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             className="flex items-center justify-center"
             title="AiSend"
           >
-            {/* AiSensy-style lightning bolt logo mark */}
+            {/* Lightning bolt logo mark */}
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl"
               style={{ background: "linear-gradient(135deg,#22c55e,#059669)" }}

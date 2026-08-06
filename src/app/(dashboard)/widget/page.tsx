@@ -2,21 +2,21 @@
 
 // src/app/(dashboard)/widget/page.tsx
 //
-// Widget Settings — clients configure their website chat widget here
-// (bot name, greeting, color, trigger timing, phone) and copy their
-// embed code. No database editing required — this makes the product
-// self-serve for every client.
+// Website Chat Widget — clients configure appearance and behaviour here and
+// copy their embed snippet. Laid out as a two-column workspace: settings on
+// the left, a live phone-style preview on the right, so changes are visible
+// before they ever reach a customer's website.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
-  Globe, Loader2, Save, Copy, Check, MessageCircle,
-  Palette, Clock, Phone, Bot, Eye, Power,
+  Globe, Loader2, Save, Copy, Check, MessageCircle, Clock, Phone,
+  Bot, Power, Code2, ExternalLink, Sparkles, Send, UserRound,
 } from "lucide-react";
 
 interface WidgetConfig {
-  org_user_id: string;
   bot_name: string;
   welcome_message: string;
   bubble_message: string;
@@ -26,7 +26,7 @@ interface WidgetConfig {
   is_active: boolean;
 }
 
-const DEFAULTS: Omit<WidgetConfig, "org_user_id"> = {
+const DEFAULTS: WidgetConfig = {
   bot_name: "Assistant",
   welcome_message: "Hello! How can I help you today?",
   bubble_message: "Hi! 👋 Have a question? I'm here to help.",
@@ -43,11 +43,16 @@ const COLOR_PRESETS = [
 
 export default function WidgetSettingsPage() {
   const supabase = createClient();
-  const [userId, setUserId] = useState<string>("");
-  const [config, setConfig] = useState<Omit<WidgetConfig, "org_user_id">>(DEFAULTS);
+  const [userId, setUserId] = useState("");
+  const [config, setConfig] = useState<WidgetConfig>(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [origin, setOrigin] = useState("");
+
+  // The embed snippet must point at THIS deployment. Hardcoding a domain
+  // silently breaks the widget on every other environment.
+  useEffect(() => setOrigin(window.location.origin), []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +65,7 @@ export default function WidgetSettingsPage() {
         .from("widget_configs")
         .select("*")
         .eq("org_user_id", user.id)
+        .is("agent_id", null)
         .maybeSingle();
 
       if (data) {
@@ -81,25 +87,24 @@ export default function WidgetSettingsPage() {
   useEffect(() => { load(); }, [load]);
 
   async function save() {
+    if (!userId) { toast.error("Please sign in again"); return; }
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("widget_configs")
-        .upsert(
-          { org_user_id: userId, ...config, updated_at: new Date().toISOString() },
-          { onConflict: "org_user_id" }
-        );
-      if (error) {
-        toast.error("Couldn't save: " + error.message);
-      } else {
-        toast.success("Widget settings saved");
-      }
+      const { error } = await supabase.from("widget_configs").upsert(
+        { org_user_id: userId, ...config, updated_at: new Date().toISOString() },
+        { onConflict: "org_user_id" },
+      );
+      if (error) toast.error("Couldn't save: " + error.message);
+      else toast.success("Widget settings saved");
     } finally {
       setSaving(false);
     }
   }
 
-  const embedCode = `<script src="https://app.performancemktg.net/widget.js" data-org="${userId}"></script>`;
+  const embedCode = useMemo(
+    () => `<script src="${origin}/widget.js" data-org="${userId}"></script>`,
+    [origin, userId],
+  );
 
   function copyEmbed() {
     navigator.clipboard.writeText(embedCode);
@@ -108,7 +113,7 @@ export default function WidgetSettingsPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  function update<K extends keyof typeof config>(key: K, value: (typeof config)[K]) {
+  function update<K extends keyof WidgetConfig>(key: K, value: WidgetConfig[K]) {
     setConfig((c) => ({ ...c, [key]: value }));
   }
 
@@ -121,215 +126,308 @@ export default function WidgetSettingsPage() {
   }
 
   return (
-    <div className="space-y-5 pb-10">
-      {/* Header */}
-      <div className="rounded-2xl border border-[#d1fae5] bg-gradient-to-br from-white to-emerald-50 p-5">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-md">
-              <Globe className="size-5" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-[#0c1f17]" style={{ fontFamily: "var(--font-display)" }}>
-                Website Widget
-              </h1>
-              <p className="mt-1 text-xs text-slate-500 max-w-xl">
-                Customize your AI chat widget and add it to your website. Changes apply instantly
-                once saved.
-              </p>
-            </div>
+    <div className="space-y-5">
+      {/* ── Header ── */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-50">
+            <Globe className="size-5 text-emerald-600" />
           </div>
+          <div>
+            <h1 className="text-xl font-bold text-[#0c1f17]">Website Chat Widget</h1>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Put your AI sales agent on any website. It answers questions and captures leads
+              straight into your inbox.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
           <button
             onClick={() => update("is_active", !config.is_active)}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
               config.is_active
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-slate-100 text-slate-500"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-[#e7ece9] bg-white text-slate-400"
             }`}
           >
             <Power className="size-3.5" />
-            {config.is_active ? "Active" : "Inactive"}
+            {config.is_active ? "LIVE" : "PAUSED"}
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:opacity-60"
+          >
+            {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+            Save changes
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* LEFT: settings form */}
-        <div className="space-y-4">
-          {/* Embed code — most important, at top */}
-          <Card title="Embed code" icon={<Copy className="size-4" />} accent="#10b981">
-            <p className="text-xs text-slate-500 mb-2">
-              Paste this into your website&apos;s HTML, just before the closing &lt;/body&gt; tag.
-            </p>
-            <div className="relative">
-              <code className="block rounded-lg bg-[#0c1f17] p-3 pr-12 text-[11px] text-emerald-300 font-mono break-all">
-                {embedCode}
-              </code>
-              <button
-                onClick={copyEmbed}
-                className="absolute right-2 top-2 rounded-md bg-emerald-500 p-1.5 text-white hover:bg-emerald-600"
-              >
-                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-              </button>
-            </div>
-          </Card>
+      {!config.is_active && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          This widget is paused — it will not appear on your website. Switch it to LIVE and save.
+        </div>
+      )}
 
-          <Card title="Assistant" icon={<Bot className="size-4" />} accent="#8b5cf6">
+      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+        {/* ── Settings ── */}
+        <div className="space-y-5">
+          <Section icon={Bot} title="Identity" subtitle="How the assistant introduces itself.">
             <Field label="Bot name">
               <input
                 value={config.bot_name}
                 onChange={(e) => update("bot_name", e.target.value)}
-                className={inputCls}
-                placeholder="e.g. Riya"
+                maxLength={40}
+                className={INPUT}
               />
             </Field>
-            <Field label="Welcome message (shown when chat opens)">
+            <Field label="Welcome message" hint="Shown as soon as the visitor opens the chat.">
               <textarea
                 value={config.welcome_message}
                 onChange={(e) => update("welcome_message", e.target.value)}
                 rows={2}
-                className={inputCls}
+                maxLength={300}
+                className={`${INPUT} resize-none`}
               />
             </Field>
-            <Field label="Notification bubble (pops up after a delay)">
-              <textarea
+            <Field label="Bubble teaser" hint="The small popup that appears before they click.">
+              <input
                 value={config.bubble_message}
                 onChange={(e) => update("bubble_message", e.target.value)}
-                rows={2}
-                className={inputCls}
+                maxLength={120}
+                className={INPUT}
               />
             </Field>
-          </Card>
+          </Section>
 
-          <Card title="Appearance" icon={<Palette className="size-4" />} accent="#f59e0b">
-            <Field label="Primary color">
-              <div className="flex items-center gap-2 flex-wrap">
-                {COLOR_PRESETS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => update("primary_color", c)}
-                    className={`size-8 rounded-full transition-transform hover:scale-110 ${
-                      config.primary_color === c ? "ring-2 ring-offset-2 ring-slate-400" : ""
-                    }`}
-                    style={{ background: c }}
-                  />
-                ))}
+          <Section icon={Sparkles} title="Appearance" subtitle="Match your brand colour.">
+            <div className="flex flex-wrap items-center gap-2">
+              {COLOR_PRESETS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => update("primary_color", color)}
+                  aria-label={`Use colour ${color}`}
+                  className={`size-8 rounded-lg transition-transform hover:scale-110 ${
+                    config.primary_color === color ? "ring-2 ring-slate-900 ring-offset-2" : ""
+                  }`}
+                  style={{ background: color }}
+                />
+              ))}
+              <label className="flex items-center gap-2 rounded-lg border border-[#e7ece9] px-2 py-1.5">
                 <input
                   type="color"
                   value={config.primary_color}
                   onChange={(e) => update("primary_color", e.target.value)}
-                  className="size-8 rounded cursor-pointer border border-slate-200"
+                  className="size-6 cursor-pointer border-0 bg-transparent p-0"
+                />
+                <span className="font-mono text-xs text-slate-500">{config.primary_color}</span>
+              </label>
+            </div>
+          </Section>
+
+          <Section icon={Clock} title="Behaviour" subtitle="When the widget invites the visitor.">
+            <Field
+              label="Show teaser after"
+              hint="Seconds on the page before the bubble appears. 0 shows it immediately."
+            >
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={0}
+                  max={60}
+                  value={config.trigger_delay_seconds}
+                  onChange={(e) => update("trigger_delay_seconds", Number(e.target.value))}
+                  className="flex-1 accent-emerald-500"
+                />
+                <span className="w-16 shrink-0 text-sm font-semibold text-[#0c1f17]">
+                  {config.trigger_delay_seconds}s
+                </span>
+              </div>
+            </Field>
+            <Field
+              label="WhatsApp handoff number"
+              hint="Optional. When the AI hands off, visitors get a button to continue on WhatsApp."
+            >
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={config.business_phone ?? ""}
+                  onChange={(e) => update("business_phone", e.target.value)}
+                  placeholder="919876543210"
+                  className={`${INPUT} pl-9`}
                 />
               </div>
             </Field>
-          </Card>
+          </Section>
 
-          <Card title="Behavior" icon={<Clock className="size-4" />} accent="#0ea5e9">
-            <Field label={`Notification delay: ${config.trigger_delay_seconds} seconds`}>
-              <input
-                type="range"
-                min={0}
-                max={60}
-                value={config.trigger_delay_seconds}
-                onChange={(e) => update("trigger_delay_seconds", Number(e.target.value))}
-                className="w-full accent-emerald-500"
-              />
-            </Field>
-            <Field label="WhatsApp number (for 'Continue on WhatsApp')">
-              <input
-                value={config.business_phone ?? ""}
-                onChange={(e) => update("business_phone", e.target.value)}
-                className={inputCls}
-                placeholder="e.g. 919818816485"
-              />
-            </Field>
-          </Card>
-
-          <button
-            onClick={save}
-            disabled={saving}
-            className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg,#10b981,#059669)", boxShadow: "0 4px 12px rgba(16,185,129,.3)" }}
-          >
-            {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-            Save settings
-          </button>
+          <Section icon={Code2} title="Install" subtitle="Paste this before the closing </body> tag.">
+            <div className="overflow-x-auto rounded-lg bg-[#0c1f17] p-3">
+              <code className="whitespace-pre text-xs text-emerald-300">{embedCode}</code>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={copyEmbed}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-emerald-600"
+              >
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? "Copied" : "Copy embed code"}
+              </button>
+              <Link
+                href="/agents"
+                className="flex items-center gap-1.5 rounded-lg border border-[#e7ece9] px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                Per-agent embed codes <ExternalLink className="size-3" />
+              </Link>
+            </div>
+            <p className="text-xs text-slate-500">
+              Works on any site — WordPress, Shopify, Webflow, or plain HTML. Leads land in{" "}
+              <Link href="/leads" className="font-semibold text-emerald-700 hover:underline">Leads</Link>{" "}
+              and the chat appears in your{" "}
+              <Link href="/inbox" className="font-semibold text-emerald-700 hover:underline">Inbox</Link>.
+            </p>
+          </Section>
         </div>
 
-        {/* RIGHT: live preview */}
-        <div className="lg:sticky lg:top-4 self-start">
-          <Card title="Live preview" icon={<Eye className="size-4" />} accent="#6366f1">
-            <div className="relative rounded-xl bg-slate-100 h-[420px] overflow-hidden border border-slate-200">
-              <div className="absolute inset-0 flex items-center justify-center text-slate-300 text-xs">
-                Your website
-              </div>
-
-              {/* Mini widget preview */}
-              <div className="absolute bottom-4 right-4 flex flex-col items-end gap-2">
-                {/* Bubble */}
-                <div className="max-w-[200px] rounded-2xl bg-white p-3 shadow-lg text-xs text-slate-700">
-                  {config.bubble_message}
-                </div>
-                {/* Button */}
-                <div
-                  className="flex size-14 items-center justify-center rounded-full shadow-lg"
-                  style={{ background: config.primary_color }}
-                >
-                  <MessageCircle className="size-6 text-white" />
-                </div>
-              </div>
-            </div>
-
-            {/* Open-state preview */}
-            <div className="mt-3 rounded-xl border border-slate-200 overflow-hidden">
-              <div className="p-3 flex items-center gap-2" style={{ background: config.primary_color }}>
-                <div className="size-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <Bot className="size-4 text-white" />
-                </div>
-                <div>
-                  <div className="text-white font-bold text-xs">{config.bot_name}</div>
-                  <div className="text-white/80 text-[10px]">● Online</div>
-                </div>
-              </div>
-              <div className="bg-[#f7f9fb] p-3">
-                <div className="inline-block rounded-2xl bg-white border border-slate-200 px-3 py-2 text-xs text-slate-700 shadow-sm">
-                  {config.welcome_message}
-                </div>
-              </div>
-            </div>
-          </Card>
+        {/* ── Live preview ── */}
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+            Live preview
+          </p>
+          <WidgetPreview config={config} />
         </div>
       </div>
     </div>
   );
 }
 
-const inputCls =
-  "w-full rounded-lg border border-[#e7ece9] bg-white p-2.5 text-sm text-[#0c1f17] placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20";
+const INPUT =
+  "w-full rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-sm text-[#0c1f17] " +
+  "placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5 mb-3 last:mb-0">
-      <label className="text-xs font-bold text-slate-600">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function Card({
-  title, icon, accent, children,
+function Section({
+  icon: Icon, title, subtitle, children,
 }: {
-  title: string; icon: React.ReactNode; accent: string; children: React.ReactNode;
+  icon: typeof Bot; title: string; subtitle: string; children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-[#e7ece9] bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="flex size-7 items-center justify-center rounded-lg text-white" style={{ background: accent }}>
-          {icon}
+    <section className="rounded-2xl border border-[#e7ece9] bg-white p-5">
+      <div className="mb-4 flex items-start gap-2.5">
+        <Icon className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+        <div>
+          <h2 className="text-sm font-bold text-[#0c1f17]">{title}</h2>
+          <p className="text-xs text-slate-500">{subtitle}</p>
         </div>
-        <h3 className="text-sm font-bold text-[#0c1f17]">{title}</h3>
       </div>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label, hint, children,
+}: {
+  label: string; hint?: string; children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-semibold text-slate-700">{label}</label>
       {children}
+      {hint && <p className="mt-1 text-[11px] text-slate-400">{hint}</p>}
+    </div>
+  );
+}
+
+/** A faithful mock of what widget.js renders, so settings can be judged before publishing. */
+function WidgetPreview({ config }: { config: WidgetConfig }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[#e7ece9] bg-[#f4f6f5] p-4">
+      <div className="mx-auto w-full max-w-[300px]">
+        <div className="overflow-hidden rounded-xl bg-white shadow-lg">
+          {/* Header */}
+          <div
+            className="flex items-center gap-2.5 px-3.5 py-3"
+            style={{ background: config.primary_color }}
+          >
+            <div className="flex size-8 items-center justify-center rounded-full bg-white/25">
+              <Bot className="size-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-white">
+                {config.bot_name || "Assistant"}
+              </p>
+              <p className="text-[10px] text-white/85">● Online</p>
+            </div>
+          </div>
+
+          {/* Transcript */}
+          <div className="space-y-2.5 bg-[#f7faf8] px-3 py-3.5" style={{ minHeight: 190 }}>
+            <div className="max-w-[85%] rounded-xl rounded-tl-sm bg-white px-3 py-2 shadow-sm">
+              <p className="text-xs leading-relaxed text-slate-700">
+                {config.welcome_message || "Hello! How can I help you today?"}
+              </p>
+            </div>
+
+            <div className="ml-auto max-w-[80%] rounded-xl rounded-tr-sm px-3 py-2"
+              style={{ background: config.primary_color }}>
+              <p className="text-xs text-white">What are your prices?</p>
+            </div>
+
+            {/* The lead form the AI can trigger. */}
+            <div className="rounded-xl border border-[#e7ece9] bg-white p-2.5 shadow-sm">
+              <p className="text-[11px] font-bold text-[#0c1f17]">Share your details</p>
+              <p className="mb-1.5 text-[10px] text-slate-400">
+                Our team will get back to you shortly.
+              </p>
+              <div className="space-y-1">
+                {["First Name", "Mobile Number"].map((placeholder) => (
+                  <div key={placeholder}
+                    className="rounded-md border border-[#e7ece9] px-2 py-1 text-[10px] text-slate-300">
+                    {placeholder}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-1.5 rounded-md py-1 text-center text-[10px] font-bold text-white"
+                style={{ background: config.primary_color }}>
+                Submit
+              </div>
+            </div>
+          </div>
+
+          {/* Composer */}
+          <div className="flex items-center gap-2 border-t border-[#e7ece9] bg-white px-3 py-2">
+            <span className="flex-1 text-[11px] text-slate-300">Type your message…</span>
+            <div className="flex size-6 items-center justify-center rounded-full"
+              style={{ background: config.primary_color }}>
+              <Send className="size-3 text-white" />
+            </div>
+          </div>
+        </div>
+
+        {/* Teaser bubble + launcher */}
+        <div className="mt-3 flex items-end justify-end gap-2">
+          <div className="max-w-[190px] rounded-xl rounded-br-sm bg-white px-3 py-2 shadow-md">
+            <p className="text-[11px] leading-snug text-slate-600">
+              {config.bubble_message || "Hi! 👋 Have a question?"}
+            </p>
+            <p className="mt-1 flex items-center gap-1 text-[9px] text-slate-400">
+              <Clock className="size-2.5" /> after {config.trigger_delay_seconds}s
+            </p>
+          </div>
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-full shadow-lg"
+            style={{ background: config.primary_color }}>
+            <MessageCircle className="size-5 text-white" />
+          </div>
+        </div>
+
+        {config.business_phone && (
+          <p className="mt-3 flex items-center justify-center gap-1 text-[10px] text-slate-400">
+            <UserRound className="size-3" />
+            Handoff to WhatsApp: {config.business_phone}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -533,8 +533,14 @@ async function processMessage(
     if (handled) return
   }
   // ── JOURNEY FIRST ──
+  // Journeys answer first. If one did, automations must not ALSO reply —
+  // otherwise the customer gets two different answers to one question.
+  // Their non-messaging steps (tag, assign, create deal, update field)
+  // still run, because a merchant is relying on those regardless of who
+  // spoke.
+  let journeyReplied = false
   try {
-    await runJourneysForInbound({
+    journeyReplied = await runJourneysForInbound({
       userId,
       conversationId: conversation.id,
       contactId: contactRecord.id,
@@ -561,6 +567,7 @@ async function processMessage(
         userId,
         triggerType,
         contactId: contactRecord.id,
+        suppressReplies: journeyReplied,
         context: {
           message_text: inboundText,
           conversation_id: conversation.id,

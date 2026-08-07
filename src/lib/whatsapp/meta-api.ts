@@ -322,7 +322,7 @@ function maxPlaceholder(text: string): number {
 /**
  * Submit a new message template to Meta for approval. Mirrors the manual
  * Graph API call (POST /{waba_id}/message_templates) so clients never
- * touch the Meta dashboard — the AiSensy "create template" experience.
+ * touch the Meta dashboard — an in-app "create template" experience.
  *
  * Returns Meta's template id + status (usually PENDING; library-derived
  * or trivially-safe templates may come back APPROVED immediately).
@@ -545,4 +545,298 @@ export async function uploadProfilePhoto(
   }
   const uploaded = await uploadRes.json()
   return uploaded.h as string // the media handle
+}
+
+// ════════════════════════════════════════════════════════════════════
+// INTERACTIVE MESSAGES
+//
+// Buttons, lists, catalogues and product messages — the message types
+// the Journey canvas offers as nodes (TEXT_BUTTONS, MEDIA_BUTTONS,
+// LIST, CATALOGUE, SINGLE_PRODUCT, MULTI_PRODUCT).
+//
+// Until now the only senders here were text, template and reaction, so
+// a TEXT_BUTTONS node could only send its text and silently dropped the
+// buttons, and the LIST/product nodes did nothing at all. Everything
+// below exists so those nodes send what the merchant designed.
+//
+// Meta's limits are enforced here rather than trusted from the caller:
+// exceeding them returns a 400 that surfaces as a failed send, which is
+// far harder to debug than a value clamped at the source.
+// ════════════════════════════════════════════════════════════════════
+
+/** A tappable reply button. Max 3 per message; title max 20 chars. */
+export interface InteractiveButton {
+  /** Returned in the webhook when tapped — keep it stable, it is how
+   *  a flow knows which branch the customer chose. */
+  id: string
+  title: string
+}
+
+/** One selectable row inside a list section. */
+export interface InteractiveListRow {
+  id: string
+  title: string        // max 24 chars
+  description?: string // max 72 chars
+}
+
+export interface InteractiveListSection {
+  title: string        // max 24 chars
+  rows: InteractiveListRow[]
+}
+
+/** Header options. Media headers need an uploaded media id or a public URL. */
+export type InteractiveHeader =
+  | { type: 'text'; text: string }
+  | { type: 'image'; link: string }
+  | { type: 'video'; link: string }
+  | { type: 'document'; link: string; filename?: string }
+
+interface BaseInteractiveArgs {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  /** The message body. Required by Meta for every interactive type. */
+  body: string
+  header?: InteractiveHeader
+  footer?: string
+  contextMessageId?: string
+}
+
+/** Trim to Meta's limit without throwing — a clipped label beats a failed send. */
+function clamp(value: string, max: number): string {
+  const text = (value ?? '').trim()
+  return text.length > max ? text.slice(0, max) : text
+}
+
+/** Shared POST + error handling for every interactive type. */
+async function postInteractive(
+  args: { phoneNumberId: string; accessToken: string; to: string; contextMessageId?: string },
+  interactive: Record<string, unknown>,
+): Promise<MetaSendResult> {
+  const url = `${META_API_BASE}/${args.phoneNumberId}/messages`
+  const body: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: args.to,
+    type: 'interactive',
+    interactive,
+  }
+  if (args.contextMessageId) {
+    body.context = { message_id: args.contextMessageId }
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${args.accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const data = await response.json()
+  return { messageId: data.messages[0].id }
+}
+
+/** Build the optional header/footer block shared by all interactive types. */
+function decorate(
+  interactive: Record<string, unknown>,
+  header?: InteractiveHeader,
+  footer?: string,
+): Record<string, unknown> {
+  if (header) {
+    if (header.type === 'text') {
+      interactive.header = { type: 'text', text: clamp(header.text, 60) }
+    } else if (header.type === 'document') {
+      interactive.header = {
+        type: 'document',
+        document: { link: header.link, ...(header.filename ? { filename: header.filename } : {}) },
+      }
+    } else {
+      interactive.header = { type: header.type, [header.type]: { link: header.link } }
+    }
+  }
+  if (footer) interactive.footer = { text: clamp(footer, 60) }
+  return interactive
+}
+
+export interface SendButtonMessageArgs extends BaseInteractiveArgs {
+  buttons: InteractiveButton[]
+}
+
+/**
+ * Reply buttons — up to 3. The customer taps one and the webhook
+ * receives the button's `id`, which is what lets a flow branch on the
+ * choice rather than parsing free text.
+ */
+export async function sendButtonMessage(
+  args: SendButtonMessageArgs,
+): Promise<MetaSendResult> {
+  const buttons = args.buttons
+    .filter((b) => b.title?.trim())
+    .slice(0, 3) // Meta's hard limit
+    .map((b) => ({
+      type: 'reply',
+      reply: { id: clamp(b.id, 256), title: clamp(b.title, 20) },
+    }))
+
+  if (buttons.length === 0) {
+    throw new Error('A button message needs at least one button')
+  }
+
+  const interactive = decorate(
+    {
+      type: 'button',
+      body: { text: clamp(args.body, 1024) },
+      action: { buttons },
+    },
+    args.header,
+    args.footer,
+  )
+  return postInteractive(args, interactive)
+}
+
+export interface SendListMessageArgs extends BaseInteractiveArgs {
+  /** Label on the button that opens the list. Max 20 chars. */
+  buttonText: string
+  sections: InteractiveListSection[]
+}
+
+/**
+ * A list message — the right choice above 3 options, since buttons cap
+ * at 3. Meta allows up to 10 sections and 10 rows in total.
+ */
+export async function sendListMessage(
+  args: SendListMessageArgs,
+): Promise<MetaSendResult> {
+  let rowBudget = 10 // total rows across ALL sections, not per section
+  const sections = args.sections
+    .filter((s) => s.rows?.length)
+    .slice(0, 10)
+    .map((section) => {
+      const rows = section.rows.slice(0, rowBudget).map((row) => ({
+        id: clamp(row.id, 200),
+        title: clamp(row.title, 24),
+        ...(row.description ? { description: clamp(row.description, 72) } : {}),
+      }))
+      rowBudget -= rows.length
+      return { title: clamp(section.title, 24), rows }
+    })
+    .filter((s) => s.rows.length > 0)
+
+  if (sections.length === 0) {
+    throw new Error('A list message needs at least one row')
+  }
+
+  const interactive = decorate(
+    {
+      type: 'list',
+      body: { text: clamp(args.body, 1024) },
+      action: { button: clamp(args.buttonText || 'Choose', 20), sections },
+    },
+    args.header,
+    args.footer,
+  )
+  return postInteractive(args, interactive)
+}
+
+export interface SendSingleProductArgs extends BaseInteractiveArgs {
+  catalogId: string
+  productRetailerId: string
+}
+
+/** One product from the merchant's Meta catalogue, with a Buy button. */
+export async function sendSingleProductMessage(
+  args: SendSingleProductArgs,
+): Promise<MetaSendResult> {
+  const interactive = decorate(
+    {
+      type: 'product',
+      body: { text: clamp(args.body, 1024) },
+      action: {
+        catalog_id: args.catalogId,
+        product_retailer_id: args.productRetailerId,
+      },
+    },
+    undefined, // Meta rejects a header on single-product messages
+    args.footer,
+  )
+  return postInteractive(args, interactive)
+}
+
+export interface SendMultiProductArgs extends BaseInteractiveArgs {
+  catalogId: string
+  /** Grouped exactly as they should appear to the customer. */
+  sections: { title: string; productRetailerIds: string[] }[]
+}
+
+/**
+ * Several catalogue products in one browsable message. Meta requires a
+ * text header here and caps the total at 30 products.
+ */
+export async function sendMultiProductMessage(
+  args: SendMultiProductArgs,
+): Promise<MetaSendResult> {
+  let productBudget = 30
+  const sections = args.sections
+    .filter((s) => s.productRetailerIds?.length)
+    .slice(0, 10)
+    .map((section) => {
+      const items = section.productRetailerIds
+        .slice(0, productBudget)
+        .map((id) => ({ product_retailer_id: id }))
+      productBudget -= items.length
+      return { title: clamp(section.title, 24), product_items: items }
+    })
+    .filter((s) => s.product_items.length > 0)
+
+  if (sections.length === 0) {
+    throw new Error('A multi-product message needs at least one product')
+  }
+
+  const headerText =
+    args.header?.type === 'text' ? args.header.text : 'Our products'
+
+  const interactive = decorate(
+    {
+      type: 'product_list',
+      body: { text: clamp(args.body, 1024) },
+      action: { catalog_id: args.catalogId, sections },
+    },
+    { type: 'text', text: headerText }, // required for product_list
+    args.footer,
+  )
+  return postInteractive(args, interactive)
+}
+
+export interface SendCatalogueArgs extends BaseInteractiveArgs {
+  /** Optional product to show as the cover. Meta picks one if omitted. */
+  thumbnailProductRetailerId?: string
+}
+
+/** The merchant's whole catalogue, with a "View catalog" button. */
+export async function sendCatalogueMessage(
+  args: SendCatalogueArgs,
+): Promise<MetaSendResult> {
+  const interactive = decorate(
+    {
+      type: 'catalog_message',
+      body: { text: clamp(args.body, 1024) },
+      action: {
+        name: 'catalog_message',
+        ...(args.thumbnailProductRetailerId
+          ? {
+              parameters: {
+                thumbnail_product_retailer_id: args.thumbnailProductRetailerId,
+              },
+            }
+          : {}),
+      },
+    },
+    undefined, // catalog messages take no header
+    args.footer,
+  )
+  return postInteractive(args, interactive)
 }

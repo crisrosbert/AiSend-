@@ -28,7 +28,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
   Bot, Loader2, Save, Plus, Image as ImageIcon, Brain, X, Sparkles,
-  Search, Check, Copy, Globe,
+  Search, Check, Copy, Globe, MessageCircle,
 } from "lucide-react";
 import {
   AGENT_TEMPLATES,
@@ -80,6 +80,13 @@ export default function AgentsPage() {
   const [applying, setApplying] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Which agent answers general WhatsApp messages. Stored on
+  // whatsapp_config so it sits beside the ads-agent picker that already
+  // works the same way.
+  const [waAgentId, setWaAgentId] = useState<string>("");
+  const [waSaving, setWaSaving] = useState(false);
+  const [hasWaConfig, setHasWaConfig] = useState(false);
+
   // "Train from your website" — the URL box in the drawer, plus what
   // came back from the last run so we can show the user what happened.
   const [trainUrl, setTrainUrl] = useState("");
@@ -103,6 +110,16 @@ export default function AgentsPage() {
 
     const rows = data || [];
     setAgents(rows);
+
+    // The WhatsApp number's config. Absent until they connect WhatsApp,
+    // in which case there is nothing to assign an agent to yet.
+    const { data: waConfig } = await supabase
+      .from("whatsapp_config")
+      .select("whatsapp_agent_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    setHasWaConfig(!!waConfig);
+    setWaAgentId(waConfig?.whatsapp_agent_id ?? "");
     // Returning users go straight to their own agents.
     if (rows.length > 0) setTab("mine");
     setLoading(false);
@@ -246,6 +263,37 @@ export default function AgentsPage() {
     }
   }
 
+  /**
+   * Assign (or clear) the agent that answers general WhatsApp messages.
+   *
+   * Saves immediately on change rather than behind a Save button — it is
+   * a single dropdown, and a picker that silently does nothing until you
+   * find a button elsewhere is how features get reported as broken.
+   */
+  async function saveWhatsAppAgent(nextId: string) {
+    const previous = waAgentId;
+    setWaAgentId(nextId);
+    setWaSaving(true);
+    try {
+      const { error } = await supabase
+        .from("whatsapp_config")
+        .update({ whatsapp_agent_id: nextId || null })
+        .eq("user_id", userId);
+      if (error) {
+        setWaAgentId(previous);
+        toast.error(error.message);
+        return;
+      }
+      toast.success(
+        nextId
+          ? "This agent now answers your WhatsApp messages"
+          : "WhatsApp replies left to your flows",
+      );
+    } finally {
+      setWaSaving(false);
+    }
+  }
+
   /** Copy the embed snippet for a specific agent. */
   function copyEmbed(agent: Agent) {
     const snippet = `<script src="${window.location.origin}/widget.js" data-org="${userId}" data-agent="${agent.id}"></script>`;
@@ -299,6 +347,41 @@ export default function AgentsPage() {
           Create Agent
         </button>
       </header>
+
+      {/* ── Channel assignment ──
+          Only meaningful once WhatsApp is connected and at least one
+          agent exists; showing an empty dropdown teaches nothing. */}
+      {hasWaConfig && agents.length > 0 && (
+        <section className="ag-channel">
+          <div className="ag-channel-left">
+            <span className="ag-channel-ic"><MessageCircle size={17} /></span>
+            <div>
+              <h2>Who answers WhatsApp?</h2>
+              <p>
+                This agent replies to anything your Chat Flows don&apos;t catch —
+                including replies to your campaigns.
+              </p>
+            </div>
+          </div>
+          <div className="ag-channel-pick">
+            <select
+              className="ag-input"
+              value={waAgentId}
+              disabled={waSaving}
+              onChange={(e) => saveWhatsAppAgent(e.target.value)}
+              aria-label="Agent that answers WhatsApp"
+            >
+              <option value="">None — flows only</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}{a.is_active ? "" : " (paused)"}
+                </option>
+              ))}
+            </select>
+            {waSaving && <Loader2 size={15} className="ag-spin ag-dim" />}
+          </div>
+        </section>
+      )}
 
       {/* ── Tabs ── */}
       <nav className="ag-tabs" role="tablist">
@@ -738,6 +821,16 @@ const css = `
 .ag-knob{position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#fff;
   transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.22)}
 .ag-toggle.on .ag-knob{left:20px}
+.ag-channel{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 20px}
+.ag-channel-left{display:flex;align-items:center;gap:12px;min-width:0}
+.ag-channel-ic{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;flex-shrink:0;
+  background:#e7f8ef;color:#075E54}
+.ag-channel h2{font-size:15px;font-weight:750}
+.ag-channel p{font-size:12.5px;color:var(--muted);margin:2px 0 0;line-height:1.45;max-width:60ch}
+.ag-channel-pick{display:flex;align-items:center;gap:9px}
+.ag-channel-pick .ag-input{min-width:210px}
+.ag-dim{color:var(--faint)}
 .ag-train{display:flex;flex-direction:column;gap:9px;padding:14px;border:1px solid var(--line);
   border-radius:14px;background:var(--lime-soft);margin-bottom:16px}
 .ag-train-lead{font-size:12px;color:#4b5563;margin:0;line-height:1.5}

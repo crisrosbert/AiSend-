@@ -136,7 +136,7 @@ export default function SignupPage() {
       password,
       options: {
         data: { full_name: fullName, slug, business_name: businessName || fullName },
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(`/${slug}/dashboard`)}`,
+        emailRedirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(`/${slug}/dashboard`)}`,
       },
     });
 

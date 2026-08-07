@@ -21,6 +21,7 @@ import {
   CalendarCheck,
   Globe,
   Bot,
+  Workflow,
 } from "lucide-react";
 import {
   Avatar,
@@ -46,7 +47,13 @@ const navItems = [
   { path: "contacts",  label: "Contacts",   icon: Users },
   { path: "pipelines", label: "Pipelines",  icon: GitBranch },
   { path: "broadcasts",label: "Campaigns",  icon: Radio },
-  { path: "automations",label: "Flows",     icon: Zap },
+  // Two builders, two jobs — the labels have to say which is which.
+  // "Chat Flows" is the visual canvas the customer experiences;
+  // "Automation Rules" is the background CRM engine. Previously the
+  // canvas had no nav entry at all and "Flows" pointed at the rules,
+  // which meant nobody could find the thing they were looking for.
+  { path: "journeys",   label: "Chat Flows", icon: Workflow },
+  { path: "automations",label: "Automation Rules", icon: Zap },
   { path: "bookings",  label: "Bookings",   icon: CalendarCheck },
   { path: "leads",     label: "Website Leads", icon: Globe },
   { path: "widget",    label: "Website Widget", icon: Globe },

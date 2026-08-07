@@ -7,6 +7,7 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { runJourneysForInbound } from '@/lib/journeys/runner'
 import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
+import { handleWhatsAppMessage } from '@/lib/whatsapp-agent/handler'
 import { handleInboundConsent } from '@/lib/optin/manager'
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -207,6 +208,7 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           phoneNumberId,
           config.ads_agent_enabled ?? false,
           config.ads_agent_id ?? null,
+          config.whatsapp_agent_id ?? null,
         )
       }
     }
@@ -422,6 +424,7 @@ async function processMessage(
   phoneNumberId: string,
   adsAgentEnabled: boolean,
   adsAgentId: string | null,
+  whatsappAgentId: string | null,
 ) {
   const senderPhone = normalizePhone(message.from)
   const contactName = contact.profile.name
@@ -552,7 +555,31 @@ async function processMessage(
   } catch (err) {
     console.error('[journeys] dispatch failed:', err)
   }
-  // ── AUTOMATIONS SECOND ──
+  // ── AI AGENT THIRD ──
+  // Whatever the deterministic layers did not answer. This is the layer
+  // that finally makes an agent work on WhatsApp — and the one that
+  // answers broadcast replies, which previously reached nobody unless a
+  // keyword happened to match.
+  let agentReplied = false
+  if (!journeyReplied && whatsappAgentId) {
+    try {
+      agentReplied = await handleWhatsAppMessage({
+        tenantId: userId,
+        agentId: whatsappAgentId,
+        conversationId: conversation.id,
+        contactId: contactRecord.id,
+        customerPhone: senderPhone,
+        contactName,
+        inboundText,
+        phoneNumberId,
+        accessToken,
+      })
+    } catch (err) {
+      console.error('[whatsapp-agent] dispatch failed:', err)
+    }
+  }
+
+  // ── AUTOMATIONS LAST ──
   const automationTriggers: (
     | 'new_contact_created'
     | 'first_inbound_message'
@@ -567,7 +594,7 @@ async function processMessage(
         userId,
         triggerType,
         contactId: contactRecord.id,
-        suppressReplies: journeyReplied,
+        suppressReplies: journeyReplied || agentReplied,
         context: {
           message_text: inboundText,
           conversation_id: conversation.id,

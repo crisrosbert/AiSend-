@@ -21,7 +21,16 @@
 //     (runAgentFallback) so conversations aren't left unanswered.
 
 import { createClient } from '@supabase/supabase-js'
-import { sendTextMessage } from '@/lib/whatsapp/meta-api'
+import {
+  sendTextMessage,
+  sendButtonMessage,
+  sendListMessage,
+  sendCatalogueMessage,
+  sendSingleProductMessage,
+  sendMultiProductMessage,
+  type InteractiveHeader,
+  type MetaSendResult,
+} from '@/lib/whatsapp/meta-api'
 import {
   getOrgIdForUser,
   deductCredits,
@@ -56,6 +65,9 @@ interface JourneyEdge {
   id: string
   source: string
   target: string
+  /** Which outlet of a branching node this edge leaves from.
+   *  Absent means "the default path" — see walk(). */
+  sourceHandle?: string
 }
 
 interface JourneyTrigger {
@@ -215,6 +227,20 @@ async function executeJourney(
   await walk(journey, startId, visited, args, orgId, 0)
 }
 
+/**
+ * What a node tells the walker to do next.
+ *
+ * `handle` is how CONDITION branches: it names which outgoing edge to
+ * follow, matched against JourneyEdge.sourceHandle. Without it every
+ * outgoing edge is followed, which is correct for ordinary send nodes
+ * and was previously (wrongly) also what CONDITION did — meaning both
+ * branches of every condition executed.
+ */
+interface NodeResult {
+  continue: boolean
+  handle?: string
+}
+
 async function walk(
   journey: JourneyRow,
   fromId: string,
@@ -222,13 +248,21 @@ async function walk(
   args: RunJourneysArgs,
   orgId: string | null,
   depth: number,
+  handleFilter?: string,
 ): Promise<void> {
   if (depth > MAX_DEPTH) {
     console.warn('[journeys.runner] max depth exceeded for journey', journey.id)
     return
   }
 
-  const outgoing = (journey.edges || []).filter((e) => e.source === fromId)
+  let outgoing = (journey.edges || []).filter((e) => e.source === fromId)
+
+  // A branching node restricts which edges may be taken. Edges drawn
+  // without an explicit handle count as the "true" path, so a condition
+  // wired with a single unlabelled edge still behaves sensibly.
+  if (handleFilter !== undefined) {
+    outgoing = outgoing.filter((e) => (e.sourceHandle ?? 'true') === handleFilter)
+  }
 
   for (const edge of outgoing) {
     if (visited.has(edge.target)) continue
@@ -237,9 +271,9 @@ async function walk(
     const node = journey.nodes.find((n) => n.id === edge.target)
     if (!node) continue
 
-    const cont = await executeNode(node, args, orgId)
-    if (cont) {
-      await walk(journey, node.id, visited, args, orgId, depth + 1)
+    const result = await executeNode(node, args, orgId)
+    if (result.continue) {
+      await walk(journey, node.id, visited, args, orgId, depth + 1, result.handle)
     }
   }
 }
@@ -248,31 +282,169 @@ async function executeNode(
   node: JourneyNode,
   args: RunJourneysArgs,
   orgId: string | null,
-): Promise<boolean> {
+): Promise<NodeResult> {
   const data = node.data || {}
   const type = node.type
 
   try {
     switch (type) {
+      // Buttons are what let a flow branch on a CHOICE rather than on
+      // parsed free text. Sending the body without them (the old
+      // behaviour) silently turned every menu into a dead end.
       case 'TEXT_BUTTONS': {
         const text = String(data.text || '').trim()
-        if (text) {
+        if (!text) return { continue: true }
+        const buttons = buttonsFrom(data.buttons)
+
+        if (buttons.length === 0) {
           await sendBotMessage(args, text, orgId)
+          return { continue: true }
         }
-        return true
+
+        await deliver(args, orgId, text, () =>
+          sendButtonMessage({
+            phoneNumberId: args.phoneNumberId,
+            accessToken: args.accessToken,
+            to: args.customerPhone,
+            body: text,
+            buttons,
+          }),
+        )
+        return { continue: true }
       }
 
       case 'MEDIA_BUTTONS': {
         const caption = String(data.caption || data.text || '').trim()
-        if (caption) {
-          await sendBotMessage(args, caption, orgId)
+        const mediaUrl = String(data.mediaUrl || '').trim()
+        const mediaType = String(data.mediaType || 'image')
+        const buttons = buttonsFrom(data.buttons)
+
+        // Meta requires a body on interactive messages, so a media node
+        // with no caption cannot be sent as one.
+        if (!caption) {
+          if (mediaUrl) console.warn('[journeys.runner] MEDIA_BUTTONS needs a caption')
+          return { continue: true }
         }
-        return true
+
+        if (buttons.length === 0) {
+          await sendBotMessage(args, caption, orgId)
+          return { continue: true }
+        }
+
+        const header: InteractiveHeader | undefined = mediaUrl
+          ? mediaType === 'video'
+            ? { type: 'video', link: mediaUrl }
+            : mediaType === 'document'
+              ? { type: 'document', link: mediaUrl }
+              : { type: 'image', link: mediaUrl }
+          : undefined
+
+        await deliver(args, orgId, caption, () =>
+          sendButtonMessage({
+            phoneNumberId: args.phoneNumberId,
+            accessToken: args.accessToken,
+            to: args.customerPhone,
+            body: caption,
+            buttons,
+            header,
+          }),
+        )
+        return { continue: true }
+      }
+
+      case 'LIST': {
+        const body = String(data.body || data.text || '').trim()
+        if (!body) return { continue: true }
+
+        const sections = listSectionsFrom(data)
+        if (sections.length === 0) {
+          await sendBotMessage(args, body, orgId)
+          return { continue: true }
+        }
+
+        const headerText = String(data.header || '').trim()
+        await deliver(args, orgId, body, () =>
+          sendListMessage({
+            phoneNumberId: args.phoneNumberId,
+            accessToken: args.accessToken,
+            to: args.customerPhone,
+            body,
+            buttonText: String(data.buttonText || 'Choose'),
+            sections,
+            header: headerText ? { type: 'text', text: headerText } : undefined,
+          }),
+        )
+        return { continue: true }
+      }
+
+      case 'CATALOGUE': {
+        const body = String(data.body || data.text || 'Browse our catalogue').trim()
+        await deliver(args, orgId, body, () =>
+          sendCatalogueMessage({
+            phoneNumberId: args.phoneNumberId,
+            accessToken: args.accessToken,
+            to: args.customerPhone,
+            body,
+            thumbnailProductRetailerId: productIdsFrom(data.productIds)[0],
+          }),
+        )
+        return { continue: true }
+      }
+
+      case 'SINGLE_PRODUCT': {
+        const body = String(data.body || data.text || '').trim()
+        const catalogId = String(data.catalogId || '').trim()
+        const productId = productIdsFrom(data.productIds)[0]
+
+        if (!catalogId || !productId) {
+          console.warn('[journeys.runner] SINGLE_PRODUCT needs catalogId + one product')
+          return { continue: true }
+        }
+
+        await deliver(args, orgId, body || 'Product', () =>
+          sendSingleProductMessage({
+            phoneNumberId: args.phoneNumberId,
+            accessToken: args.accessToken,
+            to: args.customerPhone,
+            body: body || 'Have a look at this',
+            catalogId,
+            productRetailerId: productId,
+          }),
+        )
+        return { continue: true }
+      }
+
+      case 'MULTI_PRODUCT': {
+        const body = String(data.body || data.text || '').trim()
+        const catalogId = String(data.catalogId || '').trim()
+        const productIds = productIdsFrom(data.productIds)
+
+        if (!catalogId || productIds.length === 0) {
+          console.warn('[journeys.runner] MULTI_PRODUCT needs catalogId + products')
+          return { continue: true }
+        }
+
+        await deliver(args, orgId, body || 'Products', () =>
+          sendMultiProductMessage({
+            phoneNumberId: args.phoneNumberId,
+            accessToken: args.accessToken,
+            to: args.customerPhone,
+            body: body || 'Have a look at these',
+            catalogId,
+            sections: [
+              {
+                title: String(data.header || 'Products'),
+                productRetailerIds: productIds,
+              },
+            ],
+          }),
+        )
+        return { continue: true }
       }
 
       case 'TEMPLATE': {
         console.log('[journeys.runner] TEMPLATE node skipped (Phase 3)')
-        return true
+        return { continue: true }
       }
 
       case 'TAG_CONTACT': {
@@ -281,7 +453,7 @@ async function executeNode(
         if (tagName) {
           await applyTagToContact(args.userId, args.contactId, tagName, operation === 'remove')
         }
-        return true
+        return { continue: true }
       }
 
       case 'WEBHOOK_CALL': {
@@ -290,11 +462,15 @@ async function executeNode(
         if (endpoint) {
           await callWebhook(endpoint, method, args)
         }
-        return true
+        return { continue: true }
       }
 
+      // Evaluate, then tell the walker which branch to take. Previously
+      // this returned "continue" with no handle, so BOTH branches ran and
+      // the customer received every outcome at once.
       case 'CONDITION': {
-        return true
+        const passed = evaluateCondition(data, args)
+        return { continue: true, handle: passed ? 'true' : 'false' }
       }
 
       case 'HANDOFF_TO_HUMAN': {
@@ -306,21 +482,136 @@ async function executeNode(
           .from('conversations')
           .update({ status: 'pending', updated_at: new Date().toISOString() })
           .eq('id', args.conversationId)
-        return false
+        // Stop the flow — a human owns this conversation now.
+        return { continue: false }
       }
 
       case 'CONVERSION_EVENT': {
         console.log('[journeys.runner] CONVERSION_EVENT skipped (Phase 3)')
-        return true
+        return { continue: true }
       }
 
       default:
         console.warn('[journeys.runner] unknown node type:', type)
-        return true
+        return { continue: true }
     }
   } catch (err) {
+    // One broken node must not silently kill the rest of the flow, but
+    // it must not branch either — carry on down every edge.
     console.error(`[journeys.runner] node ${node.id} (${type}) failed:`, err)
-    return true
+    return { continue: true }
+  }
+}
+
+// ── Node config readers ──
+//
+// The canvas stores node config as loose JSON, so every read is
+// defensive: a half-configured node should degrade to a plain message
+// or a skipped step, never throw inside a customer conversation.
+
+/** Button titles are stored as a plain string[]; Meta needs {id,title}. */
+function buttonsFrom(raw: unknown): { id: string; title: string }[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((title, index) => ({ id: `btn_${index}`, title: String(title ?? '').trim() }))
+    .filter((b) => b.title.length > 0)
+    .slice(0, 3)
+}
+
+/** Product ids may arrive as an array or a comma-separated string. */
+function productIdsFrom(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((id) => String(id ?? '').trim()).filter(Boolean)
+  }
+  if (typeof raw === 'string') {
+    return raw.split(',').map((id) => id.trim()).filter(Boolean)
+  }
+  return []
+}
+
+/**
+ * Read list sections from node config, accepting either a structured
+ * `sections` array or a flat `rows` array (which becomes one section).
+ */
+function listSectionsFrom(
+  data: Record<string, unknown>,
+): { title: string; rows: { id: string; title: string; description?: string }[] }[] {
+  const toRow = (row: unknown, index: number) => {
+    if (typeof row === 'string') {
+      return { id: `row_${index}`, title: row.trim() }
+    }
+    const obj = (row ?? {}) as Record<string, unknown>
+    return {
+      id: String(obj.id ?? `row_${index}`),
+      title: String(obj.title ?? '').trim(),
+      description: obj.description ? String(obj.description) : undefined,
+    }
+  }
+
+  if (Array.isArray(data.sections)) {
+    return (data.sections as unknown[])
+      .map((section) => {
+        const obj = (section ?? {}) as Record<string, unknown>
+        const rows = Array.isArray(obj.rows)
+          ? (obj.rows as unknown[]).map(toRow).filter((r) => r.title)
+          : []
+        return { title: String(obj.title ?? 'Options'), rows }
+      })
+      .filter((s) => s.rows.length > 0)
+  }
+
+  if (Array.isArray(data.rows)) {
+    const rows = (data.rows as unknown[]).map(toRow).filter((r) => r.title)
+    return rows.length ? [{ title: String(data.header ?? 'Options'), rows }] : []
+  }
+
+  return []
+}
+
+/**
+ * Evaluate a CONDITION node.
+ *
+ * Only variables the runner actually holds are resolvable today — the
+ * inbound text and the customer's phone. Anything else resolves to an
+ * empty string rather than throwing, so an unrecognised variable takes
+ * the "false" branch instead of breaking the conversation. Richer
+ * variables (contact fields, tags) need a context object passed through
+ * the walker; that is a deliberate next step, not an oversight.
+ */
+function evaluateCondition(
+  data: Record<string, unknown>,
+  args: RunJourneysArgs,
+): boolean {
+  const variable = String(data.variable ?? '').trim().toLowerCase()
+  const operator = String(data.operator ?? 'equals')
+  const compare = String(data.value ?? '').trim()
+
+  let actual = ''
+  if (['last_message', 'message', 'text', 'inbound', 'last_message_text'].includes(variable)) {
+    actual = (args.inboundText || '').trim()
+  } else if (['phone', 'contact.phone', 'customer_phone'].includes(variable)) {
+    actual = args.customerPhone || ''
+  } else if (variable) {
+    console.warn('[journeys.runner] CONDITION: unresolvable variable', variable)
+  }
+
+  const left = actual.toLowerCase()
+  const right = compare.toLowerCase()
+
+  switch (operator) {
+    case 'exists':
+      return actual.length > 0
+    case 'contains':
+      return right.length > 0 && left.includes(right)
+    case 'starts_with':
+      return right.length > 0 && left.startsWith(right)
+    case 'greater_than':
+      return Number(actual) > Number(compare)
+    case 'less_than':
+      return Number(actual) < Number(compare)
+    case 'equals':
+    default:
+      return left === right
   }
 }
 
@@ -336,23 +627,57 @@ async function executeNode(
  *     since they're inbound-triggered replies within the 24h window.
  *   - If we ever send TEMPLATE nodes (Phase 3), price them as 'marketing'.
  */
+/**
+ * Send anything to the customer, then record and bill it identically.
+ *
+ * Every outbound message from a journey — plain text, buttons, a list,
+ * a product carousel — must land in `messages`, refresh the inbox
+ * preview, and go through the same credit path. Passing the send call in
+ * keeps that lifecycle in exactly one place, so a new message type can
+ * never quietly skip logging or billing.
+ *
+ * `preview` is what gets stored and shown in the inbox. For interactive
+ * messages that is the body text; the buttons themselves are not part of
+ * the transcript.
+ */
+async function deliver(
+  args: RunJourneysArgs,
+  orgId: string | null,
+  preview: string,
+  send: () => Promise<MetaSendResult>,
+): Promise<void> {
+  let metaMessageId: string | null = null
+  try {
+    const result = await send()
+    metaMessageId = result?.messageId ?? null
+  } catch (err) {
+    console.error('[journeys.runner] send failed:', err)
+  }
+  await recordAndBill(args, orgId, preview, metaMessageId)
+}
+
+/** Plain-text convenience wrapper — the common case. */
 async function sendBotMessage(
   args: RunJourneysArgs,
   text: string,
   orgId: string | null,
 ): Promise<void> {
-  let metaMessageId: string | null = null
-  try {
-    const result = await sendTextMessage({
+  await deliver(args, orgId, text, () =>
+    sendTextMessage({
       phoneNumberId: args.phoneNumberId,
       accessToken: args.accessToken,
       to: args.customerPhone,
       text,
-    })
-    metaMessageId = result?.messageId ?? null
-  } catch (err) {
-    console.error('[journeys.runner] sendTextMessage failed:', err)
-  }
+    }),
+  )
+}
+
+async function recordAndBill(
+  args: RunJourneysArgs,
+  orgId: string | null,
+  text: string,
+  metaMessageId: string | null,
+): Promise<void> {
 
   // Save to messages with the REAL schema.
   const { error: msgErr } = await admin().from('messages').insert({

@@ -8,7 +8,7 @@
 // otherwise their account looks lost to them.
 //
 // Both providers use Supabase's PKCE flow: signInWithOAuth sends the
-// browser to the provider, which returns to /auth/callback with a code
+// browser to the provider, which returns to /callback with a code
 // that the route handler exchanges for a session.
 
 import { useState } from "react";
@@ -37,7 +37,7 @@ export function SocialAuthButtons({ next = "/dashboard", onError, intent = "sign
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+          redirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(next)}`,
         },
       });
       // On success the browser is already navigating away, so only the

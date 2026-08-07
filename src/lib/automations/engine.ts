@@ -39,6 +39,18 @@ export interface DispatchInput {
   triggerType: AutomationTriggerType
   contactId?: string | null
   context?: AutomationContext
+  /**
+   * Set when another system has already replied to this inbound message
+   * (today: a journey that matched). Message-sending steps are skipped,
+   * but everything else — tagging, deal creation, assignment, field
+   * updates, webhooks — still runs.
+   *
+   * Without this the webhook ran journeys AND automations on the same
+   * message with no coordination, so a customer could receive two
+   * different answers to one question. Suppressing only the sends keeps
+   * the CRM side-effects a merchant is relying on.
+   */
+  suppressReplies?: boolean
 }
 
 /**
@@ -107,6 +119,9 @@ export async function resumePendingExecution(pending: {
 
   try {
     await executeStepsFrom({
+      // A resumed automation is firing after a wait, long past the
+      // inbound message any other system replied to — so sends are safe.
+      suppressReplies: false,
       automation: automation as Automation,
       contactId: pending.contact_id,
       context: pending.context ?? {},
@@ -149,6 +164,7 @@ async function executeAutomation(automation: Automation, input: DispatchInput) {
   }
 
   await executeStepsFrom({
+    suppressReplies: input.suppressReplies ?? false,
     automation,
     contactId: input.contactId ?? null,
     context: input.context ?? {},
@@ -180,6 +196,8 @@ interface ExecuteArgs {
   startPosition: number
   logId: string | null
   triggerEvent: string
+  /** Mirrors DispatchInput.suppressReplies — see there for why. */
+  suppressReplies: boolean
 }
 
 async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
@@ -299,6 +317,9 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 
   switch (step.step_type) {
     case 'send_message': {
+      if (args.suppressReplies) {
+        return 'Skipped — another system already replied to this message'
+      }
       const cfg = step.step_config as SendMessageStepConfig
       if (!args.contactId) throw new Error('send_message needs a contact')
       const text = interpolate(cfg.text, args)
@@ -314,6 +335,9 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
     }
 
     case 'send_template': {
+      if (args.suppressReplies) {
+        return 'Skipped — another system already replied to this message'
+      }
       const cfg = step.step_config as SendTemplateStepConfig
       if (!args.contactId) throw new Error('send_template needs a contact')
       if (!cfg.template_name) throw new Error('send_template needs template_name')

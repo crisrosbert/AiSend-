@@ -49,7 +49,27 @@ export async function GET(req: Request) {
       configQuery = configQuery.eq('org_user_id', org).is('agent_id', null)
     }
 
-    const { data: config } = await configQuery.maybeSingle()
+    let { data: config } = await configQuery.maybeSingle()
+
+    // An agent-scoped embed (data-agent=...) looks for that agent's own
+    // widget config. Nothing in the app creates one — /widget only ever
+    // writes the tenant's org-wide row — so without this fallback every
+    // embed copied from the Agents page resolves to nothing and the
+    // visitor is told the chat "is not configured yet".
+    //
+    // Falling back keeps per-agent configs available for anyone who
+    // later wants a different colour or greeting per agent, while making
+    // the common case work with no extra setup.
+    if (!config && agent) {
+      const { data: orgConfig } = await db()
+        .from('widget_configs')
+        .select('*')
+        .eq('is_active', true)
+        .eq('org_user_id', org)
+        .is('agent_id', null)
+        .maybeSingle()
+      if (orgConfig) config = orgConfig
+    }
 
     if (!config) {
       return NextResponse.json(

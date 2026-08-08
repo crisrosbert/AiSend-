@@ -11,6 +11,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import type { LLMTool } from '@/lib/agent/llm-provider'
+import { parseBusinessHours, type BusinessHours } from '@/lib/agent/business-hours'
 import { saveLead, buildLeadFormFields } from '@/lib/agent/tools/lead-form-tools'
 import {
   getAgentMedia,
@@ -48,6 +49,19 @@ export interface Agent {
   media_enabled: boolean
   payment_enabled: boolean
   is_active: boolean
+  /**
+   * Opening hours, always populated — parseBusinessHours() substitutes a
+   * default rather than returning null, so nothing downstream has to
+   * handle "we don't know when this business is open". Not knowing is
+   * what let the agent offer midnight appointments.
+   */
+  business_hours: BusinessHours
+  /**
+   * A number the agent can give out when the system itself fails. Null
+   * when the tenant has not set one, in which case the agent promises a
+   * callback instead of inventing a number.
+   */
+  fallback_contact: string | null
 }
 
 // Load an agent row by id. Returns null if not found (engine falls back
@@ -70,11 +84,23 @@ export async function loadAgent(agentId: string): Promise<Agent | null> {
     return {
       ...data,
       lead_form_fields: Array.isArray(fields) ? fields : ['first_name', 'last_name', 'phone', 'email'],
+      // Parsed here, once, so every consumer gets a valid object. The
+      // column may be missing entirely on tenants who haven't run the
+      // migration yet — the default covers that too.
+      business_hours: parseBusinessHours(data.business_hours),
+      fallback_contact: normalisePhone(data.fallback_contact),
     } as Agent
   } catch (err) {
     console.error('[engine-capabilities] loadAgent error:', err)
     return null
   }
+}
+
+/** Trim to something worth reading aloud, or null. */
+function normalisePhone(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  return trimmed.length >= 6 ? trimmed : null
 }
 
 // ── Capability tools (only added when the agent has the flag on) ──

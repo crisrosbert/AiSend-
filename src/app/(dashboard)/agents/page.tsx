@@ -24,11 +24,12 @@
 // the cards stay clean. Add the stats when the data can back them.
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
   Bot, Loader2, Save, Plus, Image as ImageIcon, Brain, X, Sparkles,
-  Search, Check, Copy, Globe, MessageCircle, Clock,
+  Search, Check, Copy, Globe, MessageCircle, Clock, AlertCircle,
 } from "lucide-react";
 import {
   AGENT_TEMPLATES,
@@ -97,6 +98,10 @@ export default function AgentsPage() {
   const [waSaving, setWaSaving] = useState(false);
   const [hasWaConfig, setHasWaConfig] = useState(false);
 
+  // agent id → number of media items it owns. Drives the warning that
+  // explains why an agent is refusing to send images.
+  const [mediaCounts, setMediaCounts] = useState<Record<string, number>>({});
+
   // "Train from your website" — the URL box in the drawer, plus what
   // came back from the last run so we can show the user what happened.
   const [trainUrl, setTrainUrl] = useState("");
@@ -130,6 +135,25 @@ export default function AgentsPage() {
       .maybeSingle();
     setHasWaConfig(!!waConfig);
     setWaAgentId(waConfig?.whatsapp_agent_id ?? "");
+
+    // How many media items each agent owns.
+    //
+    // This exists to close a silent failure: the agent only gets the
+    // send_media tool when the toggle is ON *and* the agent has media.
+    // Miss either half and it tells customers "I can't share images" —
+    // with nothing anywhere on this page explaining why. Counting them
+    // here lets the drawer say which half is missing.
+    const { data: mediaRows } = await supabase
+      .from("agent_media")
+      .select("agent_id")
+      .eq("tenant_id", user.id);
+
+    const counts: Record<string, number> = {};
+    for (const row of mediaRows || []) {
+      counts[row.agent_id] = (counts[row.agent_id] ?? 0) + 1;
+    }
+    setMediaCounts(counts);
+
     // Returning users go straight to their own agents.
     if (rows.length > 0) setTab("mine");
     setLoading(false);
@@ -662,6 +686,16 @@ export default function AgentsPage() {
 
             <Toggle label="Media (images, PDFs, video)" on={editing.media_enabled}
               set={(v) => setEditing({ ...editing, media_enabled: v })} />
+
+            {/* ── Why the agent is refusing to send images ──
+                Sending needs BOTH the toggle and at least one uploaded
+                file. Miss either and the agent answers "I can't share
+                images" — true, but baffling if you have just uploaded
+                twenty photos. This says which half is missing. */}
+            <MediaNotice
+              enabled={editing.media_enabled}
+              count={mediaCounts[editing.id] ?? 0}
+            />
             <Toggle label="Lead-capture form" on={editing.lead_form_enabled}
               set={(v) => setEditing({ ...editing, lead_form_enabled: v })} />
 
@@ -706,6 +740,57 @@ function Field({ label, hint, children }: {
       {hint && <p className="ag-hint">{hint}</p>}
     </div>
   );
+}
+
+/**
+ * Explains, in the drawer, why an agent will or won't send images.
+ *
+ * The engine gives an agent the send_media tool only when the toggle is
+ * on AND the agent owns at least one media item. Both halves are edited
+ * on different pages, so it is easy to do one and assume you are done —
+ * and the only symptom is the agent politely telling customers it can't
+ * share anything.
+ */
+function MediaNotice({ enabled, count }: { enabled: boolean; count: number }) {
+  if (enabled && count === 0) {
+    return (
+      <p className="ag-notice warn">
+        <AlertCircle size={13} />
+        <span>
+          Media is on, but this agent has no files yet — it will still tell
+          customers it can&apos;t share images. Upload them on the{" "}
+          <Link href="/media">Media page</Link> with this agent selected.
+        </span>
+      </p>
+    );
+  }
+
+  if (!enabled && count > 0) {
+    return (
+      <p className="ag-notice warn">
+        <AlertCircle size={13} />
+        <span>
+          This agent has {count} file{count === 1 ? "" : "s"} ready, but media is
+          switched off — so it will refuse every request for a photo or
+          brochure. Turn it on above.
+        </span>
+      </p>
+    );
+  }
+
+  if (enabled && count > 0) {
+    return (
+      <p className="ag-notice ok">
+        <Check size={13} />
+        <span>
+          {count} file{count === 1 ? "" : "s"} available. The agent can send
+          {count === 1 ? " it" : " them"} when a customer asks.
+        </span>
+      </p>
+    );
+  }
+
+  return null;
 }
 
 /* ── Opening hours editor ──────────────────────────────────────────────
@@ -988,6 +1073,14 @@ const css = `
 .ag-train-done{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#3f6212;margin:0;font-weight:600}
 .ag-train-done svg{flex-shrink:0}
 .ag-train .ag-hint{color:#6b7280}
+
+/* capability notices — why an agent will or won't do something */
+.ag-notice{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.5;
+  margin:-2px 0 14px;padding:9px 11px;border-radius:10px;border:1px solid transparent}
+.ag-notice svg{flex-shrink:0;margin-top:1px}
+.ag-notice.warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
+.ag-notice.ok{background:var(--lime-soft);border-color:#d9f99d;color:#3f6212}
+.ag-notice a{color:inherit;font-weight:700;text-decoration:underline}
 
 /* opening hours */
 .ag-hours{background:var(--ground);border:1px solid var(--line);border-radius:14px;

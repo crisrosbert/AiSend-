@@ -84,6 +84,31 @@ export async function POST(req: Request) {
       )
     }
 
+    // ── Which agent is actually answering ──
+    //
+    // The fallback above deliberately keeps an agent-scoped embed working
+    // against the tenant's org-wide config row. But that row has
+    // agent_id NULL, so reading the agent from it discarded the agent the
+    // embed asked for — and the engine then ran its legacy path, where
+    // send_media, the lead form and the agent's own capability flags do
+    // not exist at all. The visible symptom was an agent insisting it
+    // could not share images while its library sat full of them.
+    //
+    // The embed's data-agent is honoured, but only after checking the
+    // agent belongs to this tenant. data-agent arrives from a public
+    // script tag, so without that check a page could name another
+    // tenant's agent and borrow its persona and media.
+    let resolvedAgentId: string | undefined = config.agent_id ?? undefined
+    if (!resolvedAgentId && agent_id) {
+      const { data: owned } = await db()
+        .from('agents')
+        .select('id')
+        .eq('id', agent_id)
+        .eq('tenant_id', org_id)
+        .maybeSingle()
+      if (owned) resolvedAgentId = owned.id
+    }
+
     // 2. Find existing session
     const { data: session } = await db()
       .from('widget_sessions')
@@ -246,7 +271,7 @@ export async function POST(req: Request) {
       inboundText: message.trim(),
       journeyId: config.journey_id ?? undefined,
       systemPromptOverride: systemPrompt,
-      agentId: config.agent_id ?? undefined,
+      agentId: resolvedAgentId,
     })
 
     const aiFailed = !result.reply

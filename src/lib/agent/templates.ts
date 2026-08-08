@@ -1,4 +1,4 @@
-// src/lib/agents/templates.ts
+// src/lib/agent/templates.ts
 //
 // ── WHAT THIS FILE IS ────────────────────────────────────────────────
 // The catalogue of ready-made AI agents shown on the "Templates" tab of
@@ -149,6 +149,7 @@ Ask one question at a time and acknowledge each answer before the next.
 
 Once you have all three, collect their name and phone number and tell them a human will follow up shortly. If someone is clearly not a fit, stay friendly and point them somewhere useful — a bad-fit lead handled kindly still becomes a referral.`,
     capabilities: {
+      media_enabled: true,
       quick_replies_enabled: true,
       lead_form_enabled: true,
       lead_form_mode: 'progressive',
@@ -173,6 +174,7 @@ You handle:
 
 The moment a question needs a person — a complaint, a bespoke quote, anything sensitive — hand off cleanly. Say who will help and roughly when. Never guess your way through something that deserves a human.`,
     capabilities: {
+      media_enabled: true,
       quick_replies_enabled: true,
     },
     chips: ['Knowledge', 'Handoff'],
@@ -195,6 +197,7 @@ Flow:
 
 If nothing offered works, ask for their preferred day and check again. Always confirm before you consider a booking made, and tell them exactly how to reschedule.`,
     capabilities: {
+      media_enabled: true,
       quick_replies_enabled: true,
       booking_enabled: true,
     },
@@ -217,6 +220,7 @@ If the knowledge base does not cover something, say so directly — "I don't hav
 
 Never speculate about refunds, warranties, legal terms or anything involving someone's money.`,
     capabilities: {
+      media_enabled: true,
       quick_replies_enabled: true,
     },
     chips: ['Knowledge', 'Handoff'],
@@ -238,6 +242,7 @@ Report the status plainly and give the expected delivery date when you have it. 
 
 Anything involving a refund or a replacement goes to a human.`,
     capabilities: {
+      media_enabled: true,
       quick_replies_enabled: true,
     },
     chips: ['Custom action', 'Handoff'],
@@ -259,6 +264,7 @@ Ask conversationally, one thing at a time. Applying for a job is stressful — b
 
 Never make a hiring decision, imply one, or discuss salary bands. Collect the facts, thank them properly, and tell them when to expect a reply.`,
     capabilities: {
+      media_enabled: true,
       quick_replies_enabled: true,
       lead_form_enabled: true,
       lead_form_mode: 'progressive',
@@ -307,6 +313,7 @@ You must NEVER give medical advice, interpret symptoms, suggest a diagnosis, or 
 
 If anything sounds like an emergency, tell them immediately to call emergency services or attend A&E. Do not attempt to triage.`,
     capabilities: {
+      media_enabled: true,
       quick_replies_enabled: true,
       booking_enabled: true,
     },
@@ -329,6 +336,7 @@ Cover courses, duration, fees, eligibility and key dates using only documented i
 
 Once they show real interest, book them a counselling call and capture their contact details.`,
     capabilities: {
+      media_enabled: true,
       quick_replies_enabled: true,
       booking_enabled: true,
       lead_form_enabled: true,

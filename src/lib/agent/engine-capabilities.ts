@@ -130,16 +130,41 @@ const SEND_MEDIA_TOOL: LLMTool = {
   },
 }
 
+/**
+ * Load this agent's media, or nothing when the capability is off.
+ *
+ * Fetched once per turn and handed to both buildAgentTools and
+ * buildAgentSystemAddon, so enabling media costs one query rather than
+ * two, and the tool list and the prompt can never disagree about what
+ * is available.
+ */
+export async function loadAgentMedia(agent: Agent): Promise<MediaItem[]> {
+  if (!agent.media_enabled) return []
+  return getAgentMedia(agent.id)
+}
+
 // Build the capability tools for this agent, gated by flags.
-export function buildAgentTools(agent: Agent): LLMTool[] {
+export function buildAgentTools(agent: Agent, media: MediaItem[] = []): LLMTool[] {
   const tools: LLMTool[] = []
   if (agent.lead_form_enabled) tools.push(SUBMIT_LEAD_TOOL)
-  if (agent.media_enabled) tools.push(SEND_MEDIA_TOOL)
+
+  // The flag alone is not enough — the agent must actually have files.
+  //
+  // Handing the model a send_media tool with an empty catalog invites it
+  // to guess at an item, fail to find one, and tell the customer
+  // something is on its way. That is the dangling-promise failure all
+  // over again, and it becomes common the moment media is switched on
+  // for agents that have not uploaded anything yet.
+  if (agent.media_enabled && media.length > 0) tools.push(SEND_MEDIA_TOOL)
+
   return tools
 }
 
 // Build the system-prompt addon: media catalog + lead-form guidance.
-export async function buildAgentSystemAddon(agent: Agent): Promise<string> {
+export async function buildAgentSystemAddon(
+  agent: Agent,
+  media: MediaItem[] = [],
+): Promise<string> {
   let addon = ''
 
   // Lead form rules
@@ -151,13 +176,10 @@ export async function buildAgentSystemAddon(agent: Agent): Promise<string> {
     }
   }
 
-  // Media catalog
-  if (agent.media_enabled) {
-    const media = await getAgentMedia(agent.id)
-    if (media.length > 0) {
-      addon += describeMediaForPrompt(media)
-      addon += `\n[When the customer wants to see any of the above, call send_media with its id.]`
-    }
+  // Media catalog — the caller has already loaded it via loadAgentMedia.
+  if (agent.media_enabled && media.length > 0) {
+    addon += describeMediaForPrompt(media)
+    addon += `\n[When the customer wants to see any of the above, call send_media with its id. Only ever offer what is on this list — if they ask for something that is not, say plainly that you do not have it.]`
   }
 
   return addon
@@ -194,7 +216,13 @@ export async function handleCapabilityTool(
     const idOrTitle = String(toolArgs.media || '')
     const item = await resolveMedia(agent.id, idOrTitle)
     if (!item) {
-      return { result: `Could not find that media item. Tell the customer you'll share it shortly.` }
+      // Never "you'll share it shortly" — there is no later message in
+      // which to share it, so that sentence is a promise the agent
+      // cannot keep.
+      return {
+        result:
+          'That item does not exist. Tell the customer plainly that you do not have that particular file, and offer what you do have or to answer their question directly. Do NOT say you will send it later.',
+      }
     }
     return {
       result: `Sending "${item.title}" to the customer now. Briefly introduce it in your reply.`,

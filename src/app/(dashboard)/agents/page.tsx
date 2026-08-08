@@ -28,7 +28,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
   Bot, Loader2, Save, Plus, Image as ImageIcon, Brain, X, Sparkles,
-  Search, Check, Copy, Globe, MessageCircle,
+  Search, Check, Copy, Globe, MessageCircle, Clock,
 } from "lucide-react";
 import {
   AGENT_TEMPLATES,
@@ -36,6 +36,12 @@ import {
   agentRowFromTemplate,
   type AgentTemplate,
 } from "@/lib/agent/templates";
+import {
+  parseBusinessHours,
+  formatDayLabel,
+  type BusinessHours,
+  type DayHours,
+} from "@/lib/agent/business-hours";
 
 /** Mirrors the columns of the `agents` table this page reads/writes. */
 interface Agent {
@@ -52,6 +58,10 @@ interface Agent {
   payment_enabled: boolean;
   is_active: boolean;
   journey_id: string | null;
+  /** JSONB — the shape parseBusinessHours() reads. May be null on older rows. */
+  business_hours: unknown;
+  /** Number the agent offers when a booking cannot be saved. */
+  fallback_contact: string | null;
 }
 
 /** Values the engine understands for `agents.agent_type`. */
@@ -148,6 +158,8 @@ export default function AgentsPage() {
           media_enabled: editing.media_enabled,
           payment_enabled: editing.payment_enabled,
           is_active: editing.is_active,
+          business_hours: editing.business_hours,
+          fallback_contact: editing.fallback_contact?.trim() || null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", editing.id);
@@ -633,6 +645,21 @@ export default function AgentsPage() {
               set={(v) => setEditing({ ...editing, quick_replies_enabled: v })} />
             <Toggle label="Appointment booking" on={editing.booking_enabled}
               set={(v) => setEditing({ ...editing, booking_enabled: v })} />
+
+            {/* ── Opening hours ──
+                Only shown when booking is on, because that is the only
+                thing they change. Before this existed the agent had no
+                clock at all: asked at 11:30pm, it accepted "today" and
+                moved to book a midnight appointment. */}
+            {editing.booking_enabled && (
+              <BusinessHoursEditor
+                value={editing.business_hours}
+                fallbackContact={editing.fallback_contact}
+                onChange={(hours) => setEditing({ ...editing, business_hours: hours })}
+                onContactChange={(v) => setEditing({ ...editing, fallback_contact: v })}
+              />
+            )}
+
             <Toggle label="Media (images, PDFs, video)" on={editing.media_enabled}
               set={(v) => setEditing({ ...editing, media_enabled: v })} />
             <Toggle label="Lead-capture form" on={editing.lead_form_enabled}
@@ -677,6 +704,127 @@ function Field({ label, hint, children }: {
       <label>{label}</label>
       {children}
       {hint && <p className="ag-hint">{hint}</p>}
+    </div>
+  );
+}
+
+/* ── Opening hours editor ──────────────────────────────────────────────
+   Writes the exact JSON shape src/lib/agent/business-hours.ts reads, so
+   what the owner sets here is what the agent enforces when a customer
+   asks for a time. The parser is deliberately forgiving, but this form
+   should never need it to be.                                          */
+
+/** Zones an Indian-first product actually sells into. */
+const TIMEZONES = [
+  "Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Karachi", "Asia/Dhaka",
+  "Europe/London", "America/New_York", "America/Los_Angeles", "Australia/Sydney", "UTC",
+];
+
+function BusinessHoursEditor({ value, fallbackContact, onChange, onContactChange }: {
+  value: unknown;
+  fallbackContact: string | null;
+  onChange: (hours: BusinessHours) => void;
+  onContactChange: (v: string) => void;
+}) {
+  // Parse once per render rather than holding a second copy in state:
+  // the drawer's `editing` object is the single source of truth, so
+  // there is nothing here to fall out of sync with it.
+  const hours = useMemo(() => parseBusinessHours(value), [value]);
+
+  function setDay(index: number, day: DayHours | null) {
+    const days = [...hours.days];
+    days[index] = day;
+    onChange({ ...hours, days });
+  }
+
+  return (
+    <div className="ag-hours">
+      <div className="ag-drawer-section"><Clock size={14} /> Opening hours</div>
+      <p className="ag-hint">
+        The agent will not offer or accept a time outside these hours. Someone
+        asking at 11pm to come &ldquo;today&rdquo; is told you&apos;re closed and
+        offered your next real slot.
+      </p>
+
+      <Field label="Time zone">
+        <select
+          className="ag-input"
+          value={hours.timezone}
+          onChange={(e) => onChange({ ...hours, timezone: e.target.value })}
+        >
+          {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+        </select>
+      </Field>
+
+      <div className="ag-hours-grid">
+        {hours.days.map((day, i) => (
+          <div className="ag-hours-row" key={i}>
+            <button
+              type="button"
+              className={`ag-day-toggle ${day ? "on" : ""}`}
+              onClick={() => setDay(i, day ? null : { open: "10:00", close: "19:00" })}
+              aria-pressed={!!day}
+            >
+              {formatDayLabel(i).slice(0, 3)}
+            </button>
+
+            {day ? (
+              <>
+                <input
+                  className="ag-input ag-time" type="time" value={day.open}
+                  onChange={(e) => setDay(i, { ...day, open: e.target.value })}
+                />
+                <span className="ag-hours-dash">to</span>
+                <input
+                  className="ag-input ag-time" type="time" value={day.close}
+                  onChange={(e) => setDay(i, { ...day, close: e.target.value })}
+                />
+              </>
+            ) : (
+              <span className="ag-hours-closed">Closed</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="ag-hours-pair">
+        <Field label="Appointment length" hint="Slots are placed on this grid.">
+          <select
+            className="ag-input"
+            value={hours.slotMinutes}
+            onChange={(e) => onChange({ ...hours, slotMinutes: Number(e.target.value) })}
+          >
+            {[15, 20, 30, 45, 60, 90, 120].map((m) => (
+              <option key={m} value={m}>{m} minutes</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Shortest notice" hint="How soon a customer may book from now.">
+          <select
+            className="ag-input"
+            value={hours.minLeadMinutes}
+            onChange={(e) => onChange({ ...hours, minLeadMinutes: Number(e.target.value) })}
+          >
+            {[
+              { v: 0, l: "No minimum" }, { v: 30, l: "30 minutes" },
+              { v: 60, l: "1 hour" }, { v: 120, l: "2 hours" },
+              { v: 240, l: "4 hours" }, { v: 1440, l: "1 day" },
+            ].map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      <Field
+        label="Fallback number"
+        hint="Given to the customer only if a booking cannot be saved. Left blank, the agent promises a callback instead."
+      >
+        <input
+          className="ag-input" type="tel" placeholder="+91 98188 16485"
+          value={fallbackContact || ""}
+          onChange={(e) => onContactChange(e.target.value)}
+        />
+      </Field>
     </div>
   );
 }
@@ -840,6 +988,25 @@ const css = `
 .ag-train-done{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#3f6212;margin:0;font-weight:600}
 .ag-train-done svg{flex-shrink:0}
 .ag-train .ag-hint{color:#6b7280}
+
+/* opening hours */
+.ag-hours{background:var(--ground);border:1px solid var(--line);border-radius:14px;
+  padding:4px 14px 14px;margin:10px 0 16px}
+.ag-hours .ag-drawer-section{margin-top:14px}
+.ag-hours .ag-input{background:var(--surface)}
+.ag-hours-grid{display:flex;flex-direction:column;gap:7px;margin:12px 0 16px}
+.ag-hours-row{display:flex;align-items:center;gap:8px}
+.ag-day-toggle{flex-shrink:0;width:52px;border:1.5px solid var(--line);background:var(--surface);
+  color:var(--faint);font-family:inherit;font-size:11.5px;font-weight:800;letter-spacing:.02em;
+  padding:9px 0;border-radius:10px;cursor:pointer;transition:.15s}
+.ag-day-toggle:hover{border-color:var(--lime-deep)}
+.ag-day-toggle.on{background:var(--lime);border-color:var(--lime);color:var(--ink)}
+.ag-time{flex:1;min-width:0;padding:9px 10px;font-size:13px}
+.ag-hours-dash{font-size:11.5px;color:var(--faint);font-weight:600;flex-shrink:0}
+.ag-hours-closed{flex:1;font-size:12.5px;color:var(--faint);font-weight:600;font-style:italic}
+.ag-hours-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:420px){.ag-hours-pair{grid-template-columns:1fr}}
+
 .ag-save{margin-top:24px}
 
 @media(prefers-reduced-motion:reduce){.ag *{transition:none!important;animation:none!important}}

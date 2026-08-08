@@ -29,6 +29,7 @@ import {
 } from '@/lib/agent/business-hours'
 import {
   loadAgent,
+  loadAgentMedia,
   buildAgentTools,
   buildAgentSystemAddon,
   handleCapabilityTool,
@@ -175,7 +176,7 @@ const HANDOFF_TOOL: LLMTool = {
 // Build the tool set for this turn. With no agent (backward compatible) every
 // tool is on, exactly as before. With an agent, booking/payment/lead/media are
 // gated by its capability flags.
-function buildToolList(agent: Agent | null): LLMTool[] {
+function buildToolList(agent: Agent | null, media: MediaItem[] = []): LLMTool[] {
   if (!agent) {
     return [
       SEARCH_KB_TOOL,
@@ -188,7 +189,7 @@ function buildToolList(agent: Agent | null): LLMTool[] {
   const tools: LLMTool[] = [SEARCH_KB_TOOL, TAG_CONTACT_TOOL, HANDOFF_TOOL]
   if (agent.booking_enabled) tools.push(BOOK_APPOINTMENT_TOOL)
   if (agent.payment_enabled) tools.push(SEND_PAYMENT_LINK_TOOL)
-  tools.push(...buildAgentTools(agent)) // submit_lead + send_media, per flags
+  tools.push(...buildAgentTools(agent, media)) // submit_lead + send_media, per flags
   return tools
 }
 
@@ -236,11 +237,15 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
 
     // System prompt = persona/override + (media catalog + lead rules) addon
     //                 + the current time and opening hours.
+    // One media load per turn, shared by the prompt and the tool list so
+    // they cannot disagree about what the agent is able to send.
+    const agentMedia = agent ? await loadAgentMedia(agent) : []
+
     let systemPrompt = buildSystemPrompt(args.systemPromptOverride)
-    if (agent) systemPrompt += await buildAgentSystemAddon(agent)
+    if (agent) systemPrompt += await buildAgentSystemAddon(agent, agentMedia)
     systemPrompt += describeHoursForPrompt(hours)
 
-    const tools = buildToolList(agent)
+    const tools = buildToolList(agent, agentMedia)
 
     // Build the running turns array (conversation so far) in the
     // provider-agnostic format. callLLM() converts this to whatever the

@@ -17,6 +17,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { sendTextMessage } from '@/lib/whatsapp/meta-api'
 import { runAgent } from '@/lib/agent/engine'
+import { deliverAgentMedia } from '@/lib/whatsapp-agent/deliver-media'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -111,11 +112,37 @@ export async function runAgentFallback(
       created_at: new Date().toISOString(),
     })
 
+    // Send any media the agent chose. Previously dropped here, so an
+    // agent that decided to send a brochure described one and sent
+    // nothing.
+    let lastPreview = result.reply
+    if (result.mediaToSend?.length) {
+      const delivered = await deliverAgentMedia({
+        phoneNumberId: args.phoneNumberId,
+        accessToken: args.accessToken,
+        to: args.customerPhone,
+        media: result.mediaToSend,
+      })
+      for (const d of delivered) {
+        await db().from('messages').insert({
+          conversation_id: args.conversationId,
+          sender_type: 'bot',
+          content_type: d.contentType,
+          content_text: d.item.title,
+          media_url: d.item.url,
+          message_id: d.messageId,
+          status: d.messageId ? 'sent' : 'failed',
+          created_at: new Date().toISOString(),
+        })
+        if (d.messageId) lastPreview = d.item.title
+      }
+    }
+
     // Update conversation preview
     await db()
       .from('conversations')
       .update({
-        last_message_text: result.reply,
+        last_message_text: lastPreview,
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

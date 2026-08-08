@@ -840,3 +840,93 @@ export async function sendCatalogueMessage(
   )
   return postInteractive(args, interactive)
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MEDIA MESSAGES
+   ═══════════════════════════════════════════════════════════════════
+
+   Images, PDFs and videos, sent by public URL.
+
+   These were missing, and their absence was silently breaking the
+   media capability on the channel the product is sold for. The AI
+   would decide to send a floor plan, the engine would resolve it, and
+   then every WhatsApp caller dropped it — so the customer read "here
+   are the photos" and received no photos. On the website widget the
+   same agent worked fine, which is why it went unnoticed.
+
+   Meta fetches the `link` itself, so the URL has to be publicly
+   reachable — Supabase public bucket URLs are, signed ones are not.  */
+
+interface BaseMediaArgs {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  /** Publicly reachable URL. Meta downloads this server-side. */
+  link: string
+  /** Shown under the media. Meta caps captions at 1024 characters. */
+  caption?: string
+  contextMessageId?: string
+}
+
+/**
+ * Local truncate, rather than reusing clamp() from the interactive
+ * section above. This block is meant to be safe to append to any
+ * version of this file, and depending on a helper that arrived in a
+ * later commit is exactly how a paste turns into a build failure.
+ */
+function capText(value: string, max: number): string {
+  return value.length <= max ? value : value.slice(0, max)
+}
+
+async function postMedia(
+  args: BaseMediaArgs & { type: 'image' | 'video' | 'document'; filename?: string },
+): Promise<MetaSendResult> {
+  const { phoneNumberId, accessToken, to, link, caption, type, filename, contextMessageId } = args
+
+  const media: Record<string, unknown> = { link }
+  if (caption?.trim()) media.caption = capText(caption.trim(), 1024)
+  // Without a filename WhatsApp shows documents as "document.pdf", which
+  // looks like a broken attachment next to a named brochure.
+  if (type === 'document' && filename) media.filename = capText(filename, 240)
+
+  const body: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type,
+    [type]: media,
+  }
+  if (contextMessageId) body.context = { message_id: contextMessageId }
+
+  const response = await fetch(`${META_API_BASE}/${phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error sending ${type}: ${response.status}`)
+  }
+  const data = await response.json()
+  return { messageId: data.messages[0].id }
+}
+
+/** A photo — property shots, before/after, product images. */
+export async function sendImageMessage(args: BaseMediaArgs): Promise<MetaSendResult> {
+  return postMedia({ ...args, type: 'image' })
+}
+
+/** A PDF or other file. `filename` is what the customer sees. */
+export async function sendDocumentMessage(
+  args: BaseMediaArgs & { filename?: string },
+): Promise<MetaSendResult> {
+  return postMedia({ ...args, type: 'document' })
+}
+
+/** A video file. Note: YouTube/Instagram links are NOT videos to Meta — it
+ *  downloads the URL, so a watch page fails. Send those as text links. */
+export async function sendVideoMessage(args: BaseMediaArgs): Promise<MetaSendResult> {
+  return postMedia({ ...args, type: 'video' })
+}

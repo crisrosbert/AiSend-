@@ -32,6 +32,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { runAgent } from '@/lib/agent/engine'
 import { sendTextMessage } from '@/lib/whatsapp/meta-api'
+import { deliverAgentMedia } from '@/lib/whatsapp-agent/deliver-media'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _db: any = null
@@ -115,12 +116,31 @@ export async function handleWhatsAppMessage(
       agentId,
     })
 
-    const reply = result?.reply?.trim()
+    let reply = result?.reply?.trim()
+    let brokeDown = false
 
-    // No reply is a legitimate outcome — the engine may decide silence
-    // is right. Returning false lets the rest of the pipeline proceed
-    // rather than sending filler the merchant never wrote.
-    if (!reply) return false
+    if (!reply) {
+      if (result?.error) {
+        // ── The agent broke ──
+        //
+        // This used to return false, which meant the customer got
+        // absolutely nothing — no reply, no explanation, no human — and
+        // the merchant never found out. On WhatsApp that reads as a
+        // business ignoring you, and it is why a customer had to send
+        // "Hello" a second time before the conversation resumed.
+        //
+        // One honest line and a handover is worth far more than silence.
+        console.error('[whatsapp-agent] engine failed:', result.error)
+        reply =
+          "Sorry — I'm having trouble on my end right now. A member of our team will get back to you shortly."
+        brokeDown = true
+      } else {
+        // A genuine, deliberate silence from the engine. Let the rest of
+        // the pipeline proceed rather than sending filler the merchant
+        // never wrote.
+        return false
+      }
+    }
 
     // ── Send it ──
     // Free-form text, valid because the customer messaged first and the
@@ -153,23 +173,64 @@ export async function handleWhatsAppMessage(
       created_at: new Date().toISOString(),
     })
 
+    // ── Send whatever the agent chose to show them ──
+    // The engine resolves images, brochures and videos into
+    // `mediaToSend`; this is where they actually reach the customer.
+    // Without this the agent says "here are the photos" and sends none —
+    // which is exactly what it was doing before.
+    let lastPreview = reply
+    if (result?.mediaToSend?.length) {
+      const delivered = await deliverAgentMedia({
+        phoneNumberId,
+        accessToken,
+        to: customerPhone,
+        media: result.mediaToSend,
+      })
+
+      for (const d of delivered) {
+        // Log failures too. A merchant reading the thread has to be able
+        // to see that a brochure did not go out, or they will assume the
+        // customer got it.
+        await db().from('messages').insert({
+          conversation_id: conversationId,
+          sender_type: 'bot',
+          content_type: d.contentType,
+          content_text: d.item.title,
+          media_url: d.item.url,
+          message_id: d.messageId,
+          status: d.messageId ? 'sent' : 'failed',
+          created_at: new Date().toISOString(),
+        })
+        if (d.messageId) lastPreview = d.item.title
+      }
+    }
+
     await db()
       .from('conversations')
       .update({
-        last_message_text: reply,
+        last_message_text: lastPreview,
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', conversationId)
 
-    // ── Hand off if the agent asked to ──
+    // ── Hand off if the agent asked to, or if it broke ──
     // Setting the conversation to 'pending' both flags it for the team
     // and stops this handler replying again on the next message, via
-    // the status check at the top.
-    if (result?.handoffRequested) {
+    // the status check at the top. A breakdown escalates for the same
+    // reason: we have just promised the customer a human, so a human has
+    // to actually see it.
+    if (result?.handoffRequested || brokeDown) {
       await db()
         .from('conversations')
-        .update({ status: 'pending', updated_at: new Date().toISOString() })
+        .update({
+          status: 'pending',
+          needs_attention: true,
+          handoff_reason: brokeDown
+            ? 'AI could not respond — needs human follow-up'
+            : 'Customer needs a human',
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', conversationId)
     }
 

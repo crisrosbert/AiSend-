@@ -364,7 +364,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   broadcast_id: broadcast.id,
-                  recipients: [{ phone: contact.phone, params }],
+                  // contact_id is what lets the server write the send
+                  // back against this campaign's recipient row. Without
+                  // it the row stays 'pending' forever and Meta's
+                  // delivery and read receipts have nothing to match.
+                  recipients: [{ phone: contact.phone, params, contact_id: contact.id }],
                   template_name: payload.template.name,
                   template_language: payload.template.language ?? 'en_US',
                 }),

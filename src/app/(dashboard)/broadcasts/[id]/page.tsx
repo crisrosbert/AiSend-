@@ -1,5 +1,6 @@
 'use client';
 import { ResendUnreadButton } from '@/components/broadcasts/resend-unread-button';
+import { ResumeBroadcastButton } from '@/components/broadcasts/resume-broadcast-button';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -302,6 +303,13 @@ export default function BroadcastDetailPage() {
             </div>
           </div>
         </div>
+{/* Shows itself only when recipients were never attempted — a
+    campaign whose browser tab closed mid-send. Renders nothing at
+    all on one that completed normally. */}
+<ResumeBroadcastButton
+  broadcastId={broadcast.id}
+  onFinished={() => window.location.reload()}
+/>
 {broadcast.status === 'sent' && (
   <ResendUnreadButton
     broadcast={broadcast}

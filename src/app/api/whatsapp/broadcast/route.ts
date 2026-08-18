@@ -42,6 +42,14 @@ interface BroadcastResult {
 interface NewRecipient {
   phone: string
   params?: string[]
+  /**
+   * Which broadcast_recipients row this send belongs to.
+   *
+   * Sent by the dashboard so a successful send can be written back
+   * against the right row. Optional, because the same endpoint is used
+   * for one-off sends that belong to no campaign.
+   */
+  contact_id?: string
 }
 
 export async function POST(request: Request) {
@@ -65,6 +73,9 @@ export async function POST(request: Request) {
       template_name,
       template_language,
       template_params,
+      // The dashboard has always sent this; nothing ever read it, which
+      // is why no send was recorded against its campaign.
+      broadcast_id,
     } = body
     let recipients: NewRecipient[]
     if (Array.isArray(newRecipients) && newRecipients.length > 0) {
@@ -243,6 +254,34 @@ export async function POST(request: Request) {
             stoppedForCredits = true
           }
         }
+        // ── Record the send against the campaign ──
+        //
+        // Without this, delivery tracking never worked. The webhook
+        // finds a recipient row by whatsapp_message_id, but nothing on
+        // the sending side ever wrote that column — the dashboard sent
+        // broadcast_id and this route ignored it. So every row stayed
+        // 'pending' with a null message id, no ticks ever turned blue,
+        // and "resend to unread" had no idea who had read anything.
+        //
+        // Failures here are logged, never fatal: the message has
+        // already gone to the customer and reporting it as failed
+        // because the bookkeeping slipped would be worse than a gap in
+        // the stats.
+        if (broadcast_id && recipient.contact_id) {
+          const { error: recErr } = await supabase
+            .from('broadcast_recipients')
+            .update({
+              status: 'sent',
+              whatsapp_message_id: sentMessageId,
+              sent_at: new Date().toISOString(),
+            })
+            .eq('broadcast_id', broadcast_id)
+            .eq('contact_id', recipient.contact_id)
+          if (recErr) {
+            console.error('[broadcast] could not mark recipient sent:', recErr.message)
+          }
+        }
+
         results.push({
           phone: recipient.phone,
           status: 'sent',
@@ -254,6 +293,26 @@ export async function POST(request: Request) {
           `Failed to send broadcast to ${recipient.phone}:`,
           lastError
         )
+
+        // Record the failure too. If only successes are written, a row
+        // left at 'pending' is ambiguous — never attempted, or attempted
+        // and failed? Marking failures makes 'pending' mean exactly one
+        // thing: this recipient has not been tried yet. That is what
+        // lets a campaign be resumed safely.
+        if (broadcast_id && recipient.contact_id) {
+          const { error: recErr } = await supabase
+            .from('broadcast_recipients')
+            .update({
+              status: 'failed',
+              error_message: (lastError || 'Unknown error').slice(0, 500),
+            })
+            .eq('broadcast_id', broadcast_id)
+            .eq('contact_id', recipient.contact_id)
+          if (recErr) {
+            console.error('[broadcast] could not mark recipient failed:', recErr.message)
+          }
+        }
+
         results.push({
           phone: recipient.phone,
           status: 'failed',

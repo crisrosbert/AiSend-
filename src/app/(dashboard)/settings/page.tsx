@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Settings, MessageSquare, Tag, User, Zap } from 'lucide-react';
+import { Settings, MessageSquare, Tag, User, Zap, Download } from 'lucide-react';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { BusinessProfile } from '@/components/settings/business-profile';
 import { ConnectWhatsApp } from '@/components/settings/connect-whatsapp';
@@ -11,9 +11,10 @@ import { TagManager } from '@/components/settings/tag-manager';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { PasswordForm } from '@/components/settings/password-form';
 import { SessionsCard } from '@/components/settings/sessions-card';
+import { DataExport } from '@/components/settings/data-export';
 import CannedRepliesPage from './canned-replies/page';
 
-const TAB_VALUES = ['profile', 'whatsapp', 'templates', 'tags', 'canned-replies'] as const;
+const TAB_VALUES = ['profile', 'whatsapp', 'templates', 'tags', 'canned-replies', 'export'] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
 const TABS: { value: TabValue; label: string; icon: typeof User }[] = [
@@ -22,6 +23,7 @@ const TABS: { value: TabValue; label: string; icon: typeof User }[] = [
   { value: 'templates',      label: 'Templates',      icon: MessageSquare },
   { value: 'tags',           label: 'Tags',           icon: Tag },
   { value: 'canned-replies', label: 'Quick Replies',  icon: Zap },
+  { value: 'export',         label: 'Export Data',    icon: Download },
 ];
 
 function isTabValue(v: string | null): v is TabValue {
@@ -100,6 +102,14 @@ function SettingsInner() {
       <div className={tab === 'canned-replies' ? 'block' : 'hidden'}>
         <CannedRepliesPage />
       </div>
+
+      {/* Mounted only when open: the export component queries on demand,
+          but there is no reason to keep it in the tree otherwise. */}
+      {tab === 'export' && (
+        <div className="block">
+          <DataExport />
+        </div>
+      )}
     </div>
   );
 }

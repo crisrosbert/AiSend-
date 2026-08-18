@@ -330,6 +330,16 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       );
 
       // ── 4. Insert recipient rows ──────────────────────────────────
+      //
+      // The resolved variables are stored with each row, not just used
+      // in the send below. Sending happens in this browser tab: close
+      // it, sleep the laptop, lose the network, and the loop stops with
+      // recipients still pending. Storing the params is what lets the
+      // server pick those up later and finish the campaign.
+      //
+      // Resolved once, here, rather than re-derived at resume time. A
+      // contact renamed or edited in between would otherwise receive a
+      // different message from everyone else in the same campaign.
       setProgress(20);
       for (let i = 0; i < contacts.length; i += INSERT_BATCH_SIZE) {
         const chunk = contacts.slice(i, i + INSERT_BATCH_SIZE);
@@ -338,6 +348,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             broadcast_id: broadcast.id,
             contact_id: c.id,
             status: 'pending',
+            params: resolveVariables(
+              payload.variables,
+              c,
+              customValueIndex.get(c.id),
+            ),
           })),
         );
       }

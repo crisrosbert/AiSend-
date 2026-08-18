@@ -15,6 +15,7 @@ import {
   Zap,
   Settings,
   Wallet,
+  Activity,
   LogOut,
   X,
   GitBranch,
@@ -60,6 +61,9 @@ const navItems = [
 ];
 
 const bottomNavItems = [
+  // Sits above Billing so a silent failure is seen on the way past,
+  // rather than only when somebody goes looking for it.
+  { path: "health",   label: "System Health", icon: Activity },
   { path: "billing",  label: "Billing",  icon: Wallet, absolute: true },
   { path: "settings", label: "Settings", icon: Settings },
 ];

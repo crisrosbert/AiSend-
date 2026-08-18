@@ -147,6 +147,7 @@ export async function GET(request: Request) {
     )
   }
 }
+export const maxDuration = 60
 // POST - Receive messages
 export async function POST(request: Request) {
   const rawBody = await request.text()
@@ -161,13 +162,28 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
-  try {
-    await processWebhook(body)
-  } catch (error) {
-    console.error('Error processing webhook:', error)
-  }
+
+
+  
+  // ── Answer Meta first, think afterwards ──
+  //
+  // This used to `await processWebhook(body)`, which held the webhook
+  // open while the AI composed a reply — one to five seconds. Meta
+  // retries a webhook it considers slow, and each retry re-ran the whole
+  // pipeline: two replies to the customer, two model calls billed to us.
+  after(async () => {
+    try {
+      await processWebhook(body)
+    } catch (error) {
+      console.error('[webhook] processing failed after response:', error)
+    }
+  })
+
   return NextResponse.json({ status: 'received' }, { status: 200 })
 }
+
+
+
 async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
   if (!body.entry) return
   for (const entry of body.entry) {
@@ -487,10 +503,22 @@ async function processMessage(
     created_at: new Date(parseInt(message.timestamp) * 1000).toISOString(),
     reply_to_message_id: replyToInternalId,
   })
+
+  
   if (msgError) {
+    // 23505 is a unique-constraint violation, and on this table it means
+    // one thing: Meta has sent us this message before. Migration 023
+    // added the constraint so a retry lands here instead of producing a
+    // second reply and a second model call.
+    if (msgError.code === '23505') {
+      console.log('[webhook] duplicate delivery, already handled:', message.id)
+      return
+    }
     console.error('Error inserting message:', msgError)
     return
   }
+
+  
   const { error: convError } = await supabaseAdmin()
     .from('conversations')
     .update({

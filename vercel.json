@@ -6,3 +6,9 @@
     }
   ]
 }
+{
+  "crons": [
+    { "path": "/api/cron/appointment-reminders", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/process-deletions",     "schedule": "0 * * * *" }
+  ]
+}

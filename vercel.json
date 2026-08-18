@@ -1,11 +1,4 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/appointment-reminders",
-      "schedule": "0 9 * * *"
-    }
-  ]
-}
+
 {
   "crons": [
     { "path": "/api/cron/appointment-reminders", "schedule": "0 9 * * *" },

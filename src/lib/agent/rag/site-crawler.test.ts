@@ -16,6 +16,7 @@ import {
   htmlToText,
   looksJsRendered,
   withSourceHeader,
+  tidyName,
   crawlSite,
 } from './site-crawler'
 
@@ -646,5 +647,56 @@ describe('crawlSite', () => {
     expect(result.pages[0].chunkSource).toBe('link://https://example.com/')
     expect(result.pages[0].title).toBe('Home')
     expect(result.pages[0].wordCount).toBeGreaterThan(10)
+  })
+})
+
+describe('tidyName', () => {
+  it('cleans the real string Kalosa produced', () => {
+    // Verbatim from the agents table after a live crawl. Three faults
+    // in one value: dangling separator, SEO tagline, and a length no
+    // chat header can show.
+    expect(
+      tidyName('Kalosa Aesthetics — Board-Certified Plastic & Cosmetic Surgery India |'),
+    ).toBe('Kalosa Aesthetics')
+  })
+
+  it('strips a dangling separator at either end', () => {
+    expect(tidyName('Acme |')).toBe('Acme')
+    expect(tidyName('| Acme')).toBe('Acme')
+    expect(tidyName('Acme -')).toBe('Acme')
+    expect(tidyName('Acme :')).toBe('Acme')
+  })
+
+  it('drops the tagline after a separator', () => {
+    expect(tidyName('Sharma Retail | Best prices in Delhi')).toBe('Sharma Retail')
+    expect(tidyName('Skyline Realty - Flats in Pune')).toBe('Skyline Realty')
+    expect(tidyName('Kalosa · Skin and hair')).toBe('Kalosa')
+  })
+
+  it('keeps a hyphenated name intact', () => {
+    // The hyphen here is part of the word, not a separator — it has no
+    // surrounding spaces.
+    expect(tidyName('Coca-Cola India')).toBe('Coca-Cola India')
+    expect(tidyName('Board-Certified Surgeons')).toBe('Board-Certified Surgeons')
+  })
+
+  it('does not trim down to a fragment', () => {
+    // "Dr | Smith" must not become "Dr".
+    expect(tidyName('Dr | Smith Clinic')).toBe('Dr | Smith Clinic')
+  })
+
+  it('collapses whitespace from a multi-line title tag', () => {
+    expect(tidyName('  Acme\n   Clinic  ')).toBe('Acme Clinic')
+  })
+
+  it('caps the length for a chat header', () => {
+    expect(tidyName('A'.repeat(200))!.length).toBe(60)
+  })
+
+  it('returns null for nothing usable', () => {
+    expect(tidyName('')).toBeNull()
+    expect(tidyName('   ')).toBeNull()
+    expect(tidyName('|')).toBeNull()
+    expect(tidyName(' — ')).toBeNull()
   })
 })

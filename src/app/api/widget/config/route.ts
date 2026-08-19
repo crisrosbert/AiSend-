@@ -6,6 +6,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { allowlistFromConfig, originAllowed, corsHeaders } from '@/lib/widget/origin'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -19,17 +20,59 @@ function db() {
   return _client
 }
 
-const CORS = {
+const OPEN_CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS })
+  return new NextResponse(null, { status: 204, headers: OPEN_CORS })
+}
+
+// What the widget on a stranger's page is allowed to know.
+//
+// The route previously answered with select('*'), so every column of
+// widget_configs went to every visitor — including any column added
+// later for internal use. An allowlist of fields cannot leak a column
+// that does not exist yet; a SELECT * inevitably will.
+const PUBLIC_FIELDS = [
+  'id',
+  'org_user_id',
+  'agent_id',
+  'is_active',
+  'bot_name',
+  'welcome_message',
+  'greeting',
+  'placeholder',
+  'primary_color',
+  'accent_color',
+  'position',
+  'avatar_url',
+  'logo_url',
+  'theme',
+  'launcher_text',
+  'show_branding',
+  'offline_message',
+  'allowed_domains',
+] as const
+
+/** Drop anything not on the public list, and never echo the allowlist itself. */
+function publicView(config: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const key of PUBLIC_FIELDS) {
+    // allowed_domains is read to enforce the check, not to publish —
+    // telling a caller which origins pass is telling them what to forge.
+    if (key === 'allowed_domains') continue
+    if (key in config) out[key] = config[key]
+  }
+  return out
 }
 
 export async function GET(req: Request) {
+  const origin = req.headers.get('origin')
+  let CORS: Record<string, string> = OPEN_CORS
+
   try {
     const { searchParams } = new URL(req.url)
     const org = searchParams.get('org')
@@ -78,7 +121,20 @@ export async function GET(req: Request) {
       )
     }
 
-    return NextResponse.json(config, { headers: CORS })
+    // The config carries the merchant's branding and greeting. Serving
+    // it to any origin lets someone stand up a convincing copy of the
+    // business's chat on their own page.
+    const allowlist = allowlistFromConfig(config)
+    CORS = corsHeaders(origin, allowlist, 'GET, OPTIONS')
+
+    if (!originAllowed(origin, allowlist)) {
+      return NextResponse.json(
+        { error: 'Widget not enabled for this website' },
+        { status: 403, headers: CORS },
+      )
+    }
+
+    return NextResponse.json(publicView(config), { headers: CORS })
   } catch (err) {
     console.error('[widget/config] error:', err)
     return NextResponse.json(

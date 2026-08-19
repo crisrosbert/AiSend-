@@ -64,6 +64,10 @@ export const PUBLIC_FIELDS = [
   'show_branding',
   'offline_message',
   'allowed_domains',
+  // Merged in from the agent by mergeAgentProfile() when widget_configs
+  // has no value of its own. Listed here so the field test counts them
+  // as served.
+  'suggested_questions',
 ] as const
 
 /** Drop anything not on the public list, and never echo the allowlist itself. */
@@ -76,6 +80,51 @@ export function publicView(config: Record<string, unknown>): Record<string, unkn
     if (key in config) out[key] = config[key]
   }
   return out
+}
+
+/** The agent's own face: what the crawl found and the merchant approved. */
+interface AgentProfile {
+  avatar_url: string | null
+  greeting: string | null
+  suggested_questions: string[] | null
+  name: string | null
+}
+
+/**
+ * Merge the agent's profile into the widget config.
+ *
+ * These live on `agents` because that is where the crawl writes them and
+ * where the Agents drawer edits them — but the widget only ever fetches
+ * `widget_configs`, so until now the logo we extracted had nowhere to
+ * go and the header rendered a hardcoded icon.
+ *
+ * Precedence is deliberately not uniform:
+ *
+ *   • welcome_message wins over the agent's greeting. A merchant who
+ *     typed their own opening ("Hey! I'm Riya from Kalosa") means it,
+ *     and a drafted greeting must not silently replace it.
+ *   • avatar_url and suggested_questions have no existing equivalent on
+ *     widget_configs, so the agent's values are simply used.
+ */
+export function mergeAgentProfile(
+  view: Record<string, unknown>,
+  agent: AgentProfile | null,
+): Record<string, unknown> {
+  if (!agent) return view
+
+  const merged = { ...view }
+
+  if (agent.avatar_url) merged.avatar_url = agent.avatar_url
+
+  // Only fill the greeting when the widget has none of its own.
+  const existing = typeof view.welcome_message === 'string' ? view.welcome_message.trim() : ''
+  if (!existing && agent.greeting) merged.welcome_message = agent.greeting
+
+  if (Array.isArray(agent.suggested_questions) && agent.suggested_questions.length > 0) {
+    merged.suggested_questions = agent.suggested_questions.slice(0, 3)
+  }
+
+  return merged
 }
 
 export async function GET(req: Request) {
@@ -143,7 +192,29 @@ export async function GET(req: Request) {
       )
     }
 
-    return NextResponse.json(publicView(config), { headers: CORS })
+    // ── The agent's face ──
+    //
+    // Resolved the same way /api/widget/message resolves it: the
+    // config's own agent_id first, then the embed's ?agent= — but only
+    // after checking that agent belongs to this tenant, because the
+    // query string comes from a public script tag and would otherwise
+    // let any page borrow another tenant's branding.
+    let profile: AgentProfile | null = null
+    const agentId: string | null = config.agent_id ?? (agent || null)
+
+    if (agentId) {
+      const { data: row } = await db()
+        .from('agents')
+        .select('name, avatar_url, greeting, suggested_questions')
+        .eq('id', agentId)
+        .eq('tenant_id', config.org_user_id)
+        .maybeSingle()
+      if (row) profile = row
+    }
+
+    return NextResponse.json(mergeAgentProfile(publicView(config), profile), {
+      headers: CORS,
+    })
   } catch (err) {
     console.error('[widget/config] error:', err)
     return NextResponse.json(

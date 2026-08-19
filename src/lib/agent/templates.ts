@@ -383,7 +383,12 @@ export function agentRowFromTemplate(template: AgentTemplate, tenantId: string) 
     // should not silently change behaviour with it.
     quick_replies_enabled: caps.quick_replies_enabled ?? false,
     booking_enabled: caps.booking_enabled ?? false,
-    media_enabled: caps.media_enabled ?? false,
+    // Media defaults ON. Every template already asks for it, and the
+    // one agent that did not — the blank one — spent its life telling
+    // customers "I can't share images here" while the library sat full.
+    // The tool is withheld anyway when an agent has no files, so a
+    // default of true cannot make an agent promise a photo it lacks.
+    media_enabled: caps.media_enabled ?? true,
     lead_form_enabled: caps.lead_form_enabled ?? false,
     lead_form_mode: caps.lead_form_mode ?? 'progressive',
     payment_enabled: caps.payment_enabled ?? false,

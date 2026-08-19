@@ -1,114 +1,82 @@
 // src/app/api/agent/train-from-url/route.ts
 //
-// ── WHAT THIS DOES ───────────────────────────────────────────────────
-// One button, "Train from your website", doing two jobs from one URL:
+// One field, one button: paste your website address and get back an
+// agent that already knows the business — its name, its logo, its
+// services, its pages.
 //
-//   1. KNOWLEDGE — saves the page as a brain_source and chunks it into
-//      agent_kb_chunks, so the agent can quote real facts back to a
-//      customer. This reuses ingestSource(), the exact same path the
-//      Brain page uses.
+// ── WHAT CHANGED, AND WHY IT MATTERS ─────────────────────────────────
+// This route used to fetch exactly ONE page. That is enough to draft a
+// persona and almost nothing else: the pricing page, the services page
+// and the contact details all sat one link away and were never read.
+// A customer asking "what do you charge?" got a shrug from an agent
+// whose own website answered the question.
 //
-//   2. PERSONA — feeds the page text to the LLM and asks it to DRAFT a
-//      persona describing this specific business.
+// It now walks the site (see rag/site-crawler.ts) and returns three
+// things instead of one:
 //
-// ── WHY THE PERSONA IS RETURNED, NOT SAVED ───────────────────────────
-// An LLM reading a website will confidently invent things it did not
-// read: delivery windows, refund terms, discounts. If we wrote that
-// straight into a live agent, it would start promising customers things
-// the business never agreed to.
+//   1. KNOWLEDGE  — every readable page, chunked into agent_kb_chunks,
+//                   each chunk labelled with the page it came from so
+//                   an answer can be traced back.
+//   2. BRAND      — the business name, logo and colour, read from the
+//                   site's own metadata. This is what makes pasting a
+//                   URL feel like magic instead of like a form.
+//   3. FACTS      — phone, address, services, hours, pulled out by the
+//                   model into a small structured object.
 //
-// So this route RETURNS the draft. The drawer drops it into the persona
-// box, the human reads it and presses Save. Knowledge (real, quoted text)
-// is safe to store automatically; a generated personality is not.
+// ── WHAT IS SAVED AND WHAT IS ONLY SUGGESTED ─────────────────────────
+// Knowledge is quoted text — safe to store. Everything the MODEL wrote
+// (persona, structured facts) is RETURNED, not saved, and the drawer
+// shows it for approval. An LLM reading a website will confidently
+// invent delivery windows and refund terms; written straight into a
+// live agent, it starts promising customers things the business never
+// agreed to.
 //
-// ── WHY IT NEEDS A JOURNEY ───────────────────────────────────────────
-// brain_sources and agent_kb_chunks are keyed by journey_id — that is
-// how the retriever scopes a search to one agent's knowledge. Agents
-// created from a template have journey_id = null, so this route creates
-// the journey on demand and links it back to the agent. That is the one
-// missing wire that made the whole knowledge feature unreachable.
+// The one exception is brand: name, logo and theme colour are read
+// verbatim from the page's own metadata, not generated, so they are
+// safe to pre-fill. The merchant still sees them before saving.
 //
-// Body:    { agent_id, url }
-// Returns: { journey_id, persona, chunks, title }
+// Body:    { agent_id, url, max_pages? }
+// Returns: { journey_id, persona, brand, facts, pages, chunks, skipped }
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { ingestSource } from '@/lib/agent/rag/ingest'
 import { callLLM } from '@/lib/agent/llm-provider'
+import { crawlSite, withSourceHeader, type CrawlResult } from '@/lib/agent/rag/site-crawler'
 
 // Mutating action — never cache it.
 export const dynamic = 'force-dynamic'
 
-/** Hard ceiling on fetched HTML. A 50MB page should not take the app down. */
-const MAX_HTML_BYTES = 2_000_000
-/** How much page text the LLM sees. Enough for an "about us"; cheap to run. */
-const MAX_TEXT_FOR_LLM = 12_000
+// The crawl budget inside site-crawler is 40s; this leaves room for the
+// two LLM calls and the database writes that follow it.
+export const maxDuration = 60
 
-/**
- * Accept only public http(s) URLs.
- *
- * Without this check the server would happily fetch http://localhost or
- * http://169.254.169.254 (the cloud metadata endpoint) on a user's
- * behalf — a textbook SSRF that can leak deployment credentials.
- */
-function validatePublicUrl(raw: string): { ok: true; url: URL } | { ok: false; reason: string } {
-  let url: URL
-  try {
-    url = new URL(raw.trim())
-  } catch {
-    return { ok: false, reason: 'That does not look like a valid URL.' }
-  }
+/** How much site text each LLM call sees. Enough to describe a business. */
+const MAX_TEXT_FOR_LLM = 14_000
 
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    return { ok: false, reason: 'Only http and https addresses can be read.' }
-  }
+/** Ceiling a caller can ask for. Beyond this the route runs out of time. */
+const MAX_PAGES_CEILING = 20
 
-  const host = url.hostname.toLowerCase()
-  const isPrivate =
-    host === 'localhost' ||
-    host === '::1' ||
-    host.endsWith('.local') ||
-    host.endsWith('.internal') ||
-    /^127\./.test(host) ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^169\.254\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-
-  if (isPrivate) {
-    return { ok: false, reason: 'That address is not reachable from the public internet.' }
-  }
-  return { ok: true, url }
+export interface StructuredFacts {
+  business_name: string | null
+  what_they_do: string | null
+  services: string[]
+  phone: string | null
+  whatsapp: string | null
+  email: string | null
+  address: string | null
+  hours: string | null
 }
 
-/** Crude HTML → text. Good enough to describe a business to an LLM. */
-function htmlToText(html: string): string {
-  return html
-    // Drop anything whose contents are code or styling, tags included.
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
-    // Turn block ends into newlines so sentences don't run together.
-    .replace(/<\/(p|div|h[1-6]|li|tr|section|article)>/gi, '\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    // Decode the handful of entities that actually show up in body copy.
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    // Collapse the whitespace the tag-stripping left behind.
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n\s*\n\s*\n+/g, '\n\n')
-    .trim()
-}
-
-/** Pull <title> for a sensible source name in the knowledge list. */
-function extractTitle(html: string, fallback: string): string {
-  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
-  return match?.[1]?.trim().slice(0, 120) || fallback
+const EMPTY_FACTS: StructuredFacts = {
+  business_name: null,
+  what_they_do: null,
+  services: [],
+  phone: null,
+  whatsapp: null,
+  email: null,
+  address: null,
+  hours: null,
 }
 
 export async function POST(req: Request) {
@@ -128,10 +96,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'agent_id and url are required' }, { status: 400 })
     }
 
-    const checked = validatePublicUrl(rawUrl)
-    if (!checked.ok) {
-      return NextResponse.json({ error: checked.reason }, { status: 400 })
-    }
+    const maxPages = Math.min(
+      Math.max(Number(body?.max_pages) || 12, 1),
+      MAX_PAGES_CEILING,
+    )
 
     // ── The agent must belong to the caller ──
     // Never trust an id from the browser; without this anyone could
@@ -147,61 +115,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
 
-    // ── 1. Fetch the page ──
-    let html: string
-    try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 15_000)
-      const res = await fetch(checked.url.toString(), {
-        signal: controller.signal,
-        headers: {
-          // Identify honestly. Some sites block unknown agents outright,
-          // and pretending to be a browser is a good way to get banned.
-          'User-Agent': 'AiSendBot/1.0 (+website training)',
-          Accept: 'text/html,application/xhtml+xml',
-        },
-        redirect: 'follow',
-      })
-      clearTimeout(timeout)
+    // ── 1. Read the site ──
+    // URL validation lives inside crawlSite and is applied to every link
+    // it follows, not just this one. A crawler that checks only its seed
+    // will happily fetch an internal address on our behalf.
+    const crawl = await crawlSite(rawUrl, { maxPages, maxDepth: 1 })
 
-      if (!res.ok) {
-        return NextResponse.json(
-          { error: `The site returned ${res.status}. Check the address is public.` },
-          { status: 422 },
-        )
-      }
-
-      const buffer = await res.arrayBuffer()
-      if (buffer.byteLength > MAX_HTML_BYTES) {
-        return NextResponse.json(
-          { error: 'That page is too large to read. Try a specific page like /about.' },
-          { status: 422 },
-        )
-      }
-      html = new TextDecoder().decode(buffer)
-    } catch {
-      return NextResponse.json(
-        { error: "Couldn't reach that page. Check the address and try again." },
-        { status: 422 },
-      )
+    if (crawl.pages.length === 0) {
+      return NextResponse.json({ error: explainEmptyCrawl(crawl) }, { status: 422 })
     }
-
-    const text = htmlToText(html)
-    if (text.length < 200) {
-      return NextResponse.json(
-        {
-          error:
-            'That page had almost no readable text — it may be JavaScript-rendered. Try a simpler page, or paste your content manually.',
-        },
-        { status: 422 },
-      )
-    }
-
-    const title = extractTitle(html, checked.url.hostname)
 
     // ── 2. Make sure the agent has a journey ──
-    // This is the wire that was missing: knowledge is scoped by
-    // journey_id, so an agent without one can never own any.
+    // Knowledge is scoped by journey_id, so an agent without one can
+    // never own any. Agents created from a template start with none.
     let journeyId = agent.journey_id
     if (!journeyId) {
       const { data: journey, error: journeyErr } = await supabase
@@ -227,7 +153,15 @@ export async function POST(req: Request) {
       await supabase.from('agents').update({ journey_id: journeyId }).eq('id', agent.id)
     }
 
-    // ── 3. Store the page as a knowledge source, then chunk it ──
+    // ── 3. Store the crawl as ONE knowledge source ──
+    //
+    // One row per site, not per page. Re-training then replaces the
+    // whole site cleanly — ingestSource deletes by source_id — instead
+    // of leaving last month's pricing page behind to be quoted back at
+    // a customer alongside this month's.
+    const seedHost = safeHost(rawUrl)
+    const title = crawl.brand.name ?? crawl.pages[0]?.title ?? seedHost
+
     const { data: source, error: sourceErr } = await supabase
       .from('brain_sources')
       .insert({
@@ -235,7 +169,7 @@ export async function POST(req: Request) {
         journey_id: journeyId,
         type: 'url',
         title,
-        source_url: checked.url.toString(),
+        source_url: rawUrl,
         status: 'processing',
       })
       .select('id')
@@ -248,34 +182,63 @@ export async function POST(req: Request) {
       )
     }
 
+    // Each page's text is prefixed with where it came from, so a chunk
+    // that lands in a prompt carries its own citation and the model can
+    // say "on your pricing page it says…" rather than stating a number
+    // from nowhere.
+    const combined = crawl.pages
+      .map((page) => withSourceHeader(page.text, page.title, page.url))
+      .join('\n\n')
+
     const ingested = await ingestSource({
       tenantId: user.id,
       journeyId,
       sourceId: source.id,
       sourceType: 'url',
-      url: checked.url.toString(),
+      url: rawUrl,
+      content: combined,
     })
 
-    // ── 4. Draft a persona from what we read ──
-    // Failure here must not fail the request: the knowledge is already
-    // stored and useful on its own, so we return an empty persona and
-    // let the user keep the template's wording.
-    let persona = ''
-    try {
-      persona = await draftPersona({
-        text: text.slice(0, MAX_TEXT_FOR_LLM),
+    // ── 4. Draft a persona and pull out the facts ──
+    //
+    // Both run against the same text and neither is allowed to fail the
+    // request: the knowledge is already stored and useful on its own.
+    // Run them together — two sequential LLM calls would put the 60s
+    // budget at risk on a slow provider.
+    const promptText = buildLlmText(crawl)
+
+    const [persona, facts] = await Promise.all([
+      draftPersona({
+        text: promptText,
         agentName: agent.name,
         industry: agent.industry,
-        siteUrl: checked.url.toString(),
-      })
-    } catch (err) {
-      console.error('[train-from-url] persona draft failed:', err)
-    }
+        siteUrl: rawUrl,
+      }).catch((err) => {
+        console.error('[train-from-url] persona draft failed:', err)
+        return ''
+      }),
+      extractFacts(promptText).catch((err) => {
+        console.error('[train-from-url] fact extraction failed:', err)
+        return EMPTY_FACTS
+      }),
+    ])
 
     return NextResponse.json({
       journey_id: journeyId,
       persona,
+      // Read from the site's own metadata, not generated — safe to
+      // pre-fill the agent's name, avatar and colour with.
+      brand: crawl.brand,
+      // Written by the model — show these for approval before saving.
+      facts,
       title,
+      pages: crawl.pages.map((page) => ({
+        url: page.url,
+        title: page.title,
+        words: page.wordCount,
+      })),
+      skipped: crawl.skipped,
+      truncated: crawl.truncated,
       chunks: ingested.chunksCreated,
       status: ingested.status,
     })
@@ -285,6 +248,71 @@ export async function POST(req: Request) {
       { status: 500 },
     )
   }
+}
+
+function safeHost(raw: string): string {
+  try {
+    return new URL(raw).hostname
+  } catch {
+    return raw
+  }
+}
+
+/**
+ * Say why nothing was read, in words a merchant can act on.
+ *
+ * "Crawl failed" tells them nothing. Whether their site is JavaScript-
+ * rendered, blocking us, or simply mistyped leads to three completely
+ * different next steps.
+ */
+function explainEmptyCrawl(crawl: CrawlResult): string {
+  const reasons = crawl.skipped.map((s) => s.reason)
+
+  if (reasons.some((r) => /builds its pages in the browser/i.test(r))) {
+    return 'This site builds its pages in the browser, so we could not read its text. Paste your key content manually, or point us at a simpler page such as /about.'
+  }
+  if (reasons.some((r) => /public internet/i.test(r))) {
+    return 'That address is not reachable from the public internet.'
+  }
+  if (reasons.some((r) => /^HTTP 4|^HTTP 5/.test(r))) {
+    const status = reasons.find((r) => /^HTTP/.test(r))
+    return `The site answered ${status}. It may be blocking automated readers, or the address may be wrong.`
+  }
+  if (reasons.some((r) => /timed out|could not be reached/.test(r))) {
+    return "We couldn't reach that site in time. Check the address, or try again in a moment."
+  }
+  return 'We could not read any text from that site. Try a specific page such as /about, or paste your content manually.'
+}
+
+/**
+ * Pick which pages the model reads, and in what order.
+ *
+ * Not simply "the first 14,000 characters": on most sites that is the
+ * homepage hero and nothing else. Pages whose address suggests they
+ * describe the business go first, so the model sees /about and /contact
+ * even on a site with a long homepage.
+ */
+function buildLlmText(crawl: CrawlResult): string {
+  const priority = /\/(about|about-us|contact|services|pricing|plans|team|company|faq)/i
+
+  const ordered = [...crawl.pages].sort((a, b) => {
+    const aScore = priority.test(a.url) ? 1 : 0
+    const bScore = priority.test(b.url) ? 1 : 0
+    return bScore - aScore
+  })
+
+  // The seed page still leads — it carries the business's own summary
+  // of itself — followed by the pages most likely to hold specifics.
+  const seed = crawl.pages[0]
+  const rest = ordered.filter((page) => page.url !== seed.url)
+
+  let out = ''
+  for (const page of [seed, ...rest]) {
+    const block = `\n\n--- ${page.title} (${page.url}) ---\n${page.text}`
+    if (out.length + block.length > MAX_TEXT_FOR_LLM) break
+    out += block
+  }
+  return out.trim().slice(0, MAX_TEXT_FOR_LLM)
 }
 
 /**
@@ -301,32 +329,123 @@ async function draftPersona(args: {
   industry: string | null
   siteUrl: string
 }): Promise<string> {
-  const system = `You write system prompts ("personas") for WhatsApp customer-facing AI agents.
+  const system = `You write system prompts ("personas") for customer-facing AI agents on WhatsApp and website chat.
 
-You will be given the text of a business's website. Write the persona that agent should use.
+You will be given text from several pages of a business's website. Write the persona that agent should use.
 
 Rules for what you write:
 - Address the agent directly in the second person: "You are…", "Always…", "Never…".
-- Open with one sentence naming what the business actually does, taken from the page.
+- Open with one sentence naming what the business actually does, taken from the pages.
 - Include an "Always:" list of 3-5 concrete behaviours suited to this business.
 - Include a "Never:" list of 2-3 rules, and ALWAYS include this one verbatim:
   "Never state a price, delivery time or policy that is not in your knowledge base — offer to check with the team instead."
 - Keep it under 220 words. It is a working instruction, not marketing copy.
 
 Rules for accuracy:
-- Use ONLY facts present in the page text. If the page does not mention prices, delivery, or hours, do not invent them.
-- If the page is thin or unclear, write a shorter, more general persona rather than guessing.
+- Use ONLY facts present in the page text. If the pages do not mention prices, delivery, or hours, do not invent them.
+- If the pages are thin or unclear, write a shorter, more general persona rather than guessing.
 
 Output the persona text only. No preamble, no markdown headings, no explanation.`
 
   const user = `Business website: ${args.siteUrl}
 Agent name: ${args.agentName}${args.industry ? `\nIndustry: ${args.industry}` : ''}
 
-Page text:
+Website text:
 """
 ${args.text}
 """`
 
   const response = await callLLM(system, [{ role: 'user', text: user }], [])
   return (response.text || '').trim()
+}
+
+/**
+ * Pull the handful of facts every agent needs into a small object.
+ *
+ * These matter more than they look. An agent that knows the phone
+ * number and the opening hours can answer the two most common questions
+ * a website visitor asks without a retrieval round-trip, and can be
+ * shown to the merchant for correction — which no amount of buried
+ * chunk text allows.
+ *
+ * `null` is required for anything absent, and the parse below is
+ * defensive: a model asked for JSON returns a fenced code block often
+ * enough that not handling it would be a bug waiting for a Friday.
+ */
+async function extractFacts(text: string): Promise<StructuredFacts> {
+  const system = `You extract structured business details from website text.
+
+Return ONLY a JSON object with exactly these keys:
+{
+  "business_name": string | null,
+  "what_they_do": string | null,
+  "services": string[],
+  "phone": string | null,
+  "whatsapp": string | null,
+  "email": string | null,
+  "address": string | null,
+  "hours": string | null
+}
+
+Rules:
+- Use null for anything the text does not state. Do NOT guess or infer.
+- "what_they_do" is one plain sentence, at most 25 words.
+- "services" is at most 8 short names taken verbatim from the text. Empty array if none are listed.
+- "hours" is copied as written, e.g. "Mon-Sat 10am-7pm". null if not stated.
+- Copy phone numbers exactly as printed, including the country code if shown.
+
+Output the JSON object and nothing else.`
+
+  const response = await callLLM(system, [{ role: 'user', text }], [])
+  return parseFacts(response.text || '')
+}
+
+/** Exported for tests — the parsing is where this breaks in practice. */
+export function parseFacts(raw: string): StructuredFacts {
+  let body = raw.trim()
+
+  // Models return ```json blocks despite being told not to.
+  const fenced = body.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fenced) body = fenced[1].trim()
+
+  // Or a sentence of preamble before the object.
+  if (!body.startsWith('{')) {
+    const start = body.indexOf('{')
+    const end = body.lastIndexOf('}')
+    if (start === -1 || end <= start) return EMPTY_FACTS
+    body = body.slice(start, end + 1)
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    return EMPTY_FACTS
+  }
+  if (!parsed || typeof parsed !== 'object') return EMPTY_FACTS
+
+  const obj = parsed as Record<string, unknown>
+  const str = (value: unknown, max = 200): string | null => {
+    if (typeof value !== 'string') return null
+    const trimmed = value.trim()
+    // Models write the string "null" surprisingly often.
+    if (!trimmed || /^(null|none|n\/a|not stated|unknown)$/i.test(trimmed)) return null
+    return trimmed.slice(0, max)
+  }
+
+  return {
+    business_name: str(obj.business_name, 120),
+    what_they_do: str(obj.what_they_do, 300),
+    services: Array.isArray(obj.services)
+      ? obj.services
+          .map((item) => str(item, 80))
+          .filter((item): item is string => Boolean(item))
+          .slice(0, 8)
+      : [],
+    phone: str(obj.phone, 32),
+    whatsapp: str(obj.whatsapp, 32),
+    email: str(obj.email, 160),
+    address: str(obj.address, 300),
+    hours: str(obj.hours, 200),
+  }
 }

@@ -520,7 +520,31 @@
       '.aisend-wa-header svg{display:block}' +
       '.aisend-close{color:#fff;font-size:26px;cursor:pointer;line-height:1;opacity:.9}' +
       '.aisend-close:hover{opacity:1}' +
-      '.aisend-messages{flex:1;overflow-y:auto;padding:16px;background:#f7f9fb;display:flex;flex-direction:column;gap:10px}' +
+      // Patterned message ground.
+      //
+      // A flat panel makes the bubbles float in nothing; a texture
+      // behind them reads as a place a conversation happens. It is
+      // drawn in currentColor at 4% via an inline SVG data URI, so it
+      // tints itself to whatever brand colour the merchant set and
+      // costs no network request.
+      //
+      // The opacity is the whole design decision: high enough to feel
+      // deliberate, low enough that message text never fights it. Any
+      // stronger and the pattern competes with the words, which is the
+      // only thing in this panel that matters.
+      '.aisend-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;' +
+        'color:var(--aisend-primary);background-color:#f7f9fb;' +
+        'background-image:url("data:image/svg+xml,' +
+          encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">' +
+            '<g fill="none" stroke="' + config.primary_color + '" stroke-opacity=".10" ' +
+              'stroke-width="1.4" stroke-linecap="round">' +
+            '<circle cx="14" cy="14" r="4.5"/>' +
+            '<path d="M35 10h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-6l-4 3v-3a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z"/>' +
+            '<path d="M9 40l4 4 8-9"/>' +
+            '<circle cx="42" cy="42" r="4.5"/>' +
+            '</g></svg>'
+          ) + '")}' +
       '.aisend-msg{display:flex;max-width:80%}' +
       '.aisend-msg-user{align-self:flex-end}' +
       '.aisend-msg-bot{align-self:flex-start}' +

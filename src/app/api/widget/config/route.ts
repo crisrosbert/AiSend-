@@ -36,16 +36,25 @@ export async function OPTIONS() {
 // widget_configs went to every visitor — including any column added
 // later for internal use. An allowlist of fields cannot leak a column
 // that does not exist yet; a SELECT * inevitably will.
-const PUBLIC_FIELDS = [
+// The first six are READ BY public/widget.js and the widget breaks
+// without them — business_phone in particular is the WhatsApp handoff
+// button. widget-config-fields.test.ts reads widget.js and fails if it
+// ever references a field missing from this list, so the two cannot
+// drift apart silently.
+export const PUBLIC_FIELDS = [
+  'bot_name',
+  'welcome_message',
+  'bubble_message',
+  'business_phone',
+  'primary_color',
+  'trigger_delay_seconds',
+  // Not read by widget.js today, but safe and useful to serve.
   'id',
   'org_user_id',
   'agent_id',
   'is_active',
-  'bot_name',
-  'welcome_message',
   'greeting',
   'placeholder',
-  'primary_color',
   'accent_color',
   'position',
   'avatar_url',
@@ -58,7 +67,7 @@ const PUBLIC_FIELDS = [
 ] as const
 
 /** Drop anything not on the public list, and never echo the allowlist itself. */
-function publicView(config: Record<string, unknown>): Record<string, unknown> {
+export function publicView(config: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const key of PUBLIC_FIELDS) {
     // allowed_domains is read to enforce the check, not to publish —

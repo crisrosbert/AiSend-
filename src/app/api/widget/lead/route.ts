@@ -14,6 +14,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { allowlistFromConfig, originAllowed, corsHeaders } from '@/lib/widget/origin'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -27,14 +28,15 @@ function db() {
   return _client
 }
 
-const CORS = {
+// Used before we know which widget is being addressed.
+const OPEN_CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS })
+  return new NextResponse(null, { status: 204, headers: OPEN_CORS })
 }
 
 /** Keep free-text short so a scripted flood can't bloat the table. */
@@ -45,6 +47,9 @@ function clean(value: unknown, max = 200): string | null {
 }
 
 export async function POST(req: Request) {
+  const origin = req.headers.get('origin')
+  let CORS: Record<string, string> = OPEN_CORS
+
   try {
     const body = await req.json().catch(() => ({}))
     const { org_id, agent_id, visitor_id, fields } = body
@@ -67,6 +72,21 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: 'Widget not found or inactive' },
         { status: 404, headers: CORS },
+      )
+    }
+
+    // Only accept leads from a page the merchant listed. Lead rows are
+    // the one thing here that a competitor would pay to pollute, and a
+    // flood of fake rows is worse than none — it destroys trust in the
+    // whole list.
+    const allowlist = allowlistFromConfig(config)
+    CORS = corsHeaders(origin, allowlist)
+
+    if (!originAllowed(origin, allowlist)) {
+      console.warn(`[widget/lead] blocked origin ${origin ?? '(none)'} for org ${org_id}`)
+      return NextResponse.json(
+        { error: 'This form is not enabled for this website.' },
+        { status: 403, headers: CORS },
       )
     }
 

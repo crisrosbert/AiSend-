@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { runAgent } from '@/lib/agent/engine'
+import { allowlistFromConfig, originAllowed, corsHeaders } from '@/lib/widget/origin'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -22,17 +23,27 @@ function db() {
   return _client
 }
 
-const CORS = {
+// Used before we know which widget is being addressed — the preflight,
+// and the argument-validation errors that fire before the config loads.
+// Neither reveals anything about the tenant.
+const OPEN_CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS })
+  return new NextResponse(null, { status: 204, headers: OPEN_CORS })
 }
 
 export async function POST(req: Request) {
+  // The embed code is public by design, so org_id and agent_id are
+  // public too: anyone can read them off a customer's page. The Origin
+  // check below is what stops those ids being replayed from somewhere
+  // else — every replayed message is an LLM call the merchant pays for.
+  const origin = req.headers.get('origin')
+  let CORS: Record<string, string> = OPEN_CORS
+
   try {
     const body = await req.json().catch(() => ({}))
     const { org_id, agent_id, visitor_id, message, page_url, page_title } = body
@@ -81,6 +92,26 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { reply: 'This chat is not configured yet. Please contact the business directly.' },
         { status: 200, headers: CORS },
+      )
+    }
+
+    // ── Is this page allowed to use this widget? ──
+    //
+    // Enforced here rather than left to CORS headers alone: a browser
+    // only refuses to *show* a blocked response, and curl ignores CORS
+    // entirely. Either way we would already have run the model and paid
+    // for it. An empty allowlist means "not configured" and still
+    // allows, so live widgets keep working — see lib/widget/origin.ts.
+    const allowlist = allowlistFromConfig(config)
+    CORS = corsHeaders(origin, allowlist)
+
+    if (!originAllowed(origin, allowlist)) {
+      console.warn(
+        `[widget/message] blocked origin ${origin ?? '(none)'} for org ${org_id}`,
+      )
+      return NextResponse.json(
+        { error: 'This chat is not enabled for this website.' },
+        { status: 403, headers: CORS },
       )
     }
 

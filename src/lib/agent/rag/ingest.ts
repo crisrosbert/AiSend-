@@ -47,12 +47,17 @@ export async function ingestSource(
 ): Promise<IngestResult> {
   try {
     // 1. Get the raw text content
+    //
+    // Content supplied by the caller wins, even for sourceType 'url'.
+    // The site crawler has already read the whole site and stripped its
+    // navigation; re-fetching here would throw that away and index only
+    // the homepage. Only fetch when nobody handed us text.
     let rawText: string | null = null
 
-    if (args.sourceType === 'url' && args.url) {
-      rawText = await fetchUrlText(args.url)
-    } else if (args.content) {
+    if (args.content && args.content.trim()) {
       rawText = args.content
+    } else if (args.sourceType === 'url' && args.url) {
+      rawText = await fetchUrlText(args.url)
     }
 
     if (!rawText || rawText.trim().length < 10) {

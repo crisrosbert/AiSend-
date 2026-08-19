@@ -16,7 +16,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { PUBLIC_FIELDS, publicView } from './route'
+import { PUBLIC_FIELDS, publicView, mergeAgentProfile } from './route'
 
 const widgetSource = readFileSync(
   join(process.cwd(), 'public', 'widget.js'),
@@ -66,5 +66,62 @@ describe('widget config field list', () => {
     ]) {
       expect(served.has(field), field).toBe(false)
     }
+  })
+})
+
+describe('mergeAgentProfile', () => {
+  const agent = {
+    name: 'Kalosa',
+    avatar_url: 'https://kalosa.in/logo.png',
+    greeting: 'Hello! How can I help you with Kalosa today?',
+    suggested_questions: ['What treatments?', 'How to book?', 'Where are you?'],
+  }
+
+  it('adds the logo the crawl found', () => {
+    // Before this, the logo was saved to agents.avatar_url and the
+    // widget only ever read widget_configs — so it had nowhere to go
+    // and the header rendered a hardcoded icon.
+    const out = mergeAgentProfile({ bot_name: 'Kalosa Assistant' }, agent)
+    expect(out.avatar_url).toBe('https://kalosa.in/logo.png')
+  })
+
+  it('does NOT overwrite a greeting the merchant wrote', () => {
+    // The single most important rule here. Kalosa's widget opens with
+    // "Hey! I'm Riya from Kalosa Aesthetics" — hand-written, in their
+    // voice. A drafted greeting silently replacing that would be a
+    // regression the merchant never asked for and might not notice.
+    const out = mergeAgentProfile(
+      { welcome_message: "Hey! I'm Riya from Kalosa Aesthetics." },
+      agent,
+    )
+    expect(out.welcome_message).toBe("Hey! I'm Riya from Kalosa Aesthetics.")
+  })
+
+  it('fills the greeting only when the widget has none', () => {
+    expect(mergeAgentProfile({}, agent).welcome_message).toBe(agent.greeting)
+    expect(mergeAgentProfile({ welcome_message: '   ' }, agent).welcome_message)
+      .toBe(agent.greeting)
+  })
+
+  it('passes the suggested questions through, capped at three', () => {
+    const many = { ...agent, suggested_questions: ['a', 'b', 'c', 'd', 'e'] }
+    expect(mergeAgentProfile({}, many).suggested_questions).toHaveLength(3)
+  })
+
+  it('leaves the config untouched when the agent has no profile yet', () => {
+    // Every agent looks like this until a site is crawled.
+    const bare = { name: 'x', avatar_url: null, greeting: null, suggested_questions: null }
+    const view = { bot_name: 'Assistant', welcome_message: 'Hi' }
+    expect(mergeAgentProfile(view, bare)).toEqual(view)
+  })
+
+  it('leaves the config untouched when there is no agent at all', () => {
+    const view = { bot_name: 'Assistant' }
+    expect(mergeAgentProfile(view, null)).toEqual(view)
+  })
+
+  it('ignores an empty question array rather than sending one', () => {
+    const out = mergeAgentProfile({}, { ...agent, suggested_questions: [] })
+    expect(out.suggested_questions).toBeUndefined()
   })
 })

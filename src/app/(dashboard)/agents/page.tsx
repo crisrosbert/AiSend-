@@ -43,6 +43,11 @@ import {
   type BusinessHours,
   type DayHours,
 } from "@/lib/agent/business-hours";
+import {
+  SiteReviewPanel,
+  type SiteReviewData,
+  type AppliedFields,
+} from "@/components/agents/site-review-panel";
 
 /** Mirrors the columns of the `agents` table this page reads/writes. */
 interface Agent {
@@ -63,6 +68,13 @@ interface Agent {
   business_hours: unknown;
   /** Number the agent offers when a booking cannot be saved. */
   fallback_contact: string | null;
+  // ── Migration 027: the agent's public face ──
+  // The first message a visitor reads and the chips they can tap
+  // before typing. Null on every row until a site is crawled.
+  greeting: string | null;
+  suggested_questions: string[] | null;
+  role: string | null;
+  avatar_url: string | null;
 }
 
 /** Values the engine understands for `agents.agent_type`. */
@@ -106,6 +118,10 @@ export default function AgentsPage() {
   // came back from the last run so we can show the user what happened.
   const [trainUrl, setTrainUrl] = useState("");
   const [training, setTraining] = useState(false);
+  // The full crawl result, so the review panel can show the name, logo,
+  // greeting and questions the route already returns. The old state held
+  // only { title, chunks } and everything else was discarded.
+  const [siteReview, setSiteReview] = useState<SiteReviewData | null>(null);
   const [trainResult, setTrainResult] = useState<
     { title: string; chunks: number } | null
   >(null);
@@ -184,6 +200,14 @@ export default function AgentsPage() {
           is_active: editing.is_active,
           business_hours: editing.business_hours,
           fallback_contact: editing.fallback_contact?.trim() || null,
+          // Migration 027. Empty arrays are stored as null so "no
+          // questions set" is one value, not two.
+          greeting: editing.greeting?.trim() || null,
+          suggested_questions: editing.suggested_questions?.length
+            ? editing.suggested_questions
+            : null,
+          role: editing.role?.trim() || null,
+          avatar_url: editing.avatar_url?.trim() || null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", editing.id);
@@ -279,6 +303,26 @@ export default function AgentsPage() {
 
       setTrainResult({ title: data.title, chunks: data.chunks ?? 0 });
 
+      // Keep everything the route returned. The name, logo, greeting and
+      // suggested questions were always in this response — the drawer
+      // simply dropped them, which is why pasting a URL felt like it did
+      // nothing but fill a text box.
+      if (data.brand || data.facts) {
+        setSiteReview({
+          brand: data.brand ?? { name: null, logoUrl: null, description: null, themeColor: null },
+          facts: data.facts ?? {
+            business_name: null, what_they_do: null, services: [],
+            phone: null, whatsapp: null, email: null, address: null, hours: null,
+            role: null, greeting: null, suggested_questions: [],
+          },
+          pages: data.pages ?? [],
+          skipped: data.skipped ?? [],
+          truncated: Boolean(data.truncated),
+          chunks: data.chunks ?? 0,
+          title: data.title ?? "",
+        });
+      }
+
       // Only replace the persona if the model actually produced one.
       // A failed draft must never wipe the template's wording.
       if (data.persona) {
@@ -297,6 +341,33 @@ export default function AgentsPage() {
     } finally {
       setTraining(false);
     }
+  }
+
+  /**
+   * Copy chosen fields from the crawl into the agent being edited.
+   *
+   * Into local state only — nothing reaches the database until Save
+   * agent. Same reasoning as the persona: the name and logo come from
+   * the site's own metadata, but the greeting and questions were
+   * written by a model, and a model describing a business it read for
+   * ten seconds will occasionally get it wrong in a way only the owner
+   * can see.
+   */
+  function applySiteFields(fields: AppliedFields) {
+    setEditing((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        ...(fields.name !== undefined ? { name: fields.name } : {}),
+        ...(fields.role !== undefined ? { role: fields.role } : {}),
+        ...(fields.greeting !== undefined ? { greeting: fields.greeting } : {}),
+        ...(fields.avatarUrl !== undefined ? { avatar_url: fields.avatarUrl } : {}),
+        ...(fields.suggestedQuestions !== undefined
+          ? { suggested_questions: fields.suggestedQuestions }
+          : {}),
+      };
+    });
+    toast.success("Added — press Save agent to keep it");
   }
 
   /**
@@ -615,8 +686,9 @@ export default function AgentsPage() {
             <div className="ag-drawer-section"><Globe size={14} /> Train from your website</div>
             <div className="ag-train">
               <p className="ag-train-lead">
-                Paste a page — your homepage, About or FAQ. We read it, save it as
-                knowledge the agent can quote, and draft a persona for you to review.
+                Paste your website address. We read it and the pages it links to,
+                save them as knowledge the agent can quote, and draft its name,
+                greeting and opening questions for you to review.
               </p>
               <div className="ag-train-row">
                 <input
@@ -652,6 +724,17 @@ export default function AgentsPage() {
                 first — anything it gets wrong, your customers will hear.
               </p>
             </div>
+
+            {/* Everything the crawl found, offered one field at a time.
+                Sits below the URL box and above Persona so the review
+                happens before the field it overwrites. */}
+            {siteReview && (
+              <SiteReviewPanel
+                data={siteReview}
+                onApply={applySiteFields}
+                onDismiss={() => setSiteReview(null)}
+              />
+            )}
 
             <Field
               label="Persona"
@@ -1073,6 +1156,84 @@ const css = `
 .ag-train-done{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#3f6212;margin:0;font-weight:600}
 .ag-train-done svg{flex-shrink:0}
 .ag-train .ag-hint{color:#6b7280}
+
+/* ── site review panel — what the crawl found, offered for approval ──
+   Deliberately quieter than the lime training box above it: that box is
+   an action, this is a result, and two loud panels stacked would make
+   neither read as important. */
+.srp{border:1px solid var(--line);border-radius:14px;background:var(--surface);
+  margin:-4px 0 16px;overflow:hidden}
+.srp-head{display:flex;align-items:center;gap:7px;padding:11px 13px;
+  border-bottom:1px solid var(--line);background:#fafbfc;font-size:12.5px}
+.srp-head strong{font-weight:750}
+.srp-head svg{color:#84cc16;flex-shrink:0}
+.srp-count{margin-left:auto;font-size:11px;color:var(--faint);font-weight:600}
+.srp-dismiss{background:none;border:0;font-size:19px;line-height:1;color:var(--faint);
+  cursor:pointer;padding:0 0 0 8px}
+.srp-dismiss:hover{color:var(--ink)}
+
+.srp-identity{display:flex;gap:11px;align-items:flex-start;padding:13px;
+  border-bottom:1px solid var(--line)}
+.srp-logo{width:42px;height:42px;border-radius:11px;object-fit:cover;flex-shrink:0;
+  border:1px solid var(--line);background:#fff}
+.srp-logo-empty{display:grid;place-items:center;color:var(--faint);background:var(--ground)}
+.srp-identity-text{min-width:0}
+.srp-name{font-size:14px;font-weight:750;line-height:1.3}
+.srp-role{font-size:12px;color:#84cc16;font-weight:650;margin-top:1px}
+.srp-desc{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:4px}
+
+.srp-row{display:flex;align-items:center;gap:10px;padding:9px 13px;
+  border-bottom:1px solid #f1f3f5;font-size:12px}
+.srp-row-block{display:block}
+.srp-row-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.srp-label{color:var(--muted);flex-shrink:0;min-width:112px;font-weight:600}
+.srp-value{flex:1;min-width:0;display:flex;align-items:center;gap:6px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srp-swatch{width:13px;height:13px;border-radius:4px;border:1px solid var(--line);flex-shrink:0}
+
+.srp-btn{flex-shrink:0;border:1px solid var(--line);background:var(--surface);
+  border-radius:8px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;
+  color:var(--ink);font-family:inherit}
+.srp-btn:hover{background:var(--lime-soft);border-color:#d9f99d}
+.srp-btn-done{display:inline-flex;align-items:center;gap:4px;color:#3f6212;
+  background:var(--lime-soft);border-color:#d9f99d;cursor:default}
+
+.srp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.srp-chip{font-size:11.5px;padding:5px 11px;border-radius:999px;
+  background:var(--lime-soft);border:1px solid #e3f5c2;color:#3f6212;font-weight:600}
+
+.srp-facts{padding:11px 13px;border-bottom:1px solid var(--line);
+  display:flex;flex-direction:column;gap:6px;background:#fafbfc}
+.srp-fact{display:flex;gap:10px;font-size:11.5px;line-height:1.5}
+.srp-fact-label{color:var(--muted);min-width:112px;flex-shrink:0;font-weight:600}
+.srp-fact-value{color:var(--ink);min-width:0}
+
+.srp-warn{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.5;
+  padding:9px 13px;background:#fffbeb;color:#92400e;border-bottom:1px solid #fde68a}
+.srp-warn svg{flex-shrink:0;margin-top:2px}
+
+.srp-actions{display:flex;align-items:center;gap:12px;padding:11px 13px}
+.srp-apply-all{border:0;background:var(--ink);color:#fff;border-radius:9px;
+  padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.srp-apply-all:hover{background:#000}
+.srp-link{background:none;border:0;color:var(--muted);font-size:11.5px;cursor:pointer;
+  text-decoration:underline;font-family:inherit;padding:0}
+
+.srp-pages{list-style:none;margin:0;padding:0 13px 11px;display:flex;
+  flex-direction:column;gap:5px;max-height:190px;overflow-y:auto}
+.srp-pages li{display:flex;gap:10px;font-size:11px;line-height:1.4}
+.srp-page-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srp-page-meta{color:var(--faint);flex-shrink:0}
+.srp-page-skipped .srp-page-title{color:var(--faint)}
+
+.srp-note{font-size:11px;color:var(--muted);line-height:1.55;margin:0;
+  padding:11px 13px;border-top:1px solid var(--line);background:#fafbfc}
+
+@media(max-width:560px){
+  .srp-row{flex-wrap:wrap}
+  .srp-label{min-width:0;width:100%}
+  .srp-fact-label{min-width:84px}
+}
 
 /* capability notices — why an agent will or won't do something */
 .ag-notice{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.5;

@@ -110,7 +110,7 @@
           '</div>' +
         '</div>' +
         '<div class="aisend-header-actions">' +
-          (config.business_phone ? '<a class="aisend-wa-header" id="aisend-wa-header" href="https://wa.me/' + config.business_phone + '" target="_blank" title="Chat on WhatsApp">' + waIcon() + '</a>' : '') +
+          (config.business_phone ? '<a class="aisend-wa-header" id="aisend-wa-header" href="https://wa.me/' + config.business_phone + '" target="_blank" rel="noopener" title="Chat on WhatsApp" aria-label="Chat on WhatsApp">' + waIcon() + '</a>' : '') +
           '<div class="aisend-close" id="aisend-close">&times;</div>' +
         '</div>' +
       '</div>' +
@@ -506,8 +506,18 @@
       '.aisend-bot-name{color:#fff;font-weight:600;font-size:15px}' +
       '.aisend-status{color:rgba(255,255,255,.85);font-size:12px;margin-top:1px}' +
       '.aisend-header-actions{display:flex;align-items:center;gap:10px}' +
-      '.aisend-wa-header{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.18);transition:background .2s}' +
-      '.aisend-wa-header:hover{background:rgba(255,255,255,.32)}' +
+      // WhatsApp green, not the merchant's brand colour and not a
+      // translucent white circle. The glyph is only 22px in a purple
+      // header — the green is what makes it read as "WhatsApp" rather
+      // than as a second, confusingly similar, chat button. Recognition
+      // is the entire job of this control, so the brand colour is
+      // hardcoded and does not follow the theme.
+      '.aisend-wa-header{display:flex;align-items:center;justify-content:center;width:34px;height:34px;' +
+        'border-radius:50%;background:#25D366;box-shadow:0 1px 3px rgba(0,0,0,.18);' +
+        'transition:background .2s,transform .12s}' +
+      '.aisend-wa-header:hover{background:#1FAF52}' +
+      '.aisend-wa-header:active{transform:scale(.94)}' +
+      '.aisend-wa-header svg{display:block}' +
       '.aisend-close{color:#fff;font-size:26px;cursor:pointer;line-height:1;opacity:.9}' +
       '.aisend-close:hover{opacity:1}' +
       '.aisend-messages{flex:1;overflow-y:auto;padding:16px;background:#f7f9fb;display:flex;flex-direction:column;gap:10px}' +

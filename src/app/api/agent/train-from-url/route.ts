@@ -66,6 +66,15 @@ export interface StructuredFacts {
   email: string | null
   address: string | null
   hours: string | null
+  // ── The agent's own opening, drafted from the site ──
+  //
+  // A generic "Hi, how can I help?" wastes the first message — the one
+  // moment a visitor is definitely reading. Naming the business and
+  // offering three real questions turns the greeting into a menu, which
+  // is what makes a chat widget convert rather than sit closed.
+  role: string | null
+  greeting: string | null
+  suggested_questions: string[]
 }
 
 const EMPTY_FACTS: StructuredFacts = {
@@ -77,6 +86,9 @@ const EMPTY_FACTS: StructuredFacts = {
   email: null,
   address: null,
   hours: null,
+  role: null,
+  greeting: null,
+  suggested_questions: [],
 }
 
 export async function POST(req: Request) {
@@ -373,7 +385,7 @@ ${args.text}
  * enough that not handling it would be a bug waiting for a Friday.
  */
 async function extractFacts(text: string): Promise<StructuredFacts> {
-  const system = `You extract structured business details from website text.
+  const system = `You extract business details from website text AND draft the opening for a chat agent that will represent that business.
 
 Return ONLY a JSON object with exactly these keys:
 {
@@ -384,15 +396,25 @@ Return ONLY a JSON object with exactly these keys:
   "whatsapp": string | null,
   "email": string | null,
   "address": string | null,
-  "hours": string | null
+  "hours": string | null,
+  "role": string | null,
+  "greeting": string | null,
+  "suggested_questions": string[]
 }
 
-Rules:
+Extraction rules (business_name through hours):
 - Use null for anything the text does not state. Do NOT guess or infer.
 - "what_they_do" is one plain sentence, at most 25 words.
 - "services" is at most 8 short names taken verbatim from the text. Empty array if none are listed.
 - "hours" is copied as written, e.g. "Mon-Sat 10am-7pm". null if not stated.
 - Copy phone numbers exactly as printed, including the country code if shown.
+
+Drafting rules (role, greeting, suggested_questions):
+- "role" is a short label for what this agent is, at most 8 words, e.g. "Clinic assistant for skin and hair treatments".
+- "greeting" is the agent's first message. One or two sentences, name the business, warm and plain. No emoji unless the site's own copy uses them.
+- "suggested_questions" is EXACTLY 3 questions a real customer of THIS business would ask, written in the customer's voice ("What does a consultation cost?", not "Ask about pricing").
+- Base all three on what the pages actually describe. A clinic gets questions about treatments and booking; a shop gets questions about delivery and returns.
+- Every question must be one the website's own content could answer. Never invent a service the pages do not mention.
 
 Output the JSON object and nothing else.`
 
@@ -447,5 +469,15 @@ export function parseFacts(raw: string): StructuredFacts {
     email: str(obj.email, 160),
     address: str(obj.address, 300),
     hours: str(obj.hours, 200),
+    role: str(obj.role, 80),
+    greeting: str(obj.greeting, 300),
+    // Three, capped. Four chips wrap to a second row on a phone, which
+    // is where most of these conversations start.
+    suggested_questions: Array.isArray(obj.suggested_questions)
+      ? obj.suggested_questions
+          .map((item) => str(item, 120))
+          .filter((item): item is string => Boolean(item))
+          .slice(0, 3)
+      : [],
   }
 }

@@ -88,8 +88,52 @@ describe('parseFacts', () => {
     const facts = parseFacts('{"business_name":"Acme","secret_key":"leak","__proto__":{"x":1}}')
     expect(facts.business_name).toBe('Acme')
     expect(Object.keys(facts).sort()).toEqual([
-      'address', 'business_name', 'email', 'hours',
-      'phone', 'services', 'what_they_do', 'whatsapp',
+      'address', 'business_name', 'email', 'greeting', 'hours',
+      'phone', 'role', 'services', 'suggested_questions',
+      'what_they_do', 'whatsapp',
     ])
+  })
+})
+
+describe('parseFacts — the agent profile fields', () => {
+  it('reads role, greeting and three suggested questions', () => {
+    const facts = parseFacts(`{
+      "role": "Clinic assistant for skin and hair",
+      "greeting": "Hello! How can I help you with Kalosa today?",
+      "suggested_questions": [
+        "What treatments do you offer?",
+        "How do I book a consultation?",
+        "Where are you located?"
+      ]
+    }`)
+    expect(facts.role).toBe('Clinic assistant for skin and hair')
+    expect(facts.greeting).toContain('Kalosa')
+    expect(facts.suggested_questions).toHaveLength(3)
+  })
+
+  it('caps suggested questions at three', () => {
+    // Four chips wrap to a second row on a phone, which is where most
+    // of these conversations start.
+    const many = JSON.stringify({
+      suggested_questions: ['a?', 'b?', 'c?', 'd?', 'e?'],
+    })
+    expect(parseFacts(many).suggested_questions).toEqual(['a?', 'b?', 'c?'])
+  })
+
+  it('returns an empty list when the model sends a string instead of an array', () => {
+    expect(parseFacts('{"suggested_questions":"What do you offer?"}').suggested_questions)
+      .toEqual([])
+  })
+
+  it('drops blank and null questions rather than rendering empty chips', () => {
+    const facts = parseFacts('{"suggested_questions":["Real question?", "", null, "  "]}')
+    expect(facts.suggested_questions).toEqual(['Real question?'])
+  })
+
+  it('leaves the profile fields null when the model omits them', () => {
+    const facts = parseFacts('{"business_name":"Acme"}')
+    expect(facts.role).toBeNull()
+    expect(facts.greeting).toBeNull()
+    expect(facts.suggested_questions).toEqual([])
   })
 })

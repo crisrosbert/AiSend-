@@ -45,7 +45,14 @@
     welcome_message: 'Hello! How can I help you today?',
     primary_color: '#25D366',
     trigger_delay_seconds: 10,
-    business_phone: null
+    business_phone: null,
+    // The business's own logo, read off their site when the agent was
+    // trained. Null falls back to the generic chat icon.
+    avatar_url: null,
+    // Up to three questions shown as tappable chips under the greeting.
+    // These are what turn an open panel into a conversation: a visitor
+    // who has to think of a question usually closes the window instead.
+    suggested_questions: []
   };
   var isOpen = false;
   var messages = []; // {role:'user'|'bot', text}
@@ -96,7 +103,7 @@
     panel.innerHTML =
       '<div class="aisend-header">' +
         '<div class="aisend-header-info">' +
-          '<div class="aisend-avatar">' + chatIcon(true) + '</div>' +
+          '<div class="aisend-avatar">' + avatarInner() + '</div>' +
           '<div>' +
             '<div class="aisend-bot-name">' + esc(config.bot_name) + '</div>' +
             '<div class="aisend-status">● Online</div>' +
@@ -121,6 +128,65 @@
     document.documentElement.style.setProperty('--aisend-primary', config.primary_color);
   }
 
+  /**
+   * The header avatar: the business's logo if we have one.
+   *
+   * onerror matters more than it looks. This URL was read off the
+   * merchant's own site — a favicon path that 404s, an image behind
+   * hotlink protection, a CDN that later expires it. A broken-image
+   * icon in the chat header looks worse than no logo at all, so a
+   * failed load swaps the generic icon back in.
+   */
+  function avatarInner() {
+    // Stashed on window so the inline onerror above can reach it — the
+    // handler runs in global scope, not inside this closure.
+    window.__aisendChatIcon = chatIcon(true);
+    if (!config.avatar_url) return chatIcon(true);
+    return '<img src="' + esc(config.avatar_url) + '" alt="" class="aisend-avatar-img" ' +
+      'onerror="this.parentNode.innerHTML=window.__aisendChatIcon||\'\'">';
+  }
+
+  /**
+   * Tappable questions under the greeting.
+   *
+   * Removed as soon as one is tapped, or as soon as the visitor types.
+   * Leaving them up through a conversation turns the panel into a menu
+   * that keeps interrupting whatever is actually being discussed.
+   */
+  function renderSuggestions() {
+    var questions = config.suggested_questions || [];
+    if (!questions.length) return;
+    if (document.getElementById('aisend-suggestions')) return;
+
+    var body = document.getElementById('aisend-messages');
+    if (!body) return;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'aisend-suggestions';
+    wrap.id = 'aisend-suggestions';
+
+    questions.slice(0, 3).forEach(function (question) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'aisend-chip';
+      chip.textContent = question;
+      chip.addEventListener('click', function () {
+        clearSuggestions();
+        addMessage('user', question);
+        deliver(question);
+      });
+      wrap.appendChild(chip);
+    });
+
+    body.appendChild(wrap);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function clearSuggestions() {
+    var el = document.getElementById('aisend-suggestions');
+    if (el) el.remove();
+  }
+
   function togglePanel() {
     var panel = document.getElementById('aisend-panel');
     isOpen = !isOpen;
@@ -129,6 +195,7 @@
     if (b) b.remove();
     if (isOpen && messages.length === 0) {
       addMessage('bot', config.welcome_message);
+      renderSuggestions();
     }
     if (isOpen) {
       setTimeout(function () {
@@ -143,7 +210,21 @@
     var text = (input.value || '').trim();
     if (!text) return;
     input.value = '';
+    clearSuggestions();
     addMessage('user', text);
+    deliver(text);
+  }
+
+  /**
+   * Send text that is already on screen.
+   *
+   * Split out of sendMessage so a tapped suggestion travels the exact
+   * same path as a typed message — same endpoint, same typing
+   * indicator, same media, handoff and lead-form handling. A second
+   * copy of this would drift, and the chip path would quietly stop
+   * rendering images or lead forms one day.
+   */
+  function deliver(text) {
     showTyping();
     fetch(API_BASE + '/api/widget/message', {
       method: 'POST',
@@ -408,7 +489,20 @@
       '.aisend-panel{position:fixed;bottom:20px;right:20px;width:370px;max-width:calc(100vw - 40px);height:560px;max-height:calc(100vh - 40px);background:#fff;border-radius:18px;box-shadow:0 12px 48px rgba(0,0,0,.24);z-index:999999;flex-direction:column;overflow:hidden;font-family:-apple-system,system-ui,sans-serif}' +
       '.aisend-header{background:var(--aisend-primary);padding:16px;display:flex;align-items:center;justify-content:space-between}' +
       '.aisend-header-info{display:flex;align-items:center;gap:10px}' +
-      '.aisend-avatar{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center}' +
+      '.aisend-avatar{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0}' +
+      // object-fit:cover, not contain: a logo letterboxed inside a
+      // circle with bands of white either side looks like a mistake.
+      '.aisend-avatar-img{width:100%;height:100%;object-fit:cover;display:block}' +
+      // Suggested-question chips. Right-aligned because they are things
+      // the VISITOR is about to say, and every other visitor message in
+      // this panel sits on the right.
+      '.aisend-suggestions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin:2px 0 4px}' +
+      '.aisend-chip{max-width:85%;text-align:left;font:inherit;font-size:13px;line-height:1.4;' +
+        'padding:9px 14px;border-radius:16px 16px 4px 16px;cursor:pointer;' +
+        'background:#fff;color:var(--aisend-primary);border:1.5px solid var(--aisend-primary);' +
+        'transition:background .15s,color .15s}' +
+      '.aisend-chip:hover{background:var(--aisend-primary);color:#fff}' +
+      '.aisend-chip:active{transform:translateY(1px)}' +
       '.aisend-bot-name{color:#fff;font-weight:600;font-size:15px}' +
       '.aisend-status{color:rgba(255,255,255,.85);font-size:12px;margin-top:1px}' +
       '.aisend-header-actions{display:flex;align-items:center;gap:10px}' +

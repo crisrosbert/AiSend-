@@ -261,6 +261,13 @@ export default function AgentsPage() {
           agent_type: "sales",
           persona: "You are a helpful assistant. Be warm and concise.",
           quick_replies_enabled: true,
+          // A blank agent used to be created with only quick replies,
+          // so it could neither share an image nor ask for a phone
+          // number — and said so to customers. Nothing about "blank"
+          // should mean "less capable than every template".
+          media_enabled: true,
+          lead_form_enabled: true,
+          lead_form_mode: "progressive",
           is_active: false,
         })
         .select("*")

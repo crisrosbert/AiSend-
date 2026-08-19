@@ -223,6 +223,45 @@ export function extractLinks(html: string, pageUrl: string, rootUrl: string): st
   return [...found]
 }
 
+/**
+ * Turn a page title or site name into something usable as a name.
+ *
+ * A real example this was written against:
+ *
+ *   "Kalosa Aesthetics — Board-Certified Plastic & Cosmetic Surgery
+ *    India |"
+ *
+ * Three separate problems in one string, and every one of them shows up
+ * in the chat header a customer reads:
+ *
+ *   1. The trailing "|" — SEO plugins append a separator and then the
+ *      site name, and when the site name is blank the separator is left
+ *      hanging. Splitting on separators surrounded by whitespace misses
+ *      it because there is nothing after it to be whitespace.
+ *   2. The tagline after the dash. The business is "Kalosa Aesthetics";
+ *      the rest is marketing aimed at Google.
+ *   3. Length. Anything past about 40 characters wraps or truncates in
+ *      a 320px-wide chat header.
+ *
+ * Trimming is conservative: if splitting would leave almost nothing,
+ * the fuller string is kept. "Dr | Smith" must not become "Dr".
+ */
+export function tidyName(raw: string): string | null {
+  let name = raw.replace(/\s+/g, ' ').trim()
+  if (!name) return null
+
+  // Drop a dangling separator at either end before anything else.
+  name = name.replace(/^[\s|–—·\-:]+/, '').replace(/[\s|–—·\-:]+$/, '').trim()
+  if (!name) return null
+
+  // Take the first segment, but only if it is substantial enough to be
+  // a name on its own.
+  const head = name.split(/\s+[|–—·:]\s+|\s+-\s+/)[0].trim()
+  if (head.length >= 3) name = head
+
+  return name.slice(0, 60).trim() || null
+}
+
 function metaContent(html: string, pattern: RegExp): string | null {
   const match = html.match(pattern)
   return match?.[1]?.trim() || null
@@ -293,9 +332,7 @@ export function extractBrand(html: string, pageUrl: string): SiteBrand {
   const rawTitle =
     metaContent(html, /<title[^>]*>([\s\S]*?)<\/title>/i) ?? null
   // "Sharma Retail | Best prices in Delhi" → "Sharma Retail"
-  const titleName = rawTitle
-    ? decodeEntities(rawTitle).split(/\s+[|–—·-]\s+/)[0].trim().slice(0, 80)
-    : null
+  const titleName = rawTitle ? tidyName(decodeEntities(rawTitle)) : null
 
   const name =
     metaContent(html, /<meta[^>]+property\s*=\s*["']og:site_name["'][^>]+content\s*=\s*["']([^"']+)["']/i) ??
@@ -315,7 +352,10 @@ export function extractBrand(html: string, pageUrl: string): SiteBrand {
     metaContent(html, /<meta[^>]+property\s*=\s*["']og:description["'][^>]+content\s*=\s*["']([^"']+)["']/i)
 
   return {
-    name: name ? decodeEntities(name).slice(0, 80) : null,
+    // Applied to whichever source won, not just the title. Kalosa's
+    // dangling "|" came through og:site_name — WordPress SEO plugins
+    // write the same padded string into every name field they touch.
+    name: name ? tidyName(decodeEntities(name)) : null,
     logoUrl,
     description: description ? decodeEntities(description).slice(0, 300) : null,
     themeColor: metaContent(html, /<meta[^>]+name\s*=\s*["']theme-color["'][^>]+content\s*=\s*["']([^"']+)["']/i),

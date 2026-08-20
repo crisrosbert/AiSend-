@@ -539,7 +539,12 @@ interface ToolExecResult {
   /** Internal note for the team. Never shown to the customer. */
   handoffReason?: string
 }
-
+export function knowledgeScope(
+  agent: Agent | null,
+  args: RunAgentArgs,
+): string | null | undefined {
+  return agent ? (agent.journey_id ?? null) : args.journeyId
+}
 async function executeTool(
   toolCall: { name: string; args: Record<string, unknown> },
   args: RunAgentArgs,
@@ -570,6 +575,8 @@ async function executeTool(
 
     switch (toolCall.name) {
       case 'search_knowledge_base': {
+        - journeyId: args.journeyId,
++ journeyId: knowledgeScope(agent, args),
         const query = String(toolCall.args.query || args.inboundText)
         return {
           result: await searchKnowledgeBase({

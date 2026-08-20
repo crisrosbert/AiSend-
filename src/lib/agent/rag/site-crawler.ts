@@ -267,6 +267,88 @@ function metaContent(html: string, pattern: RegExp): string | null {
   return match?.[1]?.trim() || null
 }
 
+/**
+ * Read one attribute off the first tag whose attributes satisfy a test.
+ *
+ * ── WHY NOT ONE REGEX ─────────────────────────────────────────────────
+ * The obvious pattern — /<link[^>]+rel="apple-touch-icon"[^>]+href="([^"]+)"/
+ * — silently requires rel to appear BEFORE href. HTML says attribute
+ * order carries no meaning, and plenty of sites emit
+ * `<link href="/icon.png" rel="apple-touch-icon">`, which that pattern
+ * skips entirely.
+ *
+ * The failure is invisible: no error, the chain simply falls through to
+ * the next candidate and eventually to /favicon.ico. That is how a site
+ * with a perfectly good 180px icon ended up represented by a 32px
+ * favicon in a chat header.
+ *
+ * So: find the tags, then look at their attributes independently of the
+ * order they were written in.
+ */
+function tagAttr(
+  html: string,
+  tag: 'link' | 'meta' | 'img',
+  matches: (attrs: Record<string, string>) => boolean,
+  want: string,
+): string | null {
+  const tags = html.matchAll(new RegExp(`<${tag}\\b([^>]*)>`, 'gi'))
+  for (const [, rawAttrs] of tags) {
+    const attrs: Record<string, string> = {}
+    for (const [, key, dq, sq, bare] of rawAttrs.matchAll(
+      /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g,
+    )) {
+      attrs[key.toLowerCase()] = dq ?? sq ?? bare ?? ''
+    }
+    if (matches(attrs)) {
+      const value = attrs[want]?.trim()
+      if (value) return value
+    }
+  }
+  return null
+}
+
+/** href of the first <link> whose rel matches, in any attribute order. */
+function linkHref(html: string, rel: RegExp): string | null {
+  return tagAttr(html, 'link', (a) => rel.test(a.rel ?? ''), 'href')
+}
+
+/** content of the first <meta> with this property/name, in any order. */
+function metaProp(html: string, prop: string): string | null {
+  const wanted = prop.toLowerCase()
+  return tagAttr(
+    html,
+    'meta',
+    (a) => (a.property ?? '').toLowerCase() === wanted || (a.name ?? '').toLowerCase() === wanted,
+    'content',
+  )
+}
+
+/**
+ * The logo a human would point at: an <img> that calls itself one.
+ *
+ * Sites that declare no icon and no og:image almost always still show
+ * their mark in the header, and it is almost always labelled — a class,
+ * an id, an alt, or the file name itself. Worth trying before giving up
+ * and shipping a favicon.
+ *
+ * Data URIs are skipped: they are usually a lazy-loading placeholder,
+ * so the "logo" would be a grey rectangle.
+ */
+function logoFromImg(html: string): string | null {
+  const looksLikeLogo = /logo|brand|wordmark/i
+  return tagAttr(
+    html,
+    'img',
+    (a) =>
+      !/^data:/i.test(a.src ?? '') &&
+      (looksLikeLogo.test(a.class ?? '') ||
+        looksLikeLogo.test(a.id ?? '') ||
+        looksLikeLogo.test(a.alt ?? '') ||
+        looksLikeLogo.test(a.src ?? '')),
+    'src',
+  )
+}
+
 function decodeEntities(text: string): string {
   return text
     .replace(/&nbsp;/g, ' ')
@@ -335,21 +417,27 @@ export function extractBrand(html: string, pageUrl: string): SiteBrand {
   const titleName = rawTitle ? tidyName(decodeEntities(rawTitle)) : null
 
   const name =
-    metaContent(html, /<meta[^>]+property\s*=\s*["']og:site_name["'][^>]+content\s*=\s*["']([^"']+)["']/i) ??
+    metaProp(html, 'og:site_name') ??
     ldName ??
-    metaContent(html, /<meta[^>]+name\s*=\s*["']application-name["'][^>]+content\s*=\s*["']([^"']+)["']/i) ??
+    metaProp(html, 'application-name') ??
     titleName
 
+  // Best first. apple-touch-icon is nearly always a clean square mark,
+  // og:image is often a wide share card with text baked in, and a
+  // header <img> beats both remaining options because it is the logo
+  // the business chose to show people. /favicon.ico is genuinely last
+  // resort: 32px, and blurry the moment it is enlarged.
   const logoUrl =
     abs(ldLogo) ??
-    abs(metaContent(html, /<link[^>]+rel\s*=\s*["'][^"']*apple-touch-icon[^"']*["'][^>]+href\s*=\s*["']([^"']+)["']/i)) ??
-    abs(metaContent(html, /<meta[^>]+property\s*=\s*["']og:image["'][^>]+content\s*=\s*["']([^"']+)["']/i)) ??
-    abs(metaContent(html, /<link[^>]+rel\s*=\s*["'][^"']*icon[^"']*["'][^>]+href\s*=\s*["']([^"']+)["']/i)) ??
+    abs(linkHref(html, /apple-touch-icon/i)) ??
+    abs(metaProp(html, 'og:image')) ??
+    abs(logoFromImg(html)) ??
+    abs(linkHref(html, /\bicon\b/i)) ??
     abs('/favicon.ico')
 
   const description =
-    metaContent(html, /<meta[^>]+name\s*=\s*["']description["'][^>]+content\s*=\s*["']([^"']+)["']/i) ??
-    metaContent(html, /<meta[^>]+property\s*=\s*["']og:description["'][^>]+content\s*=\s*["']([^"']+)["']/i)
+    metaProp(html, 'description') ??
+    metaProp(html, 'og:description')
 
   return {
     // Applied to whichever source won, not just the title. Kalosa's
@@ -358,7 +446,7 @@ export function extractBrand(html: string, pageUrl: string): SiteBrand {
     name: name ? tidyName(decodeEntities(name)) : null,
     logoUrl,
     description: description ? decodeEntities(description).slice(0, 300) : null,
-    themeColor: metaContent(html, /<meta[^>]+name\s*=\s*["']theme-color["'][^>]+content\s*=\s*["']([^"']+)["']/i),
+    themeColor: metaProp(html, 'theme-color'),
   }
 }
 

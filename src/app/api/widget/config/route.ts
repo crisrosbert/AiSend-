@@ -98,27 +98,50 @@ interface AgentProfile {
  * `widget_configs`, so until now the logo we extracted had nowhere to
  * go and the header rendered a hardcoded icon.
  *
- * Precedence is deliberately not uniform:
+ * ── WHOSE VALUES WIN DEPENDS ON WHOSE ROW IT IS ────────────────────
  *
- *   • welcome_message wins over the agent's greeting. A merchant who
- *     typed their own opening ("Hey! I'm Riya from Kalosa") means it,
- *     and a drafted greeting must not silently replace it.
- *   • avatar_url and suggested_questions have no existing equivalent on
- *     widget_configs, so the agent's values are simply used.
+ * `shared` says the config row does not belong to this agent: nothing
+ * created a row for it, so it fell back to the tenant's org-wide row.
+ * That row describes whichever business was set up first. On a tenant
+ * running one business that is harmless. On a tenant running three —
+ * a clinic, a fashion label, an estate agency — it means the estate
+ * agency's widget opens with the clinic's name, the clinic's greeting
+ * and the clinic's logo, because the clinic was configured in January.
+ *
+ * So:
+ *   • shared row  — the agent's own name, greeting, avatar and
+ *     questions win outright. Anything the shared row says about
+ *     identity is about someone else.
+ *   • the agent's OWN row — the merchant configured that row for this
+ *     agent deliberately. A greeting they typed ("Hey! I'm Riya from
+ *     Kalosa") beats a drafted one, so only blanks are filled in.
+ *
+ * avatar_url and suggested_questions have no equivalent on
+ * widget_configs at all, so the agent's values are used either way.
  */
 export function mergeAgentProfile(
   view: Record<string, unknown>,
   agent: AgentProfile | null,
+  opts: { shared?: boolean } = {},
 ): Record<string, unknown> {
   if (!agent) return view
 
   const merged = { ...view }
+  const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
   if (agent.avatar_url) merged.avatar_url = agent.avatar_url
 
-  // Only fill the greeting when the widget has none of its own.
-  const existing = typeof view.welcome_message === 'string' ? view.welcome_message.trim() : ''
-  if (!existing && agent.greeting) merged.welcome_message = agent.greeting
+  // On a shared row the name belongs to a different business, so the
+  // agent's own name replaces it rather than filling a blank. This is
+  // the header every visitor reads first.
+  if (agent.name && (opts.shared || !text(view.bot_name))) {
+    merged.bot_name = agent.name
+  }
+
+  // Same rule for the opening line, which names the business out loud.
+  if (agent.greeting && (opts.shared || !text(view.welcome_message))) {
+    merged.welcome_message = agent.greeting
+  }
 
   if (Array.isArray(agent.suggested_questions) && agent.suggested_questions.length > 0) {
     merged.suggested_questions = agent.suggested_questions.slice(0, 3)
@@ -161,6 +184,10 @@ export async function GET(req: Request) {
     // Falling back keeps per-agent configs available for anyone who
     // later wants a different colour or greeting per agent, while making
     // the common case work with no extra setup.
+    // Remembered, because it changes whose identity the widget shows:
+    // a borrowed row's name and greeting describe another business.
+    let usedSharedConfig = false
+
     if (!config && agent) {
       const { data: orgConfig } = await db()
         .from('widget_configs')
@@ -169,7 +196,10 @@ export async function GET(req: Request) {
         .eq('org_user_id', org)
         .is('agent_id', null)
         .maybeSingle()
-      if (orgConfig) config = orgConfig
+      if (orgConfig) {
+        config = orgConfig
+        usedSharedConfig = true
+      }
     }
 
     if (!config) {
@@ -212,9 +242,10 @@ export async function GET(req: Request) {
       if (row) profile = row
     }
 
-    return NextResponse.json(mergeAgentProfile(publicView(config), profile), {
-      headers: CORS,
-    })
+    return NextResponse.json(
+      mergeAgentProfile(publicView(config), profile, { shared: usedSharedConfig }),
+      { headers: CORS },
+    )
   } catch (err) {
     console.error('[widget/config] error:', err)
     return NextResponse.json(

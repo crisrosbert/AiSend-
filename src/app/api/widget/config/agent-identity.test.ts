@@ -19,7 +19,7 @@
 // widget, but it may never name it. Identity comes from the agent.
 
 import { describe, it, expect } from 'vitest'
-import { mergeAgentProfile } from './route'
+import { mergeAgentProfile, agentBubble } from './route'
 
 /** The clinic, set up first — so its row is the one everyone borrows. */
 const sharedClinicRow = {
@@ -129,5 +129,94 @@ describe('filling blanks', () => {
   it('changes nothing when there is no agent at all', () => {
     const view = { bot_name: 'Assistant' }
     expect(mergeAgentProfile(view, null, { shared: true })).toEqual(view)
+  })
+})
+
+// ── The pop-up teaser ────────────────────────────────────────────────
+//
+// The line shown before the chat is opened lives on widget_configs,
+// which holds ONE row's worth of wording for the whole tenant. So a
+// clinic, a fashion label and an estate agency all greeted their
+// visitors with "Questions about gynecomastia treatment? Ask me
+// anything." — whichever business was set up first wrote the line every
+// other business then showed to its own customers.
+//
+// It is built from the agent now, and unlike the name and greeting it
+// overrides the stored value outright. Nothing in the app can author a
+// teaser per agent, so a stored line is not evidence anyone chose it
+// for THIS agent.
+
+describe('agentBubble', () => {
+  it('describes what this agent actually does', () => {
+    const bubble = agentBubble({
+      name: 'Sobha Projects',
+      role: 'Real estate consultant for luxury properties',
+      avatar_url: null, greeting: null, suggested_questions: null,
+    })
+    expect(bubble).toBe('Hi! 👋 Real estate consultant for luxury properties — ask me anything.')
+  })
+
+  it('never shows one business the teaser written for another', () => {
+    // The reported symptom, stated as an assertion.
+    const skyline = agentBubble({
+      name: 'Skyline Properties', role: 'Real estate consultant',
+      avatar_url: null, greeting: null, suggested_questions: null,
+    })
+    expect(skyline).not.toContain('gynecomastia')
+  })
+
+  it('falls back to the name when there is no role', () => {
+    // Every agent has a name; role only arrives once a site is crawled.
+    expect(
+      agentBubble({
+        name: 'Kalosa Aesthetics', role: null,
+        avatar_url: null, greeting: null, suggested_questions: null,
+      }),
+    ).toBe('Hi! 👋 Questions about Kalosa Aesthetics? Ask me anything.')
+  })
+
+  it('falls back to the name when the role is too long for the bubble', () => {
+    // The bubble is 260px wide. A role that wraps to five lines is
+    // worse than a generic line, so length is a real constraint here
+    // rather than a stylistic preference.
+    const wordy =
+      'Real estate consultant specialising in luxury residential and ' +
+      'commercial projects across India since 1976'
+    const bubble = agentBubble({
+      name: 'SOBHA Limited', role: wordy,
+      avatar_url: null, greeting: null, suggested_questions: null,
+    })
+    expect(bubble).toBe('Hi! 👋 Questions about SOBHA Limited? Ask me anything.')
+  })
+
+  it('treats a whitespace-only role as absent', () => {
+    expect(
+      agentBubble({
+        name: 'Asort', role: '   ',
+        avatar_url: null, greeting: null, suggested_questions: null,
+      }),
+    ).toBe('Hi! 👋 Questions about Asort? Ask me anything.')
+  })
+
+  it('returns null when the agent has neither', () => {
+    // Nothing to say is better than "Questions about null?".
+    expect(
+      agentBubble({
+        name: null, role: null,
+        avatar_url: null, greeting: null, suggested_questions: null,
+      }),
+    ).toBeNull()
+  })
+
+  it('replaces a stored teaser even on the agent’s own row', () => {
+    const out = mergeAgentProfile(
+      { bubble_message: 'Hi! 👋 Questions about gynecomastia treatment? Ask me anything.' },
+      {
+        name: 'Sobha Projects', role: 'Real estate consultant',
+        avatar_url: null, greeting: null, suggested_questions: null,
+      },
+      { shared: false },
+    )
+    expect(out.bubble_message).toBe('Hi! 👋 Real estate consultant — ask me anything.')
   })
 })

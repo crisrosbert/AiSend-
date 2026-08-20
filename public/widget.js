@@ -109,8 +109,13 @@
             '<div class="aisend-status">● Online</div>' +
           '</div>' +
         '</div>' +
+        // No WhatsApp button here any more. A green badge sitting in the
+        // header offered every visitor a way out of the chat before they
+        // had asked anything — the most prominent control on screen was
+        // "leave". The handoff button still appears mid-conversation,
+        // where wanting a human is something the visitor has actually
+        // expressed rather than something we suggest to them on arrival.
         '<div class="aisend-header-actions">' +
-          (config.business_phone ? '<a class="aisend-wa-header" id="aisend-wa-header" href="https://wa.me/' + config.business_phone + '" target="_blank" rel="noopener" title="Chat on WhatsApp" aria-label="Chat on WhatsApp">' + waIcon() + '</a>' : '') +
           '<div class="aisend-close" id="aisend-close">&times;</div>' +
         '</div>' +
       '</div>' +
@@ -460,9 +465,6 @@
     var color = white ? '#fff' : '#fff';
     return '<svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.04 2 11c0 2.5 1.14 4.75 3 6.36V22l3.6-2c1.06.32 2.2.5 3.4.5 5.52 0 10-4.04 10-9S17.52 2 12 2z" fill="' + color + '"/></svg>';
   }
-  function waIcon() {
-    return '<svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M17.5 14.4c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.1-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-.3-.1-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6.1-.1.3-.3.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.1-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.1.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.4 1.3 4.9L2 22l5.3-1.4c1.4.8 3 1.2 4.7 1.2 5.5 0 10-4.5 10-10S17.5 2 12 2"/></svg>';
-  }
   function sendIcon() {
     return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z" fill="#fff"/></svg>';
   }
@@ -506,18 +508,6 @@
       '.aisend-bot-name{color:#fff;font-weight:600;font-size:15px}' +
       '.aisend-status{color:rgba(255,255,255,.85);font-size:12px;margin-top:1px}' +
       '.aisend-header-actions{display:flex;align-items:center;gap:10px}' +
-      // WhatsApp green, not the merchant's brand colour and not a
-      // translucent white circle. The glyph is only 22px in a purple
-      // header — the green is what makes it read as "WhatsApp" rather
-      // than as a second, confusingly similar, chat button. Recognition
-      // is the entire job of this control, so the brand colour is
-      // hardcoded and does not follow the theme.
-      '.aisend-wa-header{display:flex;align-items:center;justify-content:center;width:34px;height:34px;' +
-        'border-radius:50%;background:#25D366;box-shadow:0 1px 3px rgba(0,0,0,.18);' +
-        'transition:background .2s,transform .12s}' +
-      '.aisend-wa-header:hover{background:#1FAF52}' +
-      '.aisend-wa-header:active{transform:scale(.94)}' +
-      '.aisend-wa-header svg{display:block}' +
       '.aisend-close{color:#fff;font-size:26px;cursor:pointer;line-height:1;opacity:.9}' +
       '.aisend-close:hover{opacity:1}' +
       // Patterned message ground.

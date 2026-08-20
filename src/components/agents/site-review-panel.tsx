@@ -1,29 +1,30 @@
 // src/components/agents/site-review-panel.tsx
 //
-// What we read from the website, shown for approval.
+// What we read from the website, shown for approval — and editable
+// before it is applied.
 //
-// ── WHY A PANEL AND NOT SILENT AUTO-FILL ─────────────────────────────
-// The route already returned the business name, logo, greeting and
-// suggested questions — and the drawer threw all of it away, keeping
-// only the persona. That is the whole gap between "paste a URL and it
-// builds your agent" and "paste a URL and get a text box back".
+// ── WHY EDITABLE, NOT JUST APPROVABLE ────────────────────────────────
+// The first version offered each field as take-it-or-leave-it. That is
+// the wrong shape for this data, because most of what comes back is
+// 90% right: the name has a stray word, one of three questions is off,
+// the logo resolved to a favicon when a better image exists. "Leave
+// it" then means retyping the whole thing somewhere else, and a review
+// step that costs more than doing it by hand gets skipped.
 //
-// But filling the fields silently would be worse than not filling them.
-// Some of this is read verbatim from the site's own metadata (name,
-// logo, colour) and some is written by a model (role, greeting,
-// questions). The two deserve different trust, and the merchant is the
-// only one who can tell whether "Kalosa Aesthetics" is the name they
-// actually trade under.
+// So every applied field is an input pre-filled with what we found.
+// Use applies whatever is in the box, not what the crawl said. The
+// distinction that still matters — read from the site versus written
+// by a model — is kept in the footnote rather than in what you are
+// allowed to touch.
 //
-// So: everything is shown, each item can be applied on its own, and
-// nothing is saved until they press Save agent. Applying is one click
-// per field and one for all of it, because a review step nobody can
-// complete quickly is a review step people learn to skip.
+// Nothing here writes to the database. Applying copies into the
+// drawer's local state; Save agent is still the only thing that
+// persists.
 
 'use client'
 
 import { useState } from 'react'
-import { Check, Globe, Sparkles, AlertCircle } from 'lucide-react'
+import { Check, Globe, Sparkles, AlertCircle, X, Plus, RotateCcw } from 'lucide-react'
 
 export interface SiteBrand {
   name: string | null
@@ -73,35 +74,83 @@ export interface AppliedFields {
 
 interface Props {
   data: SiteReviewData
-  /** Called with only the fields the merchant chose to apply. */
+  /** Called with only the fields chosen, carrying any edits made here. */
   onApply: (fields: AppliedFields) => void
   onDismiss: () => void
 }
 
+/** Three slots, so a removed question leaves a gap to type into. */
+const QUESTION_SLOTS = 3
+
 export function SiteReviewPanel({ data, onApply, onDismiss }: Props) {
   const { brand, facts, pages, skipped, truncated, chunks } = data
+
+  // What the crawl said. Kept separate from the draft so "reset" can
+  // put it back after an edit goes wrong.
+  const found = {
+    name: brand.name ?? facts.business_name ?? '',
+    avatarUrl: brand.logoUrl ?? '',
+    greeting: facts.greeting ?? '',
+    role: facts.role ?? '',
+    questions: (facts.suggested_questions ?? []).slice(0, QUESTION_SLOTS),
+  }
+
+  const [name, setName] = useState(found.name)
+  const [avatarUrl, setAvatarUrl] = useState(found.avatarUrl)
+  const [greeting, setGreeting] = useState(found.greeting)
+  const [role, setRole] = useState(found.role)
+  const [questions, setQuestions] = useState<string[]>(found.questions)
+
   const [applied, setApplied] = useState<Set<string>>(new Set())
   const [showPages, setShowPages] = useState(false)
+  const [logoBroken, setLogoBroken] = useState(false)
 
-  const name = brand.name ?? facts.business_name
-  const questions = facts.suggested_questions ?? []
+  // An edit un-marks the row: "Added" must never sit next to a value
+  // different from the one that was added.
+  function edit(key: string, set: (value: string) => void) {
+    return (value: string) => {
+      set(value)
+      setApplied((prev) => {
+        if (!prev.has(key)) return prev
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+    }
+  }
 
   function markApplied(key: string, fields: AppliedFields) {
     onApply(fields)
     setApplied((prev) => new Set(prev).add(key))
   }
 
+  const liveQuestions = questions.map((q) => q.trim()).filter(Boolean)
+
   function applyEverything() {
     const fields: AppliedFields = {}
-    if (name) fields.name = name
-    if (brand.logoUrl) fields.avatarUrl = brand.logoUrl
+    if (name.trim()) fields.name = name.trim()
+    if (avatarUrl.trim()) fields.avatarUrl = avatarUrl.trim()
     if (brand.themeColor) fields.brandColor = brand.themeColor
-    if (facts.greeting) fields.greeting = facts.greeting
-    if (facts.role) fields.role = facts.role
-    if (questions.length) fields.suggestedQuestions = questions
+    if (greeting.trim()) fields.greeting = greeting.trim()
+    if (role.trim()) fields.role = role.trim()
+    if (liveQuestions.length) fields.suggestedQuestions = liveQuestions
 
     onApply(fields)
     setApplied(new Set(['name', 'logo', 'colour', 'greeting', 'role', 'questions']))
+  }
+
+  function setQuestion(index: number, value: string) {
+    setQuestions((prev) => {
+      const next = [...prev]
+      next[index] = value
+      return next
+    })
+    setApplied((prev) => {
+      if (!prev.has('questions')) return prev
+      const next = new Set(prev)
+      next.delete('questions')
+      return next
+    })
   }
 
   // A crawl that read one page is not a failure, but it is worth saying:
@@ -123,78 +172,132 @@ export function SiteReviewPanel({ data, onApply, onDismiss }: Props) {
         </button>
       </div>
 
-      {/* ── Identity: read from the site, not generated ── */}
+      {/* ── Live preview of the agent as configured right now ──
+          Updates as the fields below are edited, so the effect of a
+          change is visible without saving and opening the widget. */}
       <div className="srp-identity">
-        {brand.logoUrl ? (
-          // Not next/image: this is an arbitrary third-party URL that
-          // has not been added to the remotePatterns allowlist, and a
-          // logo that fails to load must not break the panel.
+        {avatarUrl && !logoBroken ? (
+          // Not next/image: an arbitrary third-party URL that is not in
+          // the remotePatterns allowlist, and it must be allowed to fail
+          // without breaking the panel.
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={brand.logoUrl}
+            src={avatarUrl}
             alt=""
             className="srp-logo"
-            onError={(e) => { e.currentTarget.style.display = 'none' }}
+            onError={() => setLogoBroken(true)}
+            onLoad={() => setLogoBroken(false)}
           />
         ) : (
           <div className="srp-logo srp-logo-empty"><Globe size={18} /></div>
         )}
 
         <div className="srp-identity-text">
-          <div className="srp-name">{name ?? 'Name not found'}</div>
-          {facts.role && <div className="srp-role">{facts.role}</div>}
+          <div className="srp-name">{name || 'Name not found'}</div>
+          {role && <div className="srp-role">{role}</div>}
           {brand.description && <div className="srp-desc">{brand.description}</div>}
         </div>
       </div>
 
-      <Row
+      <EditRow
         label="Agent name"
         value={name}
+        onChange={edit('name', setName)}
+        original={found.name}
+        placeholder="What the agent is called"
         done={applied.has('name')}
-        onApply={() => name && markApplied('name', { name })}
+        onApply={() => name.trim() && markApplied('name', { name: name.trim() })}
       />
 
-      <Row
-        label="Avatar"
-        value={brand.logoUrl ? 'Logo from your site' : null}
+      <EditRow
+        label="Role"
+        value={role}
+        onChange={edit('role', setRole)}
+        original={found.role}
+        placeholder="e.g. Customer support for Asort"
+        done={applied.has('role')}
+        onApply={() => role.trim() && markApplied('role', { role: role.trim() })}
+      />
+
+      <EditRow
+        label="Avatar URL"
+        value={avatarUrl}
+        onChange={(value) => { setLogoBroken(false); edit('logo', setAvatarUrl)(value) }}
+        original={found.avatarUrl}
+        placeholder="https://yoursite.com/logo.png"
         done={applied.has('logo')}
-        onApply={() => brand.logoUrl && markApplied('logo', { avatarUrl: brand.logoUrl })}
+        onApply={() => avatarUrl.trim() && markApplied('logo', { avatarUrl: avatarUrl.trim() })}
+        // Said plainly rather than left to a broken preview: the crawler
+        // falls back to /favicon.ico, which is 32px and looks poor
+        // enlarged into a chat header.
+        hint={
+          logoBroken
+            ? "That image didn't load — check the address."
+            : /favicon\.ico$/i.test(avatarUrl)
+              ? 'This is the site favicon, usually quite small. A logo file will look better.'
+              : undefined
+        }
       />
 
-      {brand.themeColor && (
-        <Row
-          label="Brand colour"
-          value={brand.themeColor}
-          swatch={brand.themeColor}
-          done={applied.has('colour')}
-          onApply={() => markApplied('colour', { brandColor: brand.themeColor! })}
-        />
-      )}
-
-      <Row
+      <EditRow
         label="Greeting"
-        value={facts.greeting}
+        value={greeting}
+        onChange={edit('greeting', setGreeting)}
+        original={found.greeting}
+        placeholder="The first thing a visitor reads"
+        multiline
         done={applied.has('greeting')}
-        onApply={() => facts.greeting && markApplied('greeting', { greeting: facts.greeting })}
+        onApply={() => greeting.trim() && markApplied('greeting', { greeting: greeting.trim() })}
       />
 
       {/* ── Suggested questions ── */}
-      {questions.length > 0 && (
-        <div className="srp-row srp-row-block">
-          <div className="srp-row-head">
-            <span className="srp-label">Suggested questions</span>
-            <ApplyButton
-              done={applied.has('questions')}
-              onClick={() => markApplied('questions', { suggestedQuestions: questions })}
-            />
-          </div>
-          <div className="srp-chips">
-            {questions.map((question) => (
-              <span key={question} className="srp-chip">{question}</span>
-            ))}
-          </div>
+      <div className="srp-row srp-row-block">
+        <div className="srp-row-head">
+          <span className="srp-label">Suggested questions</span>
+          <ApplyButton
+            done={applied.has('questions')}
+            disabled={liveQuestions.length === 0}
+            onClick={() => markApplied('questions', { suggestedQuestions: liveQuestions })}
+          />
         </div>
-      )}
+
+        <div className="srp-questions">
+          {questions.map((question, index) => (
+            <div className="srp-q" key={index}>
+              <input
+                className="srp-input"
+                value={question}
+                placeholder="A question a customer would actually ask"
+                onChange={(e) => setQuestion(index, e.target.value)}
+              />
+              <button
+                type="button"
+                className="srp-q-remove"
+                aria-label="Remove question"
+                onClick={() => setQuestions((prev) => prev.filter((_, i) => i !== index))}
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+
+          {questions.length < QUESTION_SLOTS && (
+            <button
+              type="button"
+              className="srp-q-add"
+              onClick={() => setQuestions((prev) => [...prev, ''])}
+            >
+              <Plus size={13} /> Add a question
+            </button>
+          )}
+        </div>
+
+        <p className="srp-q-note">
+          Ask what a customer would ask, in their words. Only include
+          questions your pages can answer — a chip that leads nowhere teaches
+          a visitor on their first click that the chat is not worth using.
+        </p>
+      </div>
 
       {/* ── Business details: not applied to the agent, but worth showing.
           These are what the agent will answer FROM, so seeing them wrong
@@ -259,42 +362,91 @@ export function SiteReviewPanel({ data, onApply, onDismiss }: Props) {
 
       <p className="srp-note">
         Nothing is saved until you press <strong>Save agent</strong>. The name,
-        logo and colour are read from your site; the greeting and questions were
-        written by AI from your pages — read them before you save.
+        logo and colour were read from your site; the role, greeting and
+        questions were written by AI from your pages — read those before you
+        save.
       </p>
     </div>
   )
 }
 
-function Row({
-  label, value, done, onApply, swatch,
+/**
+ * One editable field with its own Use button.
+ *
+ * The reset arrow only appears once the value differs from what was
+ * found. A control that is always visible but usually does nothing is
+ * noise; one that appears when it becomes useful is a hint.
+ */
+function EditRow({
+  label, value, onChange, original, placeholder, done, onApply, multiline, hint,
 }: {
   label: string
-  value: string | null
+  value: string
+  onChange: (value: string) => void
+  original: string
+  placeholder?: string
   done: boolean
   onApply: () => void
-  swatch?: string
+  multiline?: boolean
+  hint?: string
 }) {
-  if (!value) return null
+  const changed = value !== original && original !== ''
+
   return (
-    <div className="srp-row">
-      <span className="srp-label">{label}</span>
-      <span className="srp-value">
-        {swatch && <i className="srp-swatch" style={{ background: swatch }} />}
-        {value}
-      </span>
-      <ApplyButton done={done} onClick={onApply} />
+    <div className="srp-row srp-row-block">
+      <div className="srp-row-head">
+        <span className="srp-label">{label}</span>
+        <div className="srp-row-tools">
+          {changed && (
+            <button
+              type="button"
+              className="srp-reset"
+              onClick={() => onChange(original)}
+              title="Put back what we found"
+              aria-label="Reset to the value we found"
+            >
+              <RotateCcw size={12} />
+            </button>
+          )}
+          <ApplyButton done={done} disabled={!value.trim()} onClick={onApply} />
+        </div>
+      </div>
+
+      {multiline ? (
+        <textarea
+          className="srp-input srp-textarea"
+          rows={2}
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : (
+        <input
+          className="srp-input"
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+
+      {hint && <p className="srp-field-hint">{hint}</p>}
     </div>
   )
 }
 
-function ApplyButton({ done, onClick }: { done: boolean; onClick: () => void }) {
+function ApplyButton({
+  done, onClick, disabled,
+}: {
+  done: boolean
+  onClick: () => void
+  disabled?: boolean
+}) {
   return (
     <button
       type="button"
       className={done ? 'srp-btn srp-btn-done' : 'srp-btn'}
       onClick={onClick}
-      disabled={done}
+      disabled={done || disabled}
     >
       {done ? <><Check size={12} /> Added</> : 'Use'}
     </button>

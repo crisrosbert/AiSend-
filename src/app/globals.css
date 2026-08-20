@@ -267,6 +267,23 @@ button.bg-emerald-600:active, button.bg-emerald-500:active {
   filter: brightness(.97);
 }
 
+/* ---- Danger buttons: red destructive actions ---- */
+button.ag-btn-danger {
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 10px rgba(239,68,68,.25) !important;
+  font-weight: 600;
+  transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
+}
+button.ag-btn-danger:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 10px 26px rgba(239,68,68,.35) !important;
+}
+button.ag-btn-danger:active {
+  transform: translateY(1px);
+  filter: brightness(.95);
+}
+
 /* ---- Inputs: clean, calm focus ring in brand green ---- */
 input, textarea, select {
   transition: border-color .15s ease, box-shadow .15s ease;

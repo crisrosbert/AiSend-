@@ -7,7 +7,8 @@ import { retrieve } from '@/lib/agent/rag/retrieve'
 
 export interface SearchKnowledgeBaseArgs {
   tenantId: string
-  journeyId?: string
+  /** See RetrieveArgs — null means "no Brain", undefined means "all". */
+  journeyId?: string | null
   query: string
   maxChunks?: number
 }

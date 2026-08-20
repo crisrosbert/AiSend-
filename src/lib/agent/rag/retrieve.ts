@@ -25,7 +25,21 @@ function db() {
 
 export interface RetrieveArgs {
   tenantId: string
-  journeyId?: string  // scope to one journey's Brain, or null = all
+  /**
+   * Which Brain to read.
+   *
+   *   string    — that journey only.
+   *   null      — the caller knows the scope and it is EMPTY. Return
+   *               nothing. This is an agent that has never been trained.
+   *   undefined — no scope given: search everything this tenant owns.
+   *
+   * The null/undefined split is the whole point. They used to be the
+   * same value, so an agent with no journey fell through to a
+   * tenant-wide search and answered out of a different site's pages —
+   * a fashion shop quoting a surgery clinic. "I have no knowledge" and
+   * "give me all knowledge" must never collapse into one case.
+   */
+  journeyId?: string | null
   query: string
   maxChunks?: number  // default 5
 }
@@ -55,6 +69,12 @@ export async function retrieve(
     const max = args.maxChunks ?? 5
     const query = args.query.trim()
     if (!query) return []
+
+    // An explicit null scope means there is no Brain to read. Answering
+    // from another journey's chunks would be worse than answering from
+    // nothing: the agent sounds confident and is describing someone
+    // else's business.
+    if (args.journeyId === null) return []
 
     // ── Phase 1: Postgres full-text search via RPC ──
     const { data, error } = await db().rpc('search_kb_chunks', {

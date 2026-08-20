@@ -241,7 +241,29 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
     // they cannot disagree about what the agent is able to send.
     const agentMedia = agent ? await loadAgentMedia(agent) : []
 
-    let systemPrompt = buildSystemPrompt(args.systemPromptOverride)
+    // ── Whose voice this agent speaks in ─────────────────────────────
+    //
+    // The agent's own persona wins. It was ignored entirely before:
+    // the prompt was built from systemPromptOverride, which the widget
+    // route loads from the `personas` row hanging off the widget
+    // config's journey. Two consequences, both bad.
+    //
+    // First, identity leaked. An agent with no widget config of its own
+    // borrows the tenant's org-wide row, so it borrowed that row's
+    // journey and therefore that row's persona — the estate agency
+    // answering in the voice written for the clinic.
+    //
+    // Second, and quieter: an agent trained through the Agents drawer
+    // has its drafted persona saved to `agents.persona`, and nothing
+    // writes a `personas` row for it. So the override was usually
+    // undefined and the agent fell through to the generic "warm,
+    // friendly assistant" fallback — while the persona the merchant
+    // read, edited and saved sat in the database, unused. The drawer
+    // calls that field "what actually shapes every reply", so this is
+    // the code catching up with a promise the UI already made.
+    const persona = agent?.persona?.trim() || args.systemPromptOverride
+
+    let systemPrompt = buildSystemPrompt(persona)
     if (agent) systemPrompt += await buildAgentSystemAddon(agent, agentMedia)
     systemPrompt += describeHoursForPrompt(hours)
 
@@ -709,6 +731,7 @@ function buildSystemPrompt(override?: string): string {
 - To register a booking, call book_appointment once you have at least their name and phone number.
 - You get ONE reply per message. You cannot go away and come back, so never say "one moment", "let me check", "I'll get back to you", or anything that promises a later message. If you need information, call the tool now, in this turn. If you need something from the customer, ask for it now.
 - Only promise what a tool has already confirmed. Never tell a customer something is booked, held, or checked unless the tool result said so.
+- Never deny that something exists. Not finding a person, service, product, branch or price does not mean the business does not have it — you can see only a fraction of it. Do not say "we only offer X", "there is no Y here", or "that person does not work here". Say you cannot confirm that one and offer to have the team check. If the customer named someone or something specific and you cannot find it, call handoff_to_human. Wrongly denying a real doctor, service or location loses the customer for good, because they have no reason to ask twice.
 - Call handoff_to_human immediately when the customer says it is urgent or an emergency, asks to speak to a person or a specific doctor, describes pain, bleeding, or a problem after a procedure, is angry, or is making a complaint. Getting a real person involved matters more than finishing what you were doing — hand off first, then tell them someone will contact them shortly.
 - Never make the same offer twice. If the customer has already turned down or ignored a suggestion, do not repeat it: either answer what they actually asked, or call handoff_to_human. Repeating "would you like to book" at someone who asked for something else is the fastest way to lose them.
 - Keep every reply short — 1 to 3 sentences, WhatsApp style. Plain text only, no markdown or asterisks.

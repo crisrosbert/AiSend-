@@ -109,10 +109,26 @@ describe('mergeAgentProfile', () => {
   })
 
   it('leaves the config untouched when the agent has no profile yet', () => {
-    // Every agent looks like this until a site is crawled.
+    // Every agent looks like this until a site is crawled. A blank
+    // profile must not blank out a working widget.
+    //
+    // The teaser is the one exception, and deliberately so: it is now
+    // always derived from the agent, because widget_configs holds a
+    // single line for the whole tenant and a tenant with three
+    // businesses was showing all three the same one. Name-only is
+    // enough to build it, so it appears even here.
     const bare = { name: 'x', avatar_url: null, greeting: null, suggested_questions: null }
     const view = { bot_name: 'Assistant', welcome_message: 'Hi' }
-    expect(mergeAgentProfile(view, bare)).toEqual(view)
+    expect(mergeAgentProfile(view, bare)).toEqual({
+      ...view,
+      bubble_message: 'Hi! 👋 Questions about x? Ask me anything.',
+    })
+  })
+
+  it('adds no teaser when the agent has no name or role either', () => {
+    const anonymous = { name: null, avatar_url: null, greeting: null, suggested_questions: null }
+    const view = { bot_name: 'Assistant', welcome_message: 'Hi' }
+    expect(mergeAgentProfile(view, anonymous)).toEqual(view)
   })
 
   it('leaves the config untouched when there is no agent at all', () => {

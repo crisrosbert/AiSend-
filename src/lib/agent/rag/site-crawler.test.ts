@@ -700,3 +700,94 @@ describe('tidyName', () => {
     expect(tidyName(' — ')).toBeNull()
   })
 })
+
+// ── Attribute order ──────────────────────────────────────────────────
+//
+// The logo chain used patterns like
+//   /<link[^>]+rel="apple-touch-icon"[^>]+href="([^"]+)"/
+// which silently require rel to come BEFORE href. HTML gives attribute
+// order no meaning, and plenty of sites emit them the other way round.
+//
+// Nothing errors when that happens: the chain just falls through to the
+// next candidate and finally to /favicon.ico. A site with a good 180px
+// icon therefore ended up represented in the chat header by a 32px
+// favicon, and the only symptom was a logo that looked wrong.
+
+describe('extractBrand reads attributes in any order', () => {
+  const page = 'https://hudle.in/'
+
+  it('finds apple-touch-icon when href is written first', () => {
+    const html = '<link href="/touch-icon.png" rel="apple-touch-icon">'
+    expect(extractBrand(html, page).logoUrl).toBe('https://hudle.in/touch-icon.png')
+  })
+
+  it('finds apple-touch-icon when rel is written first', () => {
+    const html = '<link rel="apple-touch-icon" href="/touch-icon.png">'
+    expect(extractBrand(html, page).logoUrl).toBe('https://hudle.in/touch-icon.png')
+  })
+
+  it('finds og:image when content precedes property', () => {
+    const html = '<meta content="https://hudle.in/card.png" property="og:image">'
+    expect(extractBrand(html, page).logoUrl).toBe('https://hudle.in/card.png')
+  })
+
+  it('reads the site name with content written first', () => {
+    const html = '<meta content="Hudle" property="og:site_name">'
+    expect(extractBrand(html, page).name).toBe('Hudle')
+  })
+
+  it('handles single quotes and unquoted values', () => {
+    expect(extractBrand("<link rel='apple-touch-icon' href='/a.png'>", page).logoUrl)
+      .toBe('https://hudle.in/a.png')
+    expect(extractBrand('<link rel=apple-touch-icon href=/b.png>', page).logoUrl)
+      .toBe('https://hudle.in/b.png')
+  })
+
+  it('does not mistake a plain icon link for an apple-touch-icon', () => {
+    // Order still expresses PREFERENCE even though it cannot express
+    // position: the touch icon is the better image and must win.
+    const html =
+      '<link rel="icon" href="/small.png">' +
+      '<link rel="apple-touch-icon" href="/big.png">'
+    expect(extractBrand(html, page).logoUrl).toBe('https://hudle.in/big.png')
+  })
+})
+
+describe('falling back to a logo on the page', () => {
+  const page = 'https://hudle.in/'
+
+  it('uses a header image that calls itself a logo', () => {
+    // Sites with no icon and no og:image almost always still show their
+    // mark, and almost always label it. Better than a 32px favicon.
+    const html = '<img class="site-logo" src="/img/hudle-logo.svg" alt="Hudle">'
+    expect(extractBrand(html, page).logoUrl).toBe('https://hudle.in/img/hudle-logo.svg')
+  })
+
+  it('recognises the label in alt, id or file name too', () => {
+    for (const html of [
+      '<img id="logo" src="/a.png">',
+      '<img alt="Hudle logo" src="/b.png">',
+      '<img class="x" src="/assets/logo-dark.png">',
+    ]) {
+      expect(extractBrand(html, page).logoUrl, html).toMatch(/^https:\/\/hudle\.in\//)
+    }
+  })
+
+  it('ignores a data: URI placeholder', () => {
+    // Lazy-loading libraries put a grey rectangle in src until the real
+    // image loads. Shipping that as the logo is worse than the favicon.
+    const html = '<img class="logo" src="data:image/gif;base64,R0lGODlhAQ">'
+    expect(extractBrand(html, page).logoUrl).toBe('https://hudle.in/favicon.ico')
+  })
+
+  it('still prefers a declared icon over scraping the page', () => {
+    const html =
+      '<link rel="apple-touch-icon" href="/declared.png">' +
+      '<img class="logo" src="/guessed.png">'
+    expect(extractBrand(html, page).logoUrl).toBe('https://hudle.in/declared.png')
+  })
+
+  it('falls back to favicon.ico when there is nothing at all', () => {
+    expect(extractBrand('<p>hello</p>', page).logoUrl).toBe('https://hudle.in/favicon.ico')
+  })
+})

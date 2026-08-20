@@ -142,15 +142,19 @@ export function agentBubble(agent: AgentProfile): string | null {
  * and the clinic's logo, because the clinic was configured in January.
  *
  * So:
- *   • shared row  — the agent's own name, greeting, avatar and
- *     questions win outright. Anything the shared row says about
- *     identity is about someone else.
+ *   • shared row  — it contributes NO identity whatsoever. Not "the
+ *     agent's values where it has them": where the agent has nothing,
+ *     the field is derived from its name or cleared, never inherited.
+ *     An agent trained but not yet approved has no saved greeting, and
+ *     inheriting there is what let a sports-venue site open with
+ *     "Hey! I'm Riya from Kalosa Aesthetics."
  *   • the agent's OWN row — the merchant configured that row for this
  *     agent deliberately. A greeting they typed ("Hey! I'm Riya from
  *     Kalosa") beats a drafted one, so only blanks are filled in.
  *
- * avatar_url and suggested_questions have no equivalent on
- * widget_configs at all, so the agent's values are used either way.
+ * Styling — colour, position, trigger delay — is inherited either way.
+ * It says nothing about WHICH business this is, so borrowing it is a
+ * useful default rather than a false claim.
  */
 export function mergeAgentProfile(
   view: Record<string, unknown>,
@@ -161,20 +165,45 @@ export function mergeAgentProfile(
 
   const merged = { ...view }
   const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
+  const name = agent.name?.trim()
 
+  // ── A borrowed row contributes NO identity, not "identity the agent
+  //    happens to be missing" ─────────────────────────────────────────
+  //
+  // The first version of this only replaced a field when the agent had
+  // a value of its own, which left the hole this is closing. An agent
+  // trained but not yet approved has no greeting saved — the drafted
+  // one is still sitting in the review panel waiting for Use — so the
+  // borrowed row's greeting survived, and a sports-venue booking site
+  // opened with "Hey! I'm Riya from Kalosa Aesthetics."
+  //
+  // Being absent has to mean absent. Where the agent cannot supply a
+  // value we build a neutral one from its name, or clear the field —
+  // both are better than confidently introducing another business.
+  if (opts.shared) {
+    merged.bot_name = name || 'Assistant'
+    merged.welcome_message =
+      agent.greeting?.trim() ||
+      (name ? `Hi! How can I help you with ${name} today?` : 'Hi! How can I help you today?')
+    // A borrowed logo is another company's trademark on this widget.
+    // The script falls back to its own chat icon when this is empty.
+    merged.avatar_url = agent.avatar_url || null
+
+    if (Array.isArray(agent.suggested_questions) && agent.suggested_questions.length > 0) {
+      merged.suggested_questions = agent.suggested_questions.slice(0, 3)
+    } else {
+      // Chips answerable only out of another business's pages.
+      delete merged.suggested_questions
+    }
+
+    merged.bubble_message = agentBubble(agent) ?? undefined
+    return merged
+  }
+
+  // ── The agent's own row: the merchant configured this one on purpose
   if (agent.avatar_url) merged.avatar_url = agent.avatar_url
-
-  // On a shared row the name belongs to a different business, so the
-  // agent's own name replaces it rather than filling a blank. This is
-  // the header every visitor reads first.
-  if (agent.name && (opts.shared || !text(view.bot_name))) {
-    merged.bot_name = agent.name
-  }
-
-  // Same rule for the opening line, which names the business out loud.
-  if (agent.greeting && (opts.shared || !text(view.welcome_message))) {
-    merged.welcome_message = agent.greeting
-  }
+  if (name && !text(view.bot_name)) merged.bot_name = name
+  if (agent.greeting && !text(view.welcome_message)) merged.welcome_message = agent.greeting
 
   if (Array.isArray(agent.suggested_questions) && agent.suggested_questions.length > 0) {
     merged.suggested_questions = agent.suggested_questions.slice(0, 3)

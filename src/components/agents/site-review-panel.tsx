@@ -232,10 +232,12 @@ export function SiteReviewPanel({ data, onApply, onDismiss }: Props) {
         // enlarged into a chat header.
         hint={
           logoBroken
-            ? "That image didn't load — check the address."
+            ? "That image didn't load. Some sites block others from showing their images — use Upload logo above instead."
             : /favicon\.ico$/i.test(avatarUrl)
-              ? 'This is the site favicon, usually quite small. A logo file will look better.'
-              : undefined
+              ? 'This is the site favicon, usually 32px and blurry when enlarged. Upload logo above will look better.'
+              : !avatarUrl
+                ? 'No logo found on your site. Use Upload logo above to add one.'
+                : undefined
         }
       />
 

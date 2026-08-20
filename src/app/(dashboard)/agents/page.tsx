@@ -126,6 +126,27 @@ export default function AgentsPage() {
     { title: string; chunks: number } | null
   >(null);
 
+  // ── A crawl belongs to the agent it was run for ──────────────────
+  //
+  // All three values above describe ONE agent's training run. The
+  // drawer, however, is a single component reused for every agent, and
+  // six different places open or close it. Clearing them at each of
+  // those call sites worked until one was missed — and the one that was
+  // missed left a finished crawl on screen while a different agent was
+  // opened. A fashion shop's drawer showed a surgery clinic's name,
+  // logo and questions, one click from being applied to the wrong
+  // agent. Exactly what the screenshots showed.
+  //
+  // Tying the reset to the agent's identity instead makes that class of
+  // bug unrepresentable: whichever code path swaps the agent, the crawl
+  // state cannot survive the swap. Closing the drawer (id undefined)
+  // clears it too, so reopening never resurrects a stale panel.
+  useEffect(() => {
+    setSiteReview(null);
+    setTrainResult(null);
+    setTrainUrl("");
+  }, [editing?.id]);
+
   /* ── load ─────────────────────────────────────────────────────── */
 
   const load = useCallback(async () => {
@@ -417,6 +438,29 @@ export default function AgentsPage() {
     setTimeout(() => setCopiedId(null), 2000);
   }
 
+  /** Delete an agent and all its associated data. */
+  async function deleteAgent(agent: Agent) {
+    if (!confirm(`Delete "${agent.name}"? This will remove all associated data including conversations and knowledge.`)) {
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("agents")
+        .delete()
+        .eq("id", agent.id)
+        .eq("tenant_id", userId);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success(`Agent "${agent.name}" deleted`);
+      setEditing(null);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete agent");
+    }
+  }
+
   /* ── derived ──────────────────────────────────────────────────── */
 
   // Filter templates by chip + search box. Cheap enough to redo on every
@@ -557,7 +601,7 @@ export default function AgentsPage() {
                 <div className="ag-card-actions">
                   <button
                     className="ag-btn ag-btn-primary ag-btn-sm"
-                    onClick={() => { setTrainUrl(""); setTrainResult(null); setEditing(agent); }}
+                    onClick={() => setEditing(agent)}
                   >
                     Configure
                   </button>
@@ -810,6 +854,10 @@ export default function AgentsPage() {
 
             <button className="ag-btn ag-btn-primary ag-btn-full ag-save" onClick={saveAgent} disabled={saving}>
               {saving ? <Loader2 size={15} className="ag-spin" /> : <Save size={15} />} Save agent
+            </button>
+
+            <button className="ag-btn ag-btn-danger ag-btn-full" onClick={() => deleteAgent(editing)} title="Delete this agent">
+              <X size={15} /> Delete agent
             </button>
           </aside>
         </div>

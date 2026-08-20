@@ -201,8 +201,77 @@ export default function AgentsPage() {
   /* ── actions ──────────────────────────────────────────────────── */
 
   /** Save the drawer's edits back to the row. */
+  /**
+   * Push the agent's identity onto the row the widget actually reads.
+   *
+   * ── WHY THIS IS NEEDED AT ALL ─────────────────────────────────────
+   * An agent's identity lives in two places. This drawer writes to
+   * `agents`; the widget on the customer's site reads `widget_configs`.
+   * Nothing connected them, so renaming an agent and retraining it on a
+   * new website changed everything except what visitors actually see.
+   * A real-estate agent was retrained from skyline to sobha.com and
+   * renamed — and its widget carried on introducing itself as Aarav
+   * from Skyline Properties, because that string lives on the other row.
+   *
+   * ── WHY IT ONLY OVERWRITES WHAT WAS FOLLOWING THE AGENT ───────────
+   * The widget row can also hold wording the merchant wrote by hand on
+   * the /widget page. "Kalosa Assistant" is friendlier than the legal
+   * name the crawl found ("Kalosa Aesthetics & Cosmetic Gynaecology"),
+   * and blowing it away on every save would be its own bug report.
+   *
+   * So a field is updated only when it was blank, or when it still held
+   * the agent's PREVIOUS value — meaning it was mirroring the agent and
+   * should keep mirroring it. A field that differs was chosen
+   * deliberately and is left alone.
+   */
+  async function syncWidgetIdentity(previous: Agent | undefined) {
+    if (!editing) return;
+
+    const { data: cfg } = await supabase
+      .from("widget_configs")
+      .select("id, bot_name, welcome_message, avatar_url")
+      .eq("agent_id", editing.id)
+      .eq("org_user_id", userId)
+      .maybeSingle();
+
+    // No row of its own: the config API merges the agent's identity in
+    // at read time instead, so there is nothing to keep in step here.
+    if (!cfg) return;
+
+    /** Was this field blank, or still showing what the agent used to say? */
+    const wasFollowing = (current: unknown, before: string | null | undefined) => {
+      const now = typeof current === "string" ? current.trim() : "";
+      return !now || now === (before ?? "").trim();
+    };
+
+    const patch: Record<string, unknown> = {};
+
+    const name = editing.name?.trim();
+    if (name && wasFollowing(cfg.bot_name, previous?.name)) patch.bot_name = name;
+
+    const greeting = editing.greeting?.trim();
+    if (greeting && wasFollowing(cfg.welcome_message, previous?.greeting)) {
+      patch.welcome_message = greeting;
+    }
+
+    const avatar = editing.avatar_url?.trim();
+    if (avatar && wasFollowing(cfg.avatar_url, previous?.avatar_url)) {
+      patch.avatar_url = avatar;
+    }
+
+    if (Object.keys(patch).length === 0) return;
+
+    const { error } = await supabase.from("widget_configs").update(patch).eq("id", cfg.id);
+    // Non-fatal: the agent itself saved. Say so rather than claiming a
+    // clean save while the widget quietly keeps the old name.
+    if (error) toast.error(`Agent saved, but the widget kept its old name: ${error.message}`);
+  }
+
   async function saveAgent() {
     if (!editing) return;
+    // Captured before load() replaces it — this is what the widget row
+    // is compared against to decide whether it was following the agent.
+    const previous = agents.find((a) => a.id === editing.id);
     setSaving(true);
     try {
       const { error } = await supabase
@@ -233,6 +302,7 @@ export default function AgentsPage() {
         })
         .eq("id", editing.id);
       if (error) { toast.error(error.message); return; }
+      await syncWidgetIdentity(previous);
       toast.success("Agent saved");
       setEditing(null);
       load();

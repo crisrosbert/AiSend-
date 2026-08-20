@@ -126,6 +126,12 @@ export default function AgentsPage() {
     { title: string; chunks: number } | null
   >(null);
 
+  // The logo field in the drawer. `logoBroken` is what turns a blank
+  // square into an explanation — a crawled URL that 403s to visitors
+  // looks identical to no logo at all until something says otherwise.
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoBroken, setLogoBroken] = useState(false);
+
   // ── A crawl belongs to the agent it was run for ──────────────────
   //
   // All three values above describe ONE agent's training run. The
@@ -145,6 +151,9 @@ export default function AgentsPage() {
     setSiteReview(null);
     setTrainResult(null);
     setTrainUrl("");
+    // Also per-agent: a broken logo on one agent must not mark the next
+    // one's working logo as broken before it has even tried to load.
+    setLogoBroken(false);
   }, [editing?.id]);
 
   /* ── load ─────────────────────────────────────────────────────── */
@@ -201,6 +210,65 @@ export default function AgentsPage() {
   /* ── actions ──────────────────────────────────────────────────── */
 
   /** Save the drawer's edits back to the row. */
+  /**
+   * Upload a logo for this agent and point it at the stored copy.
+   *
+   * ── WHY UPLOADING IS NOT OPTIONAL POLISH ──────────────────────────
+   * Until now the only way an agent got a logo was the crawler finding
+   * one, and it frequently cannot: plenty of sites have no og:image,
+   * the crawler then falls back to /favicon.ico which is 32px and looks
+   * terrible enlarged into a chat header, and many hosts block
+   * hot-linking outright so the URL resolves for us and 403s for the
+   * visitor. Every one of those ends the same way — a generic speech
+   * bubble where the business's mark should be, on a widget that is
+   * meant to look like it belongs to that business.
+   *
+   * Re-hosting also fixes the quieter half. A crawled URL points at
+   * someone else's server, so the logo breaks whenever they reorganise
+   * their site. A copy in our own bucket keeps working.
+   *
+   * The `avatars` bucket already exists (migration 008) and its RLS
+   * policy requires the first path segment to be the uploader's user
+   * id, which is why the path starts with userId and not agent id.
+   */
+  async function uploadLogo(file: File) {
+    if (!editing || !userId) return;
+
+    // Checked here as well as by the bucket, because a bucket rejection
+    // arrives as an opaque storage error while these can say which rule
+    // was broken and what to do about it.
+    if (!/^image\/(png|jpeg|webp|gif|svg\+xml)$/.test(file.type)) {
+      toast.error("Use a PNG, JPG, WebP, GIF or SVG image.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error(`That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 2 MB.`);
+      return;
+    }
+
+    setLogoUploading(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+      // Timestamped rather than overwritten: a stable filename would be
+      // served from cache long after the change, and the merchant would
+      // conclude the upload silently failed.
+      const path = `${userId}/agent-${editing.id}-${Date.now()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { cacheControl: "3600", upsert: true, contentType: file.type });
+      if (upErr) { toast.error(`Upload failed: ${upErr.message}`); return; }
+
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
+
+      setEditing((prev) => (prev ? { ...prev, avatar_url: publicUrl } : prev));
+      setLogoBroken(false);
+      toast.success("Logo uploaded — press Save agent to keep it");
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
   /**
    * Push the agent's identity onto the row the widget actually reads.
    *
@@ -783,6 +851,93 @@ export default function AgentsPage() {
               />
             </Field>
 
+            {/* ── Logo ──
+                Shown as a preview beside its controls rather than as a
+                bare URL box, because the only question that matters here
+                is "does this actually render?" — and a URL cannot answer
+                it. A crawled logo that 403s to visitors looks perfectly
+                valid as text. */}
+            <Field
+              label="Logo"
+              hint="Shown in the chat header. Upload one if training could not find your logo, or if the one it found looks wrong."
+            >
+              <div className="ag-logo-row">
+                <div className="ag-logo-preview">
+                  {editing.avatar_url && !logoBroken ? (
+                    // Not next/image: an arbitrary third-party URL that
+                    // is not in remotePatterns, and it has to be allowed
+                    // to fail without taking the drawer down.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={editing.avatar_url}
+                      alt=""
+                      onError={() => setLogoBroken(true)}
+                      onLoad={() => setLogoBroken(false)}
+                    />
+                  ) : (
+                    <Bot size={20} />
+                  )}
+                </div>
+
+                <div className="ag-logo-controls">
+                  <label className="ag-btn ag-btn-sm ag-logo-upload">
+                    {logoUploading ? <Loader2 size={14} className="ag-spin" /> : <ImageIcon size={14} />}
+                    {logoUploading ? "Uploading…" : "Upload logo"}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                      disabled={logoUploading}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        // Cleared so picking the same file twice still
+                        // fires a change event — otherwise a retry after
+                        // a failed upload does nothing at all.
+                        e.target.value = "";
+                        if (file) uploadLogo(file);
+                      }}
+                    />
+                  </label>
+
+                  {editing.avatar_url && (
+                    <button
+                      type="button"
+                      className="ag-btn ag-btn-sm ag-logo-clear"
+                      onClick={() => {
+                        setEditing({ ...editing, avatar_url: null });
+                        setLogoBroken(false);
+                      }}
+                    >
+                      <X size={14} /> Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <input
+                className="ag-input ag-logo-url"
+                placeholder="…or paste an image address"
+                value={editing.avatar_url || ""}
+                onChange={(e) => {
+                  setLogoBroken(false);
+                  setEditing({ ...editing, avatar_url: e.target.value });
+                }}
+              />
+
+              {logoBroken && (
+                <p className="ag-logo-warn">
+                  <AlertCircle size={12} /> That image didn&rsquo;t load. Some
+                  sites block other sites from showing their images — uploading
+                  the file fixes that.
+                </p>
+              )}
+              {!logoBroken && /favicon\.ico$/i.test(editing.avatar_url || "") && (
+                <p className="ag-logo-warn">
+                  <AlertCircle size={12} /> This is the site favicon, usually
+                  32px. It will look blurry enlarged — upload a proper logo.
+                </p>
+              )}
+            </Field>
+
             <Field label="Type">
               <select
                 className="ag-input" value={editing.agent_type}
@@ -1254,6 +1409,27 @@ const css = `
 .ag-input:focus{border-color:var(--lime-deep);box-shadow:0 0 0 3px rgba(163,230,53,.3)}
 .ag-textarea{resize:vertical;line-height:1.55;min-height:150px}
 .ag-hint{font-size:11px;color:var(--faint);margin:0;line-height:1.45}
+
+/* ── Logo field ──
+   The preview is deliberately the same 44px circle the widget header
+   uses, so what the merchant approves here is what a visitor sees
+   rather than an idealised large version of it. */
+.ag-logo-row{display:flex;align-items:center;gap:12px}
+.ag-logo-preview{width:44px;height:44px;border-radius:50%;flex-shrink:0;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--lime-soft,#f1f8e4);color:var(--lime-deep);border:1.5px solid var(--line)}
+.ag-logo-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.ag-logo-controls{display:flex;gap:8px;flex-wrap:wrap}
+/* The file input is the label: a bare <input type=file> cannot be
+   styled to match the other buttons in this drawer. */
+.ag-logo-upload{cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.ag-logo-upload input{display:none}
+.ag-logo-clear{display:inline-flex;align-items:center;gap:6px;color:#b91c1c;border-color:#fecaca}
+.ag-logo-clear:hover{background:#fef2f2}
+.ag-logo-url{margin-top:8px;font-size:12.5px}
+.ag-logo-warn{display:flex;align-items:flex-start;gap:5px;margin:6px 0 0;
+  font-size:11px;line-height:1.45;color:#b45309}
+.ag-logo-warn svg{flex-shrink:0;margin-top:1px}
 .ag-toggle-row{display:flex;align-items:center;justify-content:space-between;width:100%;background:none;
   border:none;border-bottom:1px solid #f2f4f6;padding:12px 0;cursor:pointer;font-family:inherit;
   font-size:13.5px;color:var(--ink);text-align:left}

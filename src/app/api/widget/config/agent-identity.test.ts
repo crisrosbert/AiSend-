@@ -118,12 +118,16 @@ describe('filling blanks', () => {
     expect(out.welcome_message).toBe(skyline.greeting)
   })
 
-  it('changes nothing for an agent with no profile yet', () => {
+  it('changes nothing on its OWN row for an agent with no profile yet', () => {
     // Every agent looks like this until a site is crawled. A blank
-    // profile must not blank out a working widget.
+    // profile must not blank out a widget the merchant configured.
+    //
+    // Only true for the agent's own row. On a borrowed one the wording
+    // being preserved would belong to another business — see the
+    // half-configured case below.
     const view = { bot_name: 'Assistant', welcome_message: 'Hi' }
     const bare = { name: null, avatar_url: null, greeting: null, suggested_questions: null }
-    expect(mergeAgentProfile(view, bare, { shared: true })).toEqual(view)
+    expect(mergeAgentProfile(view, bare, { shared: false })).toEqual(view)
   })
 
   it('changes nothing when there is no agent at all', () => {
@@ -218,5 +222,72 @@ describe('agentBubble', () => {
       { shared: false },
     )
     expect(out.bubble_message).toBe('Hi! 👋 Real estate consultant — ask me anything.')
+  })
+})
+
+// ── An agent that has been trained but not yet approved ──────────────
+//
+// The gap the first version of the shared-row rule left open. Training
+// drafts a name, greeting and questions into the review panel, but
+// nothing is saved until Use and Save agent are pressed. In between,
+// the agent row has a name and NOTHING else.
+//
+// The rule only replaced fields the agent could supply, so the greeting
+// fell through to the borrowed row — and a sports-venue booking site
+// opened with "Hey! I'm Riya from Kalosa Aesthetics." The header was
+// right, which made it worse: it looked configured.
+
+describe('a half-configured agent on a borrowed row', () => {
+  const hudle = {
+    name: 'hudle',
+    greeting: null,          // drafted, not yet approved
+    avatar_url: null,        // the crawl only found a favicon
+    suggested_questions: null,
+    role: null,
+  }
+
+  const out = mergeAgentProfile(sharedClinicRow, hudle, { shared: true })
+
+  it('never greets one business’s visitors as another business', () => {
+    expect(out.welcome_message).not.toContain('Kalosa')
+    expect(out.welcome_message).not.toContain('Riya')
+  })
+
+  it('falls back to a neutral greeting built from the agent’s name', () => {
+    // Blank would be safe but wasteful — the opening line is the one
+    // message every visitor definitely reads.
+    expect(out.welcome_message).toBe('Hi! How can I help you with hudle today?')
+  })
+
+  it('does not show another company’s logo', () => {
+    // The borrowed row has one; wearing it is using their trademark.
+    // Empty makes widget.js draw its own neutral chat icon.
+    expect(out.avatar_url).toBeNull()
+  })
+
+  it('offers no suggested questions rather than another site’s', () => {
+    // Chips answerable only out of the clinic's pages, on a sports site.
+    expect(out.suggested_questions).toBeUndefined()
+  })
+
+  it('still shows the agent’s own name', () => {
+    expect(out.bot_name).toBe('hudle')
+  })
+
+  it('keeps inheriting pure styling', () => {
+    expect(out.primary_color).toBe('#F5A623')
+  })
+})
+
+describe('a borrowed row with an agent that has no name either', () => {
+  it('says something neutral rather than nothing', () => {
+    const out = mergeAgentProfile(sharedClinicRow, {
+      name: null, greeting: null, avatar_url: null,
+      suggested_questions: null, role: null,
+    }, { shared: true })
+
+    expect(out.bot_name).toBe('Assistant')
+    expect(out.welcome_message).toBe('Hi! How can I help you today?')
+    expect(out.welcome_message).not.toContain('Kalosa')
   })
 })

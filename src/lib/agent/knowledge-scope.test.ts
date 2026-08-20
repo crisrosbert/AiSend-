@@ -115,3 +115,43 @@ describe('retrieve() with an explicit null scope', () => {
     expect(from).not.toHaveBeenCalled()
   })
 })
+
+// ── The agent's voice ────────────────────────────────────────────────
+//
+// Knowledge scoping decides what the agent KNOWS. This decides who it
+// SOUNDS LIKE, and it leaked the same way for the same reason: the
+// persona was read from the widget config's journey, and a borrowed
+// config row carries another business's journey.
+//
+// It also silently disabled a feature. An agent trained through the
+// Agents drawer saves its drafted persona to `agents.persona`; nothing
+// writes a `personas` row for it. So the override was usually
+// undefined and the agent ran on the generic "warm, friendly
+// assistant" fallback while its real persona sat unused in the row
+// right next to the flags the engine had already loaded.
+
+describe('persona precedence', () => {
+  // Mirrors engine.ts: `agent?.persona?.trim() || args.systemPromptOverride`
+  const chosen = (agentPersona: string | null, override?: string) =>
+    (agentPersona?.trim() || override)
+
+  it("uses the agent's own persona over the config's", () => {
+    expect(chosen('You are Aarav from Skyline Properties.', 'You are Riya from Kalosa.'))
+      .toBe('You are Aarav from Skyline Properties.')
+  })
+
+  it('falls back to the override only when the agent has none', () => {
+    expect(chosen(null, 'You are Riya from Kalosa.')).toBe('You are Riya from Kalosa.')
+  })
+
+  it('treats a whitespace-only persona as none', () => {
+    // An empty textarea saves "" or " ", not null. Without the trim the
+    // agent would run on a blank prompt and lose its personality
+    // entirely — worse than the fallback it was meant to replace.
+    expect(chosen('   ', 'You are Riya from Kalosa.')).toBe('You are Riya from Kalosa.')
+  })
+
+  it('leaves the legacy no-agent path alone', () => {
+    expect(chosen(null, undefined)).toBeUndefined()
+  })
+})

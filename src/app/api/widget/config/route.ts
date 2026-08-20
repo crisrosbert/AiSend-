@@ -88,6 +88,39 @@ interface AgentProfile {
   greeting: string | null
   suggested_questions: string[] | null
   name: string | null
+  /**
+   * What this agent is for, drafted from its own site. Drives the
+   * teaser. Optional because it arrived in a later migration and rows
+   * written before it have no value.
+   */
+  role?: string | null
+}
+
+/**
+ * The line on the little pop-up bubble, before the chat is opened.
+ *
+ * It lives on widget_configs, which means one tenant gets one teaser —
+ * so a clinic, a fashion label and an estate agency all greeted their
+ * visitors with "Questions about gynecomastia treatment?". Whichever
+ * business was configured first wrote the line every other business
+ * then showed to its customers.
+ *
+ * Built from the agent instead. `role` is a description of what this
+ * agent does ("Real estate consultant for luxury properties"), drafted
+ * from that agent's own website, so it is both specific and already
+ * per-agent. The name is the fallback because it is the one thing
+ * every agent has.
+ */
+export function agentBubble(agent: AgentProfile): string | null {
+  const role = agent.role?.trim()
+  // Long roles get truncated to nothing useful in a 260px bubble, and a
+  // teaser that wraps to five lines is worse than a generic one.
+  if (role && role.length <= 60) return `Hi! 👋 ${role} — ask me anything.`
+
+  const name = agent.name?.trim()
+  if (name) return `Hi! 👋 Questions about ${name}? Ask me anything.`
+
+  return null
 }
 
 /**
@@ -146,6 +179,23 @@ export function mergeAgentProfile(
   if (Array.isArray(agent.suggested_questions) && agent.suggested_questions.length > 0) {
     merged.suggested_questions = agent.suggested_questions.slice(0, 3)
   }
+
+  // ── The teaser always follows the agent ──
+  //
+  // Unlike the name and greeting, this one overrides the stored value
+  // even on the agent's own row. There is no per-agent way to author a
+  // teaser — /widget writes a single line for the whole tenant — so a
+  // stored value here is not evidence that anyone chose it FOR THIS
+  // AGENT. It is far likelier to be another business's line, which is
+  // exactly the symptom: three widgets, three businesses, one teaser
+  // about gynecomastia.
+  //
+  // The tradeoff is deliberate: a tenant with one agent who hand-wrote
+  // a teaser loses it. That is worth fixing properly by giving agents
+  // their own teaser field, not by leaving every multi-business tenant
+  // advertising the wrong business.
+  const bubble = agentBubble(agent)
+  if (bubble) merged.bubble_message = bubble
 
   return merged
 }
@@ -235,7 +285,7 @@ export async function GET(req: Request) {
     if (agentId) {
       const { data: row } = await db()
         .from('agents')
-        .select('name, avatar_url, greeting, suggested_questions')
+        .select('name, avatar_url, greeting, suggested_questions, role')
         .eq('id', agentId)
         .eq('tenant_id', config.org_user_id)
         .maybeSingle()

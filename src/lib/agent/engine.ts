@@ -539,12 +539,33 @@ interface ToolExecResult {
   /** Internal note for the team. Never shown to the customer. */
   handoffReason?: string
 }
+
+/**
+ * Which Brain this turn is allowed to read.
+ *
+ * Knowledge is scoped by journey_id, and an agent owns exactly one
+ * journey. The caller passes a journeyId too — but on the widget path
+ * it comes from the widget config row, which may be the tenant's
+ * ORG-WIDE row rather than this agent's own. A tenant running several
+ * sites then got the wrong site's pages: a fashion shop's agent
+ * quoting a surgery clinic, because both embeds fell back to the same
+ * legacy config and therefore the same journey.
+ *
+ * So when an agent is known, ITS journey wins. The caller's value is
+ * used only on the legacy no-agent path.
+ *
+ * Returns null — not undefined — for an agent with no journey yet.
+ * An agent that has never been trained must retrieve NOTHING;
+ * undefined would drop the filter and search every journey the tenant
+ * owns, which is the same leak arriving by a different road.
+ */
 export function knowledgeScope(
   agent: Agent | null,
   args: RunAgentArgs,
 ): string | null | undefined {
   return agent ? (agent.journey_id ?? null) : args.journeyId
 }
+
 async function executeTool(
   toolCall: { name: string; args: Record<string, unknown> },
   args: RunAgentArgs,
@@ -575,13 +596,11 @@ async function executeTool(
 
     switch (toolCall.name) {
       case 'search_knowledge_base': {
-        - journeyId: args.journeyId,
-+ journeyId: knowledgeScope(agent, args),
         const query = String(toolCall.args.query || args.inboundText)
         return {
           result: await searchKnowledgeBase({
             tenantId: args.tenantId,
-            journeyId: args.journeyId,
+            journeyId: knowledgeScope(agent, args),
             query,
           }),
         }

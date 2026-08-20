@@ -68,6 +68,11 @@ export async function POST(req: Request) {
     }
     let { data: config } = await cfgQuery.maybeSingle()
 
+    // True when this agent had no config row and borrowed the tenant's
+    // org-wide one. That row describes whichever business was set up
+    // first, so nothing on it may be treated as describing this agent.
+    let usedSharedConfig = false
+
     // An agent-scoped embed (data-agent=...) looks for that agent's own
     // widget config. Nothing in the app creates one — /widget only ever
     // writes the tenant's org-wide row — so without this fallback every
@@ -85,7 +90,10 @@ export async function POST(req: Request) {
         .eq('org_user_id', org_id)
         .is('agent_id', null)
         .maybeSingle()
-      if (orgConfig) config = orgConfig
+      if (orgConfig) {
+        config = orgConfig
+        usedSharedConfig = true
+      }
     }
 
     if (!config) {
@@ -281,8 +289,13 @@ export async function POST(req: Request) {
 
     // 5. Load persona for the linked journey (legacy path). When an agent
     //    is set, the engine loads the agent's own persona via agentId.
+    //    A borrowed row's journey belongs to another business, so its
+    //    persona does too — loading it here is how the estate agency
+    //    ended up speaking in the clinic's voice. The engine prefers
+    //    agents.persona anyway; this stops the wrong one being offered
+    //    as a fallback for an agent that simply has none yet.
     let systemPrompt: string | undefined
-    if (config.journey_id) {
+    if (config.journey_id && !(usedSharedConfig && resolvedAgentId)) {
       const { data: persona } = await db()
         .from('personas')
         .select('raw_prompt')

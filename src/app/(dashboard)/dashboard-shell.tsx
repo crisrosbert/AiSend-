@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { BusinessProvider } from "@/hooks/use-business";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
@@ -48,7 +49,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <DashboardShellInner>{children}</DashboardShellInner>
+      {/* Inside AuthProvider because it needs the signed-in user to know
+          which businesses to load, and outside the shell so every page
+          and the sidebar switcher read the same selection. */}
+      <BusinessProvider>
+        <DashboardShellInner>{children}</DashboardShellInner>
+      </BusinessProvider>
     </AuthProvider>
   );
 }

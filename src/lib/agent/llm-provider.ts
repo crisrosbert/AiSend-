@@ -1,7 +1,7 @@
 // src/lib/agent/llm-provider.ts
 //
-// Pluggable LLM provider. Switch between Gemini and OpenAI with one
-// env var: LLM_PROVIDER = 'gemini' | 'openai'  (defaults to gemini).
+// Pluggable LLM provider. Switch between OpenAI and Gemini with one
+// env var: LLM_PROVIDER = 'openai' | 'gemini'  (defaults to openai).
 //
 // The engine calls callLLM() and gets back a common shape, regardless
 // of which provider is active. To add Groq/Claude later, add an adapter
@@ -45,17 +45,48 @@ export interface LLMResponse {
 
 // ── Public entry point ──
 
+/**
+ * Which provider serves this deployment.
+ *
+ * OpenAI is the default. The default used to be Gemini, which meant a
+ * deployment that simply forgot to set LLM_PROVIDER silently ran on a
+ * provider nobody had chosen — and, since the key check is done per
+ * provider, could report "no API key" while a perfectly good
+ * OPENAI_API_KEY sat in the environment.
+ *
+ * One exported reader rather than three inlined `process.env` reads,
+ * because they had already drifted: the engine defaulted one way and
+ * logged a hardcoded Gemini model name regardless of what actually ran.
+ */
+export function activeProvider(): 'openai' | 'gemini' {
+  return (process.env.LLM_PROVIDER || 'openai').toLowerCase() === 'gemini'
+    ? 'gemini'
+    : 'openai'
+}
+
+/** The model that will actually serve a call, for logging and display. */
+export function activeModel(): string {
+  return activeProvider() === 'gemini'
+    ? process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
+    : process.env.OPENAI_MODEL || 'gpt-4o-mini'
+}
+
+/** Is the key for the active provider present? */
+export function hasProviderKey(): boolean {
+  return activeProvider() === 'gemini'
+    ? !!process.env.GEMINI_API_KEY
+    : !!process.env.OPENAI_API_KEY
+}
+
 export async function callLLM(
   systemPrompt: string,
   turns: LLMTurn[],
   tools: LLMTool[],
 ): Promise<LLMResponse> {
-  const provider = (process.env.LLM_PROVIDER || 'gemini').toLowerCase()
-
-  if (provider === 'openai') {
-    return callOpenAI(systemPrompt, turns, tools)
+  if (activeProvider() === 'gemini') {
+    return callGemini(systemPrompt, turns, tools)
   }
-  return callGemini(systemPrompt, turns, tools)
+  return callOpenAI(systemPrompt, turns, tools)
 }
 
 // ════════════════════════════════════════════════════════════

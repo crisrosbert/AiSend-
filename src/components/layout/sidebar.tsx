@@ -23,6 +23,7 @@ import {
   Globe,
   Bot,
   Workflow,
+  BarChart3,
 } from "lucide-react";
 import {
   Avatar,
@@ -39,6 +40,11 @@ import {
 
 const navItems = [
   { path: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  // Next to Dashboard, not buried near Settings. Dashboard answers
+  // "what is happening right now"; Analytics answers "is this working"
+  // — and the second question is the one that decides whether someone
+  // renews, so it should not take three clicks to find.
+  { path: "analytics", label: "Analytics", icon: BarChart3 },
   // AI Agents sits high in the list on purpose: it is the feature we
   // want people to find, and burying it below Bookings guarantees they
   // never will.

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { BusinessSwitcher } from "@/components/layout/business-switcher";
 import { LogOut, Menu, Settings as SettingsIcon, User, Zap } from "lucide-react";
 import {
   Avatar,
@@ -68,9 +69,10 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           <Menu className="h-5 w-5" />
         </button>
 
-        <span className="truncate text-base font-bold" style={{ color: "#0c1f17" }}>
-          {businessName}
-        </span>
+        {/* Takes the slot the plain business name used to occupy. With
+            one business it renders identically; with several it becomes
+            the control that decides what every page below is showing. */}
+        <BusinessSwitcher fallbackName={businessName} />
       </div>
 
       {/* Right — status badges + plan + avatar */}

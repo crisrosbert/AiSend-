@@ -20,7 +20,14 @@ import { createClient } from '@supabase/supabase-js'
 import { searchKnowledgeBase } from '@/lib/agent/tools/knowledge-base-tools'
 import { bookAppointment } from '@/lib/agent/tools/booking-tools'
 import { sendPaymentLink } from '@/lib/agent/tools/payment-tools'
-import { callLLM, type LLMTool, type LLMTurn } from '@/lib/agent/llm-provider'
+import {
+  callLLM,
+  activeProvider,
+  activeModel,
+  hasProviderKey,
+  type LLMTool,
+  type LLMTurn,
+} from '@/lib/agent/llm-provider'
 import {
   describeHoursForPrompt,
   parseBusinessHours,
@@ -204,13 +211,13 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
     mediaToSend: [],
   }
 
-  // Provider + key check (gemini or openai depending on LLM_PROVIDER)
-  const provider = (process.env.LLM_PROVIDER || 'gemini').toLowerCase()
-  const hasKey =
-    provider === 'openai'
-      ? !!process.env.OPENAI_API_KEY
-      : !!process.env.GEMINI_API_KEY
-  if (!hasKey) {
+  // Asked of the provider module rather than re-derived here. This
+  // block used to default to Gemini while llm-provider defaulted the
+  // same way — two copies of one rule, which is one copy too many:
+  // changing the default in one place would have left the engine
+  // checking for a key the call would never use.
+  const provider = activeProvider()
+  if (!hasProviderKey()) {
     console.warn(`[agent/engine] no API key for provider "${provider}" — agent disabled`)
     return { ...empty, error: `no API key configured for provider "${provider}"` }
   }
@@ -786,7 +793,10 @@ async function logUsage(args: RunAgentArgs, log: LogArgs): Promise<void> {
       conversation_id: args.conversationId,
       journey_id: args.journeyId ?? null,
       vertical: args.verticalConfigId ?? null,
-      model: 'gemini-2.5-flash-lite',
+      // Was hardcoded to a Gemini model, so every row logged that name
+      // even when OpenAI served the call — making the usage table
+      // actively misleading about what was being billed.
+      model: activeModel(),
       output_tokens: log.tokens,
       tools_called: log.toolsUsed,
       handoff: log.handoff,

@@ -5,10 +5,7 @@ import { createPortal } from "react-dom";
 import { X, Loader2, Wallet, Zap, Info } from "lucide-react";
 import { toast } from "sonner";
 import { MIN_TOPUP_INR, bonusForAmount } from "@/lib/billing/plans";
-
-declare global {
-  interface Window { Razorpay?: new (options: Record<string, unknown>) => { open: () => void } }
-}
+import { loadRazorpayScript } from "@/lib/billing/razorpay-checkout";
 
 interface Props {
   open: boolean;
@@ -61,17 +58,6 @@ export function CreditsPurchaseModal({
   if (!open || !mounted) return null;
 
   const bonus = bonusForAmount(amount);
-
-  async function loadRazorpayScript(): Promise<boolean> {
-    if (window.Razorpay) return true;
-    return new Promise((resolve) => {
-      const s = document.createElement("script");
-      s.src = "https://checkout.razorpay.com/v1/checkout.js";
-      s.onload = () => resolve(true);
-      s.onerror = () => resolve(false);
-      document.body.appendChild(s);
-    });
-  }
 
   async function handlePurchase() {
     if (amount < MIN_TOPUP_INR) {

@@ -36,6 +36,7 @@ import {
 } from "@/lib/billing/usage";
 import { lastNDayKeys, startOfLocalDay } from "@/lib/dashboard/date-utils";
 import { CreditsPurchaseModal } from "@/components/billing/credits-purchase-modal";
+import { loadRazorpayScript } from "@/lib/billing/razorpay-checkout";
 
 /* ────────────────────────────── constants ────────────────────────────── */
 
@@ -222,6 +223,19 @@ export default function BillingPage() {
 
   /* ── actions ── */
 
+  /**
+   * Change plan.
+   *
+   * Free plans apply server-side and we just reload. Paid plans come
+   * back with a Razorpay order, which opens in Checkout; the plan is
+   * activated by subscribe/verify once Razorpay confirms the payment —
+   * never by this file. Nothing the browser does here grants a plan.
+   *
+   * The old version looked for `checkout_url`, which the server never
+   * sent because the payment branch was an empty `if`. So every click
+   * fell through to "Plan updated" and the customer got the plan for
+   * nothing.
+   */
   const choosePlan = async (planId: string) => {
     setBusyPlan(planId);
     try {
@@ -232,9 +246,65 @@ export default function BillingPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Could not change plan");
-      if (data.checkout_url) { window.location.href = data.checkout_url; return; }
-      toast.success("Plan updated");
-      await loadAccount();
+
+      // Free plan — already applied.
+      if (data.mode === "applied") {
+        toast.success("Plan updated");
+        await loadAccount();
+        return;
+      }
+
+      if (data.mode !== "razorpay") {
+        throw new Error("Unexpected response from the billing service");
+      }
+
+      const ok = await loadRazorpayScript();
+      if (!ok || !window.Razorpay) {
+        toast.error("Couldn't load the payment gateway. Check your connection.");
+        return;
+      }
+
+      const rzp = new window.Razorpay({
+        key: data.keyId,
+        amount: data.order.amount,
+        currency: data.order.currency,
+        name: "AiSend",
+        description: `${data.plan.name} — ${data.plan.cycle === "yearly" ? "yearly" : "monthly"}`,
+        order_id: data.order.id,
+        theme: { color: "#16a34a" },
+        handler: async (resp: Record<string, string>) => {
+          // Only the three fields Razorpay signs are sent. The plan and
+          // the amount are read server-side from the order itself, so
+          // there is nothing here worth tampering with.
+          const v = await fetch("/api/billing/subscribe/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              razorpay_order_id: resp.razorpay_order_id,
+              razorpay_payment_id: resp.razorpay_payment_id,
+              razorpay_signature: resp.razorpay_signature,
+            }),
+          });
+          const vd = await v.json();
+          if (v.ok) {
+            toast.success(`${data.plan.name} is active`);
+            await loadAccount();
+          } else {
+            // The money may well have been taken. Never say "payment
+            // failed" here — say what is true and give them the
+            // reference, so support can find it.
+            toast.error(vd.error || "We couldn't confirm that payment. Contact support.");
+          }
+        },
+        modal: {
+          // Fires when the customer closes Checkout without paying.
+          // Without this the button stays spinning and the page looks
+          // stuck, so people click again and start a second order.
+          ondismiss: () => setBusyPlan(null),
+        },
+      });
+
+      rzp.open();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not change plan");
     } finally {

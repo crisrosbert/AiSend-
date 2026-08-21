@@ -1,74 +1,123 @@
 // src/app/api/billing/verify/route.ts
 //
-// Verifies a Razorpay payment signature, then credits the wallet via
-// add_credits. Called by the purchase modal's Razorpay success handler.
+// Confirms a wallet top-up with Razorpay and credits it.
+// Called by the purchase modal's Razorpay success handler.
 //
-// Only used in Razorpay mode (when keys are set). In manual-fallback mode
-// the recharge route already credits directly, so this is never hit.
+// ── WHAT CHANGED AND WHY ─────────────────────────────────────────────
+// This used to credit `body.amount` — a number sent by the browser.
+// Razorpay's signature covers `order_id|payment_id` and nothing else,
+// so every check still passed if you altered it: pay ₹100 for real,
+// post the real order id, real payment id, real signature, and
+// `amount: 100000`, and the wallet gained ₹1,00,000.
 //
-// Body: { razorpay_order_id, razorpay_payment_id, razorpay_signature,
-//         amount, bonus }
+// The amount now comes from confirmPayment(), which reads it back from
+// Razorpay. The body's amount is ignored entirely.
+//
+// Body: { razorpay_order_id, razorpay_payment_id, razorpay_signature }
 
-import { NextResponse } from 'next/server';
-import crypto from 'crypto';
-import { createClient } from '@/lib/supabase/server';
-import { getOrgIdForUser } from '@/lib/billing/credits';
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { getOrgIdForUser } from '@/lib/billing/credits'
+import { confirmPayment, isRazorpayEnabled } from '@/lib/billing/razorpay'
+import { bonusForAmount } from '@/lib/billing/plans'
+
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
+  const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (!keySecret) {
-    return NextResponse.json({ error: 'Payment gateway not configured' }, { status: 500 });
+  if (!isRazorpayEnabled()) {
+    return NextResponse.json({ error: 'Payment gateway not configured' }, { status: 500 })
   }
 
-  let body: {
-    razorpay_order_id?: string;
-    razorpay_payment_id?: string;
-    razorpay_signature?: string;
-    amount?: number;
-    bonus?: number;
-  };
+  let body: Record<string, unknown>
   try {
-    body = await req.json();
+    body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
 
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
-  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-    return NextResponse.json({ error: 'Missing payment fields' }, { status: 400 });
+  let payment
+  try {
+    payment = await confirmPayment(body)
+  } catch (err) {
+    // Deliberately the same shape for "bad signature" and "not paid":
+    // a caller probing the difference learns which half of a forged
+    // callback they got right.
+    console.warn('[billing/verify] rejected:', err instanceof Error ? err.message : err)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Payment verification failed' },
+      { status: 400 },
+    )
   }
 
-  // Verify the signature: HMAC_SHA256(order_id|payment_id, key_secret)
-  const expected = crypto
-    .createHmac('sha256', keySecret)
-    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-    .digest('hex');
-
-  if (expected !== razorpay_signature) {
-    return NextResponse.json({ error: 'Payment verification failed' }, { status: 400 });
-  }
-
-  const amount = Math.floor(Number(body.amount));
-  const bonus = Math.max(0, Math.floor(Number(body.bonus) || 0));
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-  }
-
-  const orgId = await getOrgIdForUser(supabase, user.id);
+  const orgId = await getOrgIdForUser(supabase, user.id)
   if (!orgId) {
-    return NextResponse.json({ error: 'No organization found' }, { status: 400 });
+    return NextResponse.json({ error: 'No organization found' }, { status: 400 })
   }
 
-  // Credit the wallet. reference_id = payment id for traceability.
+  // ── The order must belong to this org ──
+  //
+  // Without this, any signed-in user could take another org's payment
+  // details — from a shared screen, a support ticket, a browser history
+  // — and credit their own wallet with someone else's money.
+  const orderOrg = payment.notes.org_id
+  if (orderOrg && orderOrg !== orgId) {
+    console.warn(`[billing/verify] org mismatch: order ${orderOrg} vs caller ${orgId}`)
+    return NextResponse.json({ error: 'This payment belongs to another account.' }, { status: 403 })
+  }
+
+  // ── Has this payment already been credited? ──
+  //
+  // Razorpay's handler fires again on a flaky connection, and a customer
+  // can refresh mid-callback. Both replay the same payment id, and
+  // without a guard each replay credits the wallet again.
+  //
+  // add_credits() stores the payment id via p_reference, but which
+  // column that lands in is defined in a migration this repo does not
+  // carry, so the lookup is attempted rather than assumed: if the column
+  // is named differently the query errors, and we log and continue
+  // instead of failing a real payment. Losing the guard is bad; refusing
+  // money that already left the customer's account is worse.
+  //
+  // Best-effort either way — two simultaneous callbacks could both read
+  // "not found". The real fix is a unique index on (org_id, reference),
+  // which makes the second insert fail at the database. Worth adding.
+  const { data: already, error: dupeErr } = await supabase
+    .from('wallet_transactions')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('reference_id', payment.paymentId)
+    .maybeSingle()
+
+  if (dupeErr) {
+    console.warn(
+      '[billing/verify] replay check unavailable, crediting anyway:',
+      dupeErr.message,
+    )
+  } else if (already) {
+    const { data: balance } = await supabase
+      .from('organizations')
+      .select('credit_balance')
+      .eq('id', orgId)
+      .maybeSingle()
+    return NextResponse.json({
+      newBalance: Number(balance?.credit_balance ?? 0),
+      alreadyApplied: true,
+    })
+  }
+
+  const amount = payment.amountInr
+
+  // The bonus is recomputed from the paid amount rather than taken from
+  // the browser, for the same reason as the amount itself.
+  const bonus = bonusForAmount(amount)
+
   const { data, error } = await supabase.rpc('add_credits', {
     p_org_id: orgId,
     p_user_id: user.id,
@@ -76,12 +125,13 @@ export async function POST(req: Request) {
     p_bonus: bonus,
     p_type: 'recharge',
     p_description: `Recharge ₹${amount}${bonus ? ` (+₹${bonus} bonus)` : ''}`,
-    p_reference: razorpay_payment_id,
-  });
+    p_reference: payment.paymentId,
+  })
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[billing/verify] add_credits failed:', error.message)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ newBalance: Number(data) });
+  return NextResponse.json({ newBalance: Number(data), credited: amount, bonus })
 }

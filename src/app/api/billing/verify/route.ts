@@ -78,16 +78,20 @@ export async function POST(req: Request) {
   // can refresh mid-callback. Both replay the same payment id, and
   // without a guard each replay credits the wallet again.
   //
-  // add_credits() stores the payment id via p_reference, but which
-  // column that lands in is defined in a migration this repo does not
-  // carry, so the lookup is attempted rather than assumed: if the column
-  // is named differently the query errors, and we log and continue
-  // instead of failing a real payment. Losing the guard is bad; refusing
-  // money that already left the customer's account is worse.
+  // add_credits() stores what we pass as p_reference in
+  // wallet_transactions.reference_id. Note that column is shared: manual
+  // top-ups write a credit-pack id there ('pack_1000'), and the same
+  // pack bought twice is perfectly normal. Only the 'pay_' form — a
+  // Razorpay payment id — is unique, which is why migration 029's index
+  // is partial rather than covering the whole column.
   //
-  // Best-effort either way — two simultaneous callbacks could both read
-  // "not found". The real fix is a unique index on (org_id, reference),
-  // which makes the second insert fail at the database. Worth adding.
+  // Still wrapped in an error check: this runs against deployments that
+  // may not have applied 029 yet, and refusing money that already left
+  // the customer's account is worse than losing the guard.
+  //
+  // Best-effort on its own — two simultaneous callbacks could both read
+  // "not found". The partial unique index is what actually closes that,
+  // by making the second insert fail at the database.
   const { data: already, error: dupeErr } = await supabase
     .from('wallet_transactions')
     .select('id')

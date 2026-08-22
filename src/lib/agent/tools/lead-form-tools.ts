@@ -23,6 +23,8 @@ function db() {
 
 export interface SaveLeadArgs {
   tenantId: string
+  /** The agent's business — see the note on Agent.business_id. */
+  businessId?: string | null
   agentId: string
   conversationId: string
   firstName?: string
@@ -38,6 +40,7 @@ export async function saveLead(args: SaveLeadArgs): Promise<string> {
   try {
     const { error } = await db().from('leads').insert({
       tenant_id: args.tenantId,
+      business_id: args.businessId ?? null,
       agent_id: args.agentId,
       conversation_id: args.conversationId,
       first_name: args.firstName || null,

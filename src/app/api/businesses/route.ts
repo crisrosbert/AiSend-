@@ -92,8 +92,33 @@ export async function POST(request: Request) {
     .single()
 
   if (error) {
-    console.error('[businesses] create failed:', error.message)
-    return NextResponse.json({ error: 'Could not create the business' }, { status: 500 })
+    console.error('[businesses] create failed:', error.code, error.message)
+
+    // A generic "could not create" sent someone hunting through Vercel
+    // logs for a one-line cause. These are the two failures that
+    // actually happen, and both have a specific thing to go and do —
+    // so they say so instead.
+    if (error.code === '42501' || /row-level security/i.test(error.message)) {
+      return NextResponse.json(
+        {
+          error:
+            'The database is refusing the write. Run migration 033 — the ' +
+            'businesses table has no row-level security policy.',
+        },
+        { status: 500 },
+      )
+    }
+    if (error.code === '42P01') {
+      return NextResponse.json(
+        { error: 'The businesses table does not exist. Run migration 030 first.' },
+        { status: 500 },
+      )
+    }
+
+    return NextResponse.json(
+      { error: `Could not create the business: ${error.message}` },
+      { status: 500 },
+    )
   }
 
   return NextResponse.json({ business: data }, { status: 201 })

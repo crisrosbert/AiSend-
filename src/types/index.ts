@@ -344,6 +344,12 @@ export type AutomationStepConfig =
 export interface Automation {
   id: string;
   user_id: string;
+  /**
+   * Which business this automation belongs to. Nullable while the
+   * boundary is still being rolled out — rows written before migration
+   * 030 have none, so consumers must handle null rather than assume it.
+   */
+  business_id?: string | null;
   name: string;
   description?: string;
   trigger_type: AutomationTriggerType;

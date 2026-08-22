@@ -31,7 +31,7 @@ import {
   Bot, Loader2, Save, Plus, Image as ImageIcon, Brain, X, Sparkles,
   Search, Check, Copy, Globe, MessageCircle, Clock, AlertCircle,
 } from "lucide-react";
-import { useScopedBusinessId } from "@/hooks/use-business";
+import { useBusiness } from "@/hooks/use-business";
 import {
   AGENT_TEMPLATES,
   TEMPLATE_CATEGORIES,
@@ -85,11 +85,10 @@ export default function AgentsPage() {
   const supabase = useMemo(() => createClient(), []);
 
   const [userId, setUserId] = useState("");
-  // Null while the provider is still loading, and on accounts with no
-  // business row yet. Written as null in both cases rather than
-  // guessed — an untagged agent is fixable, a wrongly tagged one is
-  // indistinguishable from a correct one.
-  const businessId = useScopedBusinessId();
+  // Both halves are needed here, not just the id: "still resolving" and
+  // "this account has no business" look identical from the id alone,
+  // and they need opposite handling — wait vs. show an empty list.
+  const { businessId, loading: businessLoading } = useBusiness();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -169,10 +168,17 @@ export default function AgentsPage() {
     if (!user) { setLoading(false); return; }
     setUserId(user.id);
 
+    // Do not query until the business is known. An unscoped read here
+    // would paint every business's agents and then swap them out — and
+    // on a slow connection people read the first version.
+    if (businessLoading) return;
+    if (!businessId) { setAgents([]); setLoading(false); return; }
+
     const { data } = await supabase
       .from("agents")
       .select("*")
       .eq("tenant_id", user.id)
+      .eq("business_id", businessId)
       .order("created_at");
 
     const rows = data || [];
@@ -198,7 +204,8 @@ export default function AgentsPage() {
     const { data: mediaRows } = await supabase
       .from("agent_media")
       .select("agent_id")
-      .eq("tenant_id", user.id);
+      .eq("tenant_id", user.id)
+      .eq("business_id", businessId);
 
     const counts: Record<string, number> = {};
     for (const row of mediaRows || []) {
@@ -209,7 +216,10 @@ export default function AgentsPage() {
     // Returning users go straight to their own agents.
     if (rows.length > 0) setTab("mine");
     setLoading(false);
-  }, [supabase]);
+    // businessId in the deps is what makes the switcher work: changing
+    // business re-runs this and repaints the page with that business's
+    // agents.
+  }, [supabase, businessId, businessLoading]);
 
   useEffect(() => { load(); }, [load]);
 

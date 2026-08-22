@@ -89,7 +89,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, businessId, businessLoading]);
 
   useEffect(() => { load(); }, [load]);
 

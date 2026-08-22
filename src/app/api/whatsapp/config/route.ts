@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { verifyPhoneNumber } from '@/lib/whatsapp/meta-api'
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
+import { currentBusinessId } from '@/lib/business/server'
 
 /**
  * GET /api/whatsapp/config
@@ -197,6 +198,10 @@ export async function POST(request: Request) {
         .from('whatsapp_config')
         .insert({
           user_id: user.id,
+          // The business connecting the number. One WABA number serves
+          // one business, so this is set at connect time and not
+          // re-derived later.
+          business_id: await currentBusinessId(supabase, user.id, request),
           phone_number_id,
           waba_id: waba_id || null,
           access_token: encryptedAccessToken,

@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GitBranch, Plus, ChevronDown, Settings } from "lucide-react";
 import { toast } from "sonner";
+import { useBusiness } from "@/hooks/use-business";
 
 // Spec-defined seed — name and color per the product spec.
 const SPEC_DEFAULT_STAGES = [
@@ -39,6 +40,7 @@ const SPEC_DEFAULT_STAGES = [
 export default function PipelinesPage() {
   const supabase = createClient();
 
+  const { businessId } = useBusiness();
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
   const [stages, setStages] = useState<PipelineStage[]>([]);
@@ -64,13 +66,14 @@ export default function PipelinesPage() {
     const { data, error } = await supabase
       .from("pipelines")
       .select("*")
+      .eq("business_id", businessId)
       .order("created_at");
     if (error) {
       console.error("Failed to load pipelines:", error.message);
       return [];
     }
     return data ?? [];
-  }, [supabase]);
+  }, [supabase, businessId]);
 
   const loadStages = useCallback(
     async (pipelineId: string) => {
@@ -105,7 +108,7 @@ export default function PipelinesPage() {
 
     const { data: pipeline, error } = await supabase
       .from("pipelines")
-      .insert({ user_id: user.id, name: "Sales Pipeline" })
+      .insert({ user_id: user.id, business_id: businessId, name: "Sales Pipeline" })
       .select()
       .single();
 
@@ -123,7 +126,7 @@ export default function PipelinesPage() {
     await supabase.from("pipeline_stages").insert(stagesPayload);
 
     return pipeline as Pipeline;
-  }, [supabase]);
+  }, [supabase, businessId]);
 
   // Initial load + seed-if-empty
   useEffect(() => {

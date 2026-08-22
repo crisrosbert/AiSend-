@@ -639,6 +639,7 @@ async function executeTool(
         return {
           result: await bookAppointment({
             tenantId: args.tenantId,
+            businessId: agent?.business_id ?? null,
             contactId: args.contactId,
             conversationId: args.conversationId,
             customerName: String(toolCall.args.customer_name || ''),

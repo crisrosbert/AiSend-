@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { encrypt } from '@/lib/whatsapp/encryption'
+import { currentBusinessId } from '@/lib/business/server'
 
 /**
  * Embedded Signup — token exchange + auto-connect.
@@ -140,7 +141,11 @@ export async function POST(request: Request) {
     } else {
       const { error } = await supabase
         .from('whatsapp_config')
-        .insert({ user_id: user.id, ...row })
+        .insert({
+          user_id: user.id,
+          business_id: await currentBusinessId(supabase, user.id, request),
+          ...row,
+        })
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     }
 

@@ -13,6 +13,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { runAgent } from '@/lib/agent/engine'
 import { deliverAgentMedia } from '@/lib/whatsapp-agent/deliver-media'
+import { businessIdForAgent } from '@/lib/business/server'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _db: any = null
@@ -176,9 +177,15 @@ export async function handleAdLead(input: AdLeadInput): Promise<boolean> {
       ? 'meta_ads'
       : 'whatsapp'
 
+    // The agent's business, not the WhatsApp number's. One number can
+    // route ads for several businesses; the agent answering is what
+    // says whose lead this is.
+    const businessId = await businessIdForAgent(db(), agentId)
+
     await db().from('leads').upsert(
       {
         tenant_id: tenantId,
+        business_id: businessId,
         agent_id: agentId,
         contact_id: contactId,
         phone: customerPhone,

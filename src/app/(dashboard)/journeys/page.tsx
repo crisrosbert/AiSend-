@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Journey, JourneyStatus, Trigger } from "@/types/journey";
 import { triggerSummary } from "@/types/journey";
+import { useScopedBusinessId } from "@/hooks/use-business";
 
 type TabValue = "yours" | "blueprints" | "routing" | "test_number";
 
@@ -32,6 +33,7 @@ const DEFAULT_TRIGGER: Trigger = { type: "keyword", keywords: [] };
 export default function JourneysPage() {
   const router = useRouter();
   const supabase = createClient();
+  const businessId = useScopedBusinessId();
   const [tab, setTab] = useState<TabValue>("yours");
   const [search, setSearch] = useState("");
   const [journeys, setJourneys] = useState<Journey[]>([]);
@@ -81,6 +83,7 @@ export default function JourneysPage() {
 
       const newJourney = {
         user_id: user.id,
+        business_id: businessId,
         name: "Untitled Journey",
         status: "draft" as JourneyStatus,
         trigger: DEFAULT_TRIGGER,
@@ -135,6 +138,8 @@ export default function JourneysPage() {
       .from("journeys")
       .insert({
         user_id: user.id,
+        // The original's business, so a copy never quietly moves.
+        business_id: journey.business_id ?? businessId,
         name: `${journey.name} (copy)`,
         status: "draft" as JourneyStatus,
         trigger: journey.trigger,

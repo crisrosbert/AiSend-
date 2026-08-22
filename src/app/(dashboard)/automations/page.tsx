@@ -48,6 +48,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { AUTOMATION_TEMPLATES, type TemplateSlug } from "@/lib/automations/templates"
 import { triggerMeta, formatRelative } from "@/lib/automations/trigger-meta"
+import { useBusiness } from "@/hooks/use-business";
 
 const TEMPLATE_ORDER: TemplateSlug[] = [
   "welcome_message",
@@ -65,6 +66,7 @@ const TEMPLATE_ICON: Record<TemplateSlug, typeof Zap> = {
 
 export default function AutomationsPage() {
   const router = useRouter()
+  const { businessId, loading: businessLoading } = useBusiness();
   const [automations, setAutomations] = useState<Automation[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Automation | null>(null)
@@ -73,10 +75,14 @@ export default function AutomationsPage() {
 
   async function load() {
     try {
+      if (businessLoading) return
+      if (!businessId) { setAutomations([]); return }
+
       const supabase = createClient()
       const { data, error: fetchErr } = await supabase
         .from("automations")
         .select("*")
+        .eq("business_id", businessId)
         .order("created_at", { ascending: false })
       if (fetchErr) throw fetchErr
       setAutomations((data ?? []) as Automation[])
@@ -85,7 +91,10 @@ export default function AutomationsPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  // businessId in the deps is what repaints this list when the
+  // switcher changes business.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [businessId, businessLoading])
 
   async function toggleActive(a: Automation, next: boolean) {
     // Optimistic flip so the switch feels instant.

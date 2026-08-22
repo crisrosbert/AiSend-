@@ -23,6 +23,7 @@ import {
   BarChart3, Radio, Megaphone, Headphones, Bot, Link2, Bell, FileText,
   Target, Inbox,
 } from "lucide-react";
+import { useBusiness } from "@/hooks/use-business";
 
 /**
  * Shape returned by GET /api/whatsapp/config.
@@ -69,6 +70,7 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
 
 export default function DashboardPage() {
   const { profile } = useAuth();
+  const { businessId, loading: businessLoading } = useBusiness();
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null);
   const [activity, setActivity] = useState<ActivityItem[] | null>(null);
   const [series, setSeries] = useState<ConversationsSeriesPoint[] | null>(null);
@@ -78,9 +80,14 @@ export default function DashboardPage() {
   const [waConfig, setWaConfig] = useState<WaConfigState | null>(null);
 
   useEffect(() => {
+    // Wait for the business before asking for numbers. Loading the
+    // account-wide figures first and correcting them a moment later is
+    // worse than a brief spinner: people read a dashboard once.
+    if (businessLoading) return;
+
     const db = createClient();
-    void loadMetrics(db).then(setMetrics).catch(console.error).finally(() => setLoading(false));
-    void loadActivity(db, 6).then(setActivity).catch(console.error);
+    void loadMetrics(db, businessId).then(setMetrics).catch(console.error).finally(() => setLoading(false));
+    void loadActivity(db, 6, businessId).then(setActivity).catch(console.error);
     void loadConversationsSeries(db, 7).then(setSeries).catch(console.error);
     // Fetch THIS user's WhatsApp config. The API route scopes by user_id,
     // so a new tenant with no config correctly gets { connected: false }.
@@ -93,7 +100,7 @@ export default function DashboardPage() {
         // forever (a permanent "CHECKING…" looks broken).
         setWaConfig({ connected: false, reason: "fetch_failed" });
       });
-  }, []);
+  }, [businessId, businessLoading]);
 
   const businessName = profile?.business_name || "Your Business";
   // Derived once so the JSX below stays readable.

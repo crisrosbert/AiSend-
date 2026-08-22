@@ -27,9 +27,38 @@ import type {
 
 type DB = SupabaseClient
 
+/**
+ * Apply the business filter, when a business is known.
+ *
+ * These queries carry no user filter of their own — they lean on RLS to
+ * scope to the signed-in account. That is still true; this narrows the
+ * account's rows to one of its businesses.
+ *
+ * A null businessId means "not resolved yet" and leaves the query
+ * alone, which is the pre-existing behaviour rather than an empty
+ * result. Callers that must not show unscoped numbers should wait for
+ * the id instead of passing null.
+ *
+ * ── WHAT THIS CANNOT SCOPE ───────────────────────────────────────────
+ * `messages` and `deals` have no business_id — migration 030 tagged the
+ * sixteen tables that had a clear owner column, and these two hang off
+ * conversations and contacts instead. So on an account with more than
+ * one business the conversation and contact numbers below are per
+ * business while the message and deal numbers are account-wide. With
+ * one business they agree, which is every account today. Tagging those
+ * two tables is the remaining piece.
+ */
+function scoped<T>(query: T, businessId?: string | null): T {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return businessId ? ((query as any).eq('business_id', businessId) as T) : query
+}
+
 // --- 1. Metric cards ---------------------------------------------------
 
-export async function loadMetrics(db: DB): Promise<MetricsBundle> {
+export async function loadMetrics(
+  db: DB,
+  businessId?: string | null,
+): Promise<MetricsBundle> {
   const todayStart = startOfLocalDay().toISOString()
   const yesterdayStart = daysAgoStart(1).toISOString()
 
@@ -43,24 +72,39 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
     messagesToday,
     messagesYesterday,
   ] = await Promise.all([
-    db.from('conversations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-    db
-      .from('conversations')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'open')
-      .gte('created_at', todayStart),
-    db
-      .from('conversations')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'open')
-      .gte('created_at', yesterdayStart)
-      .lt('created_at', todayStart),
-    db.from('contacts').select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
-    db
-      .from('contacts')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', yesterdayStart)
-      .lt('created_at', todayStart),
+    scoped(
+      db.from('conversations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+      businessId,
+    ),
+    scoped(
+      db
+        .from('conversations')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'open')
+        .gte('created_at', todayStart),
+      businessId,
+    ),
+    scoped(
+      db
+        .from('conversations')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'open')
+        .gte('created_at', yesterdayStart)
+        .lt('created_at', todayStart),
+      businessId,
+    ),
+    scoped(
+      db.from('contacts').select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
+      businessId,
+    ),
+    scoped(
+      db
+        .from('contacts')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', yesterdayStart)
+        .lt('created_at', todayStart),
+      businessId,
+    ),
     db.from('deals').select('value, status').eq('status', 'open'),
     db
       .from('messages')
@@ -265,7 +309,11 @@ export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
 
 // --- 5. Activity feed --------------------------------------------------
 
-export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> {
+export async function loadActivity(
+  db: DB,
+  limit = 20,
+  businessId?: string | null,
+): Promise<ActivityItem[]> {
   // Pull ~10 from each source (plenty of headroom after merge-sort),
   // then interleave by timestamp. The individual per-table limits
   // keep the payload small; the final limit is enforced after sort.
@@ -276,11 +324,14 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
       .eq('sender_type', 'customer')
       .order('created_at', { ascending: false })
       .limit(10),
-    db
-      .from('contacts')
-      .select('id, name, phone, created_at')
-      .order('created_at', { ascending: false })
-      .limit(10),
+    scoped(
+      db
+        .from('contacts')
+        .select('id, name, phone, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10),
+      businessId,
+    ),
     db
       .from('deals')
       .select('id, title, updated_at, stage:pipeline_stages(name)')

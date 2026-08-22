@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Contact, MessageTemplate } from '@/types';
+import { useScopedBusinessId } from '@/hooks/use-business';
 
 export type CustomFieldOperator = 'is' | 'is_not' | 'contains';
 
@@ -114,6 +115,7 @@ async function fetchCustomValueIndex(
 }
 
 export function useBroadcastSending(): UseBroadcastSendingReturn {
+  const businessId = useScopedBusinessId();
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [skippedOptOut, setSkippedOptOut] = useState(0);
@@ -243,6 +245,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       .filter((p) => !byPhone.has(p))
       .map((phone) => ({
         user_id: user.id,
+        business_id: businessId,
         phone,
         name: uniqueByPhone.get(phone)?.name ?? null,
       }));

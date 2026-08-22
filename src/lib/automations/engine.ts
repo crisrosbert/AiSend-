@@ -36,6 +36,18 @@ export interface AutomationContext {
 
 export interface DispatchInput {
   userId: string
+  /**
+   * Which business this event belongs to — taken from the number the
+   * message arrived on, or from the signed-in caller's selection.
+   *
+   * Without it, an account with two businesses fires every automation
+   * either one owns against every contact either one has: the salon's
+   * "send the price list" rule replying to the estate agency's lead.
+   * Null means the caller genuinely does not know, and leaves the
+   * query unfiltered — which is the behaviour that existed before, not
+   * a safe default. Both callers supply it.
+   */
+  businessId?: string | null
   triggerType: AutomationTriggerType
   contactId?: string | null
   context?: AutomationContext
@@ -63,12 +75,14 @@ export interface DispatchInput {
 export async function runAutomationsForTrigger(input: DispatchInput): Promise<void> {
   try {
     const db = supabaseAdmin()
-    const { data: automations, error } = await db
+    let query = db
       .from('automations')
       .select('*')
       .eq('user_id', input.userId)
       .eq('trigger_type', input.triggerType)
       .eq('is_active', true)
+    if (input.businessId) query = query.eq('business_id', input.businessId)
+    const { data: automations, error } = await query
 
     if (error) {
       console.error('[automations] fetch failed:', error)

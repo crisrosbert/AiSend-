@@ -138,6 +138,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Which business these numbers describe. Re-derived from the cookie
+    // server-side rather than trusted from the query string: an
+    // analytics page is exactly where a caller would want to pass
+    // someone else's id.
+    const businessId = await currentBusinessId(supabase, user.id, req)
+
     const { searchParams } = new URL(req.url)
 
     // Default to the last 7 days, which is what the page opens on.
@@ -185,13 +191,15 @@ export async function GET(req: Request) {
     }
 
     // ── Conversations closed in the range ──
-    const { data: closedRows, error: convErr } = await supabase
+    let closedQuery = supabase
       .from('conversations')
       .select('id, updated_at, status')
       .eq('user_id', user.id)
       .eq('status', 'closed')
       .gte('updated_at', fromIso)
       .lte('updated_at', toIso)
+    if (businessId) closedQuery = closedQuery.eq('business_id', businessId)
+    const { data: closedRows, error: convErr } = await closedQuery
 
     if (convErr) {
       console.error('[analytics] conversations:', convErr.message)
@@ -203,12 +211,6 @@ export async function GET(req: Request) {
     // tenant that owns the embed (see api/widget/lead). Same value,
     // different column name, and getting it wrong returns a silent zero
     // rather than an error — which is the worst kind of wrong number.
-    // Scoped to the business the switcher is on, re-derived from the
-    // cookie server-side. Without it this counts every business's leads
-    // and reports the total as one business's performance — a number
-    // that looks fine and is wrong.
-    const businessId = await currentBusinessId(supabase, user.id, req)
-
     let leadQuery = supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })

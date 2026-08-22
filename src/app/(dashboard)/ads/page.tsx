@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import {
   Megaphone, Loader2, Save, Bot, Phone, ExternalLink, Sparkles,
 } from "lucide-react";
+import { useBusiness } from "@/hooks/use-business";
 
 interface Agent { id: string; name: string }
 interface Lead {
@@ -29,6 +30,7 @@ interface Lead {
 export default function AdsAgentPage() {
   const supabase = createClient();
   const [userId, setUserId] = useState("");
+  const { businessId, loading: businessLoading } = useBusiness();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [enabled, setEnabled] = useState(false);
   const [agentId, setAgentId] = useState<string>("");
@@ -42,10 +44,13 @@ export default function AdsAgentPage() {
     if (!user) { setLoading(false); return; }
     setUserId(user.id);
 
+    if (businessLoading) return;
+    if (!businessId) { setAgents([]); setLoading(false); return; }
+
     const [{ data: ag }, { data: cfg }, { data: ld }] = await Promise.all([
-      supabase.from("agents").select("id, name").eq("tenant_id", user.id).order("name"),
+      supabase.from("agents").select("id, name").eq("tenant_id", user.id).eq("business_id", businessId).order("name"),
       supabase.from("whatsapp_config").select("ads_agent_enabled, ads_agent_id").eq("user_id", user.id).maybeSingle(),
-      supabase.from("leads").select("*").eq("tenant_id", user.id).eq("source", "meta_ads").order("updated_at", { ascending: false }).limit(50),
+      supabase.from("leads").select("*").eq("tenant_id", user.id).eq("business_id", businessId).eq("source", "meta_ads").order("updated_at", { ascending: false }).limit(50),
     ]);
 
     setAgents(ag || []);
@@ -56,7 +61,7 @@ export default function AdsAgentPage() {
     }
     setLeads(ld || []);
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, businessId, businessLoading]);
 
   useEffect(() => { load(); }, [load]);
 

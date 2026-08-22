@@ -8,6 +8,7 @@ import {
   Sparkles, Save, Loader2, RefreshCw, FileCode, Layers,
   Briefcase, Mic, Target, Shield, Plus, X,
 } from "lucide-react";
+import { businessIdForJourney } from "@/lib/business/parent";
 
 interface PersonaState {
   id?: string;
@@ -115,7 +116,12 @@ export default function PersonaPage() {
 
       const { data, error } = persona.id
         ? await supabase.from("personas").update(payload).eq("id", persona.id).select().single()
-        : await supabase.from("personas").insert(payload).select().single();
+        : await supabase
+            .from("personas")
+            // Inherited from the journey this persona belongs to.
+            .insert({ ...payload, business_id: await businessIdForJourney(supabase, journeyId) })
+            .select()
+            .single();
 
       if (error || !data) {
         toast.error("Couldn't save. Run the personas migration.");

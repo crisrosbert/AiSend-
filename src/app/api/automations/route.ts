@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { currentBusinessId } from '@/lib/business/server'
 import { getTemplate } from '@/lib/automations/templates'
 import { insertSteps, type BuilderStepInput } from '@/lib/automations/steps-tree'
 import {
@@ -83,6 +84,9 @@ export async function POST(request: Request) {
     .from('automations')
     .insert({
       user_id: user.id,
+      // Whichever business the switcher has selected, re-derived
+      // server-side from the cookie rather than trusted from the body.
+      business_id: await currentBusinessId(supabase, user.id, request),
       name: effectiveName,
       description: effectiveDescription ?? null,
       trigger_type: effectiveTriggerType,

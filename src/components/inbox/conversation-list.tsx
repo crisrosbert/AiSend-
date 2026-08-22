@@ -38,6 +38,7 @@ import {
   X,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useBusiness } from "@/hooks/use-business";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -71,6 +72,7 @@ export function ConversationList({
   conversations,
   onConversationsLoaded,
 }: ConversationListProps) {
+  const { businessId, loading: businessLoading } = useBusiness();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeTab, setActiveTab] = useState<TabValue>("open");
@@ -112,9 +114,16 @@ export function ConversationList({
         .from("conversations")
         .select(`*, contact:contacts(*)`, { count: "exact" })
         .eq("status", TAB_TO_STATUS[activeTab])
+        // The inbox is the screen where a stray conversation is most
+        // visible and most alarming — someone else's customer sitting in
+        // your list. RLS already limits this to the account; this limits
+        // it to the business. The effect below never calls this before
+        // the id resolves; the conditional keeps that guarantee local.
         .or("channel.eq.whatsapp,channel.is.null")
         .order("last_message_at", { ascending: false, nullsFirst: false })
         .limit(PAGE_SIZE);
+
+      if (businessId) q = q.eq("business_id", businessId);
 
       if (cursor) q = q.lt("last_message_at", cursor);
 
@@ -126,15 +135,29 @@ export function ConversationList({
       }
       return q;
     },
-    [activeTab, debouncedSearch]
+    [activeTab, debouncedSearch, businessId]
   );
 
   // Initial / tab / search load — replaces the list.
   useEffect(() => {
+    // Never fetch before the business resolves. An unscoped first page
+    // would show the account's other conversations for a moment, which
+    // on this screen looks like a stranger's chat in your inbox.
+    if (businessLoading) return;
+
     let cancelled = false;
     (async () => {
       setLoading(true);
       setHasMore(true);
+
+      if (!businessId) {
+        onLoadedRef.current([]);
+        setTotalCount(0);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
       const { data, error, count } = await fetchPage(null);
       if (cancelled) return;
       if (error) {
@@ -153,7 +176,7 @@ export function ConversationList({
     return () => {
       cancelled = true;
     };
-  }, [fetchPage]);
+  }, [fetchPage, businessId, businessLoading]);
 
   // Load the next page and append.
   const loadMore = useCallback(async () => {

@@ -15,6 +15,7 @@ import {
   Accordion, AccordionItem, AccordionTrigger, AccordionContent,
 } from '@/components/ui/accordion';
 import type { WhatsAppConfig as WhatsAppConfigType } from '@/types';
+import { useScopedBusinessId } from '@/hooks/use-business';
 
 const MASKED_TOKEN = '••••••••••••••••';
 
@@ -24,6 +25,7 @@ type ResetReason = 'token_corrupted' | 'meta_api_error' | null;
 export function WhatsAppConfig() {
   const supabase = createClient();
   const { user, loading: authLoading } = useAuth();
+  const businessId = useScopedBusinessId();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -132,7 +134,7 @@ export function WhatsAppConfig() {
         // Insert skeleton row so the field is persisted
         await supabase
           .from('whatsapp_config')
-          .insert({ user_id: user.id, [field]: value.trim() });
+          .insert({ user_id: user.id, business_id: businessId, [field]: value.trim() });
       }
       setAutoSaved(field);
       setTimeout(() => setAutoSaved(null), 2500);

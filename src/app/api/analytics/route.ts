@@ -34,6 +34,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { currentBusinessId } from '@/lib/business/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -202,12 +203,20 @@ export async function GET(req: Request) {
     // tenant that owns the embed (see api/widget/lead). Same value,
     // different column name, and getting it wrong returns a silent zero
     // rather than an error — which is the worst kind of wrong number.
-    const { count: leadCount } = await supabase
+    // Scoped to the business the switcher is on, re-derived from the
+    // cookie server-side. Without it this counts every business's leads
+    // and reports the total as one business's performance — a number
+    // that looks fine and is wrong.
+    const businessId = await currentBusinessId(supabase, user.id, req)
+
+    let leadQuery = supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
       .eq('tenant_id', user.id)
       .gte('created_at', fromIso)
       .lte('created_at', toIso)
+    if (businessId) leadQuery = leadQuery.eq('business_id', businessId)
+    const { count: leadCount } = await leadQuery
 
     // ── Broadcast delivery in the range ──
     const { data: recipients } = await supabase

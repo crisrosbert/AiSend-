@@ -15,11 +15,16 @@
 // so nothing moves: the label people already read as "whose data is
 // this" simply becomes the control that answers it.
 //
-// ── WHY IT STILL SHOWS WITH ONE BUSINESS ─────────────────────────────
-// Hiding it until there are two would mean the first time anyone sees
-// it is the moment they are already confused about which business they
-// are in. With one it renders as a plain label — which is what the
-// header showed before, so single-business accounts lose nothing.
+// ── WHY IT IS A MENU EVEN WITH ONE BUSINESS ──────────────────────────
+// It used to render as a plain label until a second business existed,
+// on the grounds that a control which does nothing is worse than a
+// label. That stopped being true once businesses could be created:
+// with one business the menu still has something to offer — the way to
+// make the second — and the switcher is where someone looks for it.
+//
+// Hiding it until there are two would also mean the first time anyone
+// sees it is the moment they are already confused about which business
+// they are in.
 
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
@@ -82,19 +87,6 @@ export function BusinessSwitcher({ fallbackName }: BusinessSwitcherProps) {
 
   const many = businesses.length > 1;
 
-  // One business: a label, not a control. No focus stop, no hover, no
-  // chevron — nothing that promises an interaction that does nothing.
-  if (!many) {
-    return (
-      <div className="bsw">
-        <style>{css}</style>
-        <span className="bsw-plain" title={business.name}>
-          {business.name}
-        </span>
-      </div>
-    );
-  }
-
   return (
     <div className="bsw" ref={ref}>
       <style>{css}</style>
@@ -114,7 +106,7 @@ export function BusinessSwitcher({ fallbackName }: BusinessSwitcherProps) {
       {open && (
         <ul className="bsw-menu" role="listbox" aria-label="Switch business">
           <li className="bsw-heading" role="presentation">
-            Switch business
+            {many ? "Switch business" : "Business"}
           </li>
 
           {businesses.map((b) => (
@@ -138,7 +130,7 @@ export function BusinessSwitcher({ fallbackName }: BusinessSwitcherProps) {
           <li className="bsw-sep" role="presentation" />
 
           <li>
-            <a className="bsw-item bsw-add" href="/settings#businesses">
+            <a className="bsw-item bsw-add" href="/settings?tab=businesses">
               <Plus size={13} /> Add a business
             </a>
           </li>

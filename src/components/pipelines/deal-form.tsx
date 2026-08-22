@@ -30,6 +30,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useBusiness } from "@/hooks/use-business";
 
 interface DealFormProps {
   open: boolean;
@@ -51,6 +52,7 @@ export function DealForm({
   onSaved,
 }: DealFormProps) {
   const supabase = createClient();
+  const { businessId } = useBusiness();
 
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
@@ -105,10 +107,13 @@ export function DealForm({
   // Load supporting data once the sheet is open
   useEffect(() => {
     if (!open) return;
+    // The picker lists this business's contacts. Waiting avoids
+    // offering a contact the deal cannot legitimately be linked to.
+    if (!businessId) return;
     let cancelled = false;
     (async () => {
       const [c, p] = await Promise.all([
-        supabase.from("contacts").select("*").order("name"),
+        supabase.from("contacts").select("*").eq("business_id", businessId).order("name"),
         supabase.from("profiles").select("*").order("full_name"),
       ]);
       if (cancelled) return;
@@ -118,7 +123,7 @@ export function DealForm({
     return () => {
       cancelled = true;
     };
-  }, [open, supabase]);
+  }, [open, supabase, businessId]);
 
   // Fetch linked conversation for the selected contact (newest open one).
   // Clearing on no-selection is sync with prop state; the populated

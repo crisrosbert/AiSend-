@@ -15,6 +15,7 @@ import {
   Upload, Plus, Bot, ArrowLeft, Save, Check,
 } from "lucide-react";
 import { businessIdForAgent } from "@/lib/business/parent";
+import { useBusiness } from "@/hooks/use-business";
 
 interface Agent { id: string; name: string; media_enabled: boolean }
 interface MediaItem {
@@ -32,6 +33,7 @@ export default function MediaLibraryPage() {
   const supabase = createClient();
   const router = useRouter();
   const [userId, setUserId] = useState("");
+  const { businessId, loading: businessLoading } = useBusiness();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>("");
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -62,16 +64,25 @@ export default function MediaLibraryPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
     setUserId(user.id);
+
+    if (businessLoading) return;
+    if (!businessId) { setAgents([]); setLoading(false); return; }
+
     const { data } = await supabase
       .from("agents")
       .select("id, name, media_enabled")
       .eq("tenant_id", user.id)
+      .eq("business_id", businessId)
       .order("name");
     const list = data || [];
     setAgents(list);
     if (list.length && !selectedAgent) setSelectedAgent(list[0].id);
     setLoading(false);
-  }, [supabase, selectedAgent]);
+  }, [supabase, selectedAgent, businessId, businessLoading]);
+
+  // agent_media is deliberately NOT filtered by business below: it is
+  // already scoped by agent_id, and that agent came from the scoped
+  // list above. Filtering twice would only add a way to get it wrong.
 
   const loadMedia = useCallback(async (agentId: string) => {
     if (!agentId) return;

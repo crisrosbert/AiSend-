@@ -9,6 +9,7 @@ import {
   User, Filter, Clock, ChevronRight,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useBusiness } from "@/hooks/use-business";
 
 const PAGE_SIZE = 25;
 
@@ -81,6 +82,7 @@ function one<T>(rel: MaybeArray<T>): T | null {
 
 export default function RecentPage() {
   const supabase = createClient();
+  const { businessId, loading: businessLoading } = useBusiness();
   const [rows, setRows] = useState<RecentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -130,6 +132,7 @@ export default function RecentPage() {
           automations ( name )
         `)
         .eq("user_id", user.id)
+        .eq("business_id", businessId)
         .not("contact_id", "is", null)
         .order("created_at", { ascending: false })
         .limit(200);
@@ -210,7 +213,7 @@ export default function RecentPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, businessId, businessLoading]);
 
   useEffect(() => { load(); }, [load]);
 

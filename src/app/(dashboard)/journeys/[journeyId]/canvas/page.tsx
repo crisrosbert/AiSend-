@@ -18,6 +18,7 @@ import {
   Tag, Loader2, Power, PowerOff, X, Brain, Settings as SettingsIcon, History,
 } from "lucide-react";
 import { NODE_CATALOG, type Journey, type JourneyStatus, type NodeType, type Trigger } from "@/types/journey";
+import { useScopedBusinessId } from "@/hooks/use-business";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   MessageSquare, Image: ImageIcon, List: ListIcon, BookOpen, Package, Boxes, FileText,
@@ -113,6 +114,10 @@ function CanvasInner() {
   const router = useRouter();
   const supabase = createClient();
   const journeyId = params.journeyId;
+  // Only used for the temp_ path below, which creates a brand-new
+  // journey — the one case where the switcher's selection is the right
+  // answer rather than the parent row's.
+  const businessId = useScopedBusinessId();
 
   const [journey, setJourney] = useState<Journey | null>(null);
   const [loading, setLoading] = useState(true);
@@ -221,7 +226,7 @@ function CanvasInner() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { toast.error("Sign in required"); return; }
         const { data, error } = await supabase.from("journeys").insert({
-          user_id: user.id, name: journey.name, status: journey.status,
+          user_id: user.id, business_id: businessId, name: journey.name, status: journey.status,
           trigger: journey.trigger, nodes: cleanNodes, edges: cleanEdges,
         }).select().single();
         if (error || !data) { toast.error("Save failed"); return; }
@@ -278,33 +283,41 @@ function CanvasInner() {
 
     const matchedKey = findClosestKeyword(rawInput.toLowerCase(), registeredKeywords);
 
-    // If a keyword mismatch happens, execute the live Gemini autopilot engine automatically
+    // No keyword matched — let the model answer, the way a live agent
+    // would when no flow fires.
+    //
+    // ── WHY THIS GOES THROUGH OUR OWN API ──────────────────────────
+    // This called the provider straight from the browser with the API
+    // key written into the source. This file begins with "use client",
+    // so that key was compiled into the JavaScript bundle and served to
+    // every visitor who opened this page — readable in view-source,
+    // usable by anyone, and billed to us.
+    //
+    // A key cannot be hidden in client code. It has to live on the
+    // server, which is what /api/ai/respond is for: it authenticates
+    // the caller and follows LLM_PROVIDER like the rest of the app.
     if (!matchedKey) {
       setMockChatHistory((prev) => [...prev, { sender: "bot", text: "🧠 [AI Autopilot]: Processing context and query...", isSystem: true }]);
 
       try {
-        const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyDKT3yeyEPw5YXXoY4l-eVoLbgtKHUVwGo", {
+        const response = await fetch("/api/ai/respond", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `You are an intelligent, helpful WhatsApp customer support agent for a business dashboard. Answer the following client query politely and completely under 2 sentences: "${rawInput}"`
-              }]
-            }]
-          })
+            prompt: `A customer on WhatsApp asked: "${rawInput}". Answer politely in under two sentences.`,
+          }),
         });
 
         const data = await response.json();
-        const aiReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Message routed successfully.";
+        if (!response.ok) throw new Error(data?.error || "AI request failed");
 
         setMockChatHistory((prev) => [
-          ...prev, 
-          { sender: "bot", text: aiReply.trim() }
+          ...prev,
+          { sender: "bot", text: String(data.reply || "").trim() || "Message routed successfully." },
         ]);
-      } catch (err) {
+      } catch {
         setMockChatHistory((prev) => [
-          ...prev, 
+          ...prev,
           { sender: "bot", text: `📝 System Backup: Thank you for asking about "${rawInput}". Our team has logged this request.` }
         ]);
       }

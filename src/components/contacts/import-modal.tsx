@@ -108,19 +108,28 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
    * up front how many rows are new, rather than failing them at insert time.
    */
   const loadExistingPhones = useCallback(async () => {
+    // Without the business we cannot tell a duplicate from a new
+    // contact, and guessing either way is worse than waiting: guess
+    // "new" and you create duplicates, guess "existing" and you drop
+    // rows the user asked to import.
+    if (!businessId) return;
     const phones = new Set<string>();
     const pageSize = 1000;
     for (let from = 0; from < 100_000; from += pageSize) {
+      // Duplicate detection is per business: the same number can be a
+      // customer of two of your businesses, and importing it into the
+      // second must not be silently skipped as "already exists".
       const { data, error } = await supabase
         .from('contacts')
         .select('phone')
+        .eq('business_id', businessId)
         .range(from, from + pageSize - 1);
       if (error || !data || data.length === 0) break;
       for (const row of data) if (row.phone) phones.add(String(row.phone));
       if (data.length < pageSize) break;
     }
     setExistingPhones(phones);
-  }, [supabase]);
+  }, [supabase, businessId]);
 
   const loadFile = useCallback(async (selected: File, sheetName?: string) => {
     if (selected.size > MAX_FILE_BYTES) {

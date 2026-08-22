@@ -225,6 +225,10 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           config.ads_agent_enabled ?? false,
           config.ads_agent_id ?? null,
           config.whatsapp_agent_id ?? null,
+          // Inbound messages have no signed-in user to ask, so the
+          // business comes from the number the message arrived on.
+          // That row is the only thing that knows.
+          config.business_id ?? null,
         )
       }
     }
@@ -441,19 +445,22 @@ async function processMessage(
   adsAgentEnabled: boolean,
   adsAgentId: string | null,
   whatsappAgentId: string | null,
+  businessId: string | null,
 ) {
   const senderPhone = normalizePhone(message.from)
   const contactName = contact.profile.name
   const contactOutcome = await findOrCreateContact(
     userId,
     senderPhone,
-    contactName
+    contactName,
+    businessId
   )
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact
   const conversation = await findOrCreateConversation(
     userId,
-    contactRecord.id
+    contactRecord.id,
+    businessId
   )
   if (!conversation) return
   if (message.type === 'reaction') {
@@ -703,7 +710,8 @@ interface ContactOutcome {
 async function findOrCreateContact(
   userId: string,
   phone: string,
-  name: string
+  name: string,
+  businessId: string | null
 ): Promise<ContactOutcome | null> {
   const { data: contacts, error: contactsError } = await supabaseAdmin()
     .from('contacts')
@@ -725,7 +733,7 @@ async function findOrCreateContact(
   }
   const { data: newContact, error: createError } = await supabaseAdmin()
     .from('contacts')
-    .insert({ user_id: userId, phone, name: name || phone })
+    .insert({ user_id: userId, phone, name: name || phone, business_id: businessId })
     .select()
     .single()
   if (createError) {
@@ -734,7 +742,11 @@ async function findOrCreateContact(
   }
   return { contact: newContact, wasCreated: true }
 }
-async function findOrCreateConversation(userId: string, contactId: string) {
+async function findOrCreateConversation(
+  userId: string,
+  contactId: string,
+  businessId: string | null
+) {
   const { data: existing, error: findError } = await supabaseAdmin()
     .from('conversations')
     .select('*')
@@ -748,7 +760,7 @@ async function findOrCreateConversation(userId: string, contactId: string) {
   }
   const { data: newConv, error: createError } = await supabaseAdmin()
     .from('conversations')
-    .insert({ user_id: userId, contact_id: contactId })
+    .insert({ user_id: userId, contact_id: contactId, business_id: businessId })
     .select()
     .single()
   if (createError) {

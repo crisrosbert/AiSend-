@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Journey, JourneyStatus, Trigger } from "@/types/journey";
 import { triggerSummary } from "@/types/journey";
-import { useScopedBusinessId } from "@/hooks/use-business";
+import { useBusiness } from "@/hooks/use-business";
 
 type TabValue = "yours" | "blueprints" | "routing" | "test_number";
 
@@ -33,7 +33,7 @@ const DEFAULT_TRIGGER: Trigger = { type: "keyword", keywords: [] };
 export default function JourneysPage() {
   const router = useRouter();
   const supabase = createClient();
-  const businessId = useScopedBusinessId();
+  const { businessId, loading: businessLoading } = useBusiness();
   const [tab, setTab] = useState<TabValue>("yours");
   const [search, setSearch] = useState("");
   const [journeys, setJourneys] = useState<Journey[]>([]);
@@ -53,10 +53,14 @@ export default function JourneysPage() {
       if (!user) { setLoading(false); return; }
 
       // Fetch journeys; gracefully handle missing table.
+      if (businessLoading) return;
+      if (!businessId) { setJourneys([]); setLoading(false); return; }
+
       const { data, error } = await supabase
         .from("journeys")
         .select("*")
         .eq("user_id", user.id)
+        .eq("business_id", businessId)
         .order("updated_at", { ascending: false });
 
       if (error) {
@@ -70,7 +74,7 @@ export default function JourneysPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, businessId, businessLoading]);
 
   useEffect(() => { fetchJourneys(); }, [fetchJourneys]);
 

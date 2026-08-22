@@ -85,7 +85,7 @@ export function Step4ScheduleSend({
     }
 
     calculateReach();
-  }, [audience]);
+  }, [audience, businessId]);
 
   const audienceLabel =
     audience.type === 'all'

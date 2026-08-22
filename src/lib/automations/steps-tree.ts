@@ -21,6 +21,7 @@ export interface BuilderStepInput {
 interface InsertRow {
   id: string
   automation_id: string
+  business_id: string | null
   parent_step_id: string | null
   branch: 'yes' | 'no' | null
   step_type: string
@@ -57,6 +58,16 @@ export async function insertSteps(
   )
   const tree = looksFlat ? seedsToTree(input) : input
 
+  // A step's business is its automation's — there is no other possible
+  // answer — so it is read here rather than threaded through every
+  // caller. A parameter would be one more place to forget.
+  const { data: parent } = await supabaseAdmin()
+    .from('automations')
+    .select('business_id')
+    .eq('id', automationId)
+    .maybeSingle()
+  const businessId: string | null = parent?.business_id ?? null
+
   const rows: InsertRow[] = []
   function walk(
     steps: BuilderStepInput[],
@@ -68,6 +79,7 @@ export async function insertSteps(
       rows.push({
         id,
         automation_id: automationId,
+        business_id: businessId,
         parent_step_id: parentId,
         branch,
         step_type: s.step_type,

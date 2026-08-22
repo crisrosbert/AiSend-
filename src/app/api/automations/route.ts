@@ -16,10 +16,14 @@ export async function GET() {
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await supabase
+  const businessId = await currentBusinessId(supabase, user.id)
+
+  let query = supabase
     .from('automations')
     .select('*')
     .order('created_at', { ascending: false })
+  if (businessId) query = query.eq('business_id', businessId)
+  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ automations: data ?? [] })
 }

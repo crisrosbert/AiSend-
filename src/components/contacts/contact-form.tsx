@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
+import { useScopedBusinessId } from '@/hooks/use-business';
 
 interface ContactFormProps {
   open: boolean;
@@ -35,6 +36,7 @@ export function ContactForm({
 }: ContactFormProps) {
   const supabase = createClient();
   const isEdit = !!contact;
+  const businessId = useScopedBusinessId();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -111,6 +113,7 @@ export function ContactForm({
           .from('contacts')
           .insert({
             user_id: user.id,
+            business_id: businessId,
             name: name.trim() || null,
             phone: phone.trim(),
             email: email.trim() || null,

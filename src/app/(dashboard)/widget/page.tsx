@@ -15,6 +15,7 @@ import {
   Globe, Loader2, Save, Copy, Check, MessageCircle, Clock, Phone,
   Bot, Power, Code2, ExternalLink, Sparkles, Send, UserRound,
 } from "lucide-react";
+import { useScopedBusinessId } from "@/hooks/use-business";
 
 interface WidgetConfig {
   bot_name: string;
@@ -44,6 +45,9 @@ const COLOR_PRESETS = [
 export default function WidgetSettingsPage() {
   const supabase = createClient();
   const [userId, setUserId] = useState("");
+  // This row is the tenant's org-wide widget config — it is being
+  // created here, so the selected business is the right owner.
+  const businessId = useScopedBusinessId();
   const [config, setConfig] = useState<WidgetConfig>(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -111,7 +115,7 @@ export default function WidgetSettingsPage() {
         ? await supabase.from("widget_configs").update(payload).eq("id", existing.id)
         : await supabase
             .from("widget_configs")
-            .insert({ ...payload, org_user_id: userId, agent_id: null });
+            .insert({ ...payload, org_user_id: userId, agent_id: null, business_id: businessId });
       if (error) throw error;
 
       toast.success("Widget settings saved");

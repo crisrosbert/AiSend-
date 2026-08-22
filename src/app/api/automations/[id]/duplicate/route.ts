@@ -1,112 +1,77 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
-import { currentBusinessId } from '@/lib/business/server'
-import { getTemplate } from '@/lib/automations/templates'
-import { insertSteps, type BuilderStepInput } from '@/lib/automations/steps-tree'
-import {
-  validateStepsForActivation,
-  validateTriggerForActivation,
-} from '@/lib/automations/validate'
 
-export async function GET() {
+export async function POST(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data, error } = await supabase
-    .from('automations')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ automations: data ?? [] })
-}
-
-export async function POST(request: Request) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const body = await request.json().catch(() => null)
-  if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-
-  const { name, description, trigger_type, trigger_config, is_active, steps, template } = body
-
-  let effectiveSteps: BuilderStepInput[] | undefined = steps
-  let effectiveName = name
-  let effectiveDescription = description
-  let effectiveTriggerType = trigger_type
-  let effectiveTriggerConfig = trigger_config
-
-  if (template && (!steps || steps.length === 0)) {
-    const t = getTemplate(template)
-    if (t) {
-      effectiveName = effectiveName ?? t.name
-      effectiveDescription = effectiveDescription ?? t.description
-      effectiveTriggerType = effectiveTriggerType ?? t.trigger_type
-      effectiveTriggerConfig = effectiveTriggerConfig ?? t.trigger_config
-      effectiveSteps = t.steps as unknown as BuilderStepInput[]
-    }
-  }
-
-  if (!effectiveName || !effectiveTriggerType) {
-    return NextResponse.json(
-      { error: 'name and trigger_type are required' },
-      { status: 400 },
-    )
-  }
-
-  // Block activation of a clearly broken automation up-front instead of
-  // letting every trigger silently produce a failed log row. Drafts
-  // (is_active=false) are allowed to be incomplete so users can save
-  // progress mid-build.
-  if (is_active) {
-    const issues = [
-      ...validateTriggerForActivation(effectiveTriggerType, effectiveTriggerConfig ?? {}),
-      ...validateStepsForActivation(
-        (effectiveSteps ?? []) as unknown as { step_type: string; step_config: Record<string, unknown> }[],
-      ),
-    ]
-    if (issues.length > 0) {
-      return NextResponse.json(
-        { error: 'Cannot activate automation with invalid configuration', issues },
-        { status: 400 },
-      )
-    }
-  }
 
   const admin = supabaseAdmin()
-  const { data: automation, error: insertErr } = await admin
+  const { data: original, error: origErr } = await admin
+    .from('automations')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (origErr) return NextResponse.json({ error: origErr.message }, { status: 500 })
+  if (!original) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const { data: copy, error: copyErr } = await admin
     .from('automations')
     .insert({
       user_id: user.id,
-      // Whichever business the switcher has selected, re-derived
-      // server-side from the cookie rather than trusted from the body.
-      business_id: await currentBusinessId(supabase, user.id, request),
-      name: effectiveName,
-      description: effectiveDescription ?? null,
-      trigger_type: effectiveTriggerType,
-      trigger_config: effectiveTriggerConfig ?? {},
-      is_active: !!is_active,
+      // The original's business, not the currently selected one. A copy
+      // that lands in a different business than the thing it was copied
+      // from is a surprise nobody asked for.
+      business_id: original.business_id ?? null,
+      name: `${original.name} (Copy)`,
+      description: original.description,
+      trigger_type: original.trigger_type,
+      trigger_config: original.trigger_config,
+      is_active: false,
     })
     .select()
     .single()
-
-  if (insertErr || !automation) {
-    return NextResponse.json(
-      { error: insertErr?.message ?? 'insert failed' },
-      { status: 500 },
-    )
+  if (copyErr || !copy) {
+    return NextResponse.json({ error: copyErr?.message ?? 'copy failed' }, { status: 500 })
   }
 
-  if (effectiveSteps && effectiveSteps.length > 0) {
-    const err = await insertSteps(automation.id, effectiveSteps)
-    if (err) return NextResponse.json({ error: err }, { status: 500 })
+  const { data: steps } = await admin
+    .from('automation_steps')
+    .select('id, parent_step_id, branch, step_type, step_config, position')
+    .eq('automation_id', id)
+    .order('position', { ascending: true })
+
+  if (steps && steps.length > 0) {
+    // Re-map parent_step_id: build old→new id map first so the second
+    // pass inserts rows with correct parent references.
+    const idMap = new Map<string, string>()
+    const uid = () =>
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36)
+    for (const row of steps) idMap.set(row.id as string, uid())
+
+    const rows = steps.map((row) => ({
+      id: idMap.get(row.id as string)!,
+      automation_id: copy.id,
+      business_id: copy.business_id ?? null,
+      parent_step_id: row.parent_step_id ? idMap.get(row.parent_step_id as string) : null,
+      branch: row.branch,
+      step_type: row.step_type,
+      step_config: row.step_config,
+      position: row.position,
+    }))
+    const { error: insErr } = await admin.from('automation_steps').insert(rows)
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
   }
 
-  return NextResponse.json({ automation }, { status: 201 })
+  return NextResponse.json({ automation: copy }, { status: 201 })
 }

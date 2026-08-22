@@ -23,6 +23,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Download, Loader2, Users, Globe, MessageSquare, ShieldCheck } from "lucide-react";
 import { toCsv, csvFilename, downloadCsv, type CsvColumn } from "@/lib/export/csv";
+import { useBusiness } from "@/hooks/use-business";
 
 const PAGE = 1000;
 
@@ -33,6 +34,7 @@ type Row = Record<string, any>;
 
 export function DataExport() {
   const supabase = createClient();
+  const { businessId } = useBusiness();
   const [busy, setBusy] = useState<Job>(null);
   const [progress, setProgress] = useState(0);
 
@@ -110,12 +112,19 @@ export function DataExport() {
     try {
       const userId = await currentUserId();
       if (!userId) { toast.error("Please sign in again"); return; }
+      // Refuse rather than export an empty file. A download that
+      // silently contains nothing looks like "you have no leads".
+      if (!businessId) { toast.error("Still loading your business — try again in a moment"); return; }
 
       const rows = await fetchAll((from, to) =>
         supabase
           .from("leads")
           .select("id, first_name, last_name, phone, email, company_name, source, status, extra, created_at")
           .eq("tenant_id", userId)
+          // Exports the business you are looking at, not every business
+          // you own. A file silently containing another business's
+          // contact details is the kind of thing that gets sent on.
+          .eq("business_id", businessId)
           .order("created_at", { ascending: true })
           .range(from, to),
       );

@@ -150,6 +150,9 @@ async function executeAutomation(automation: Automation, input: DispatchInput) {
     .insert({
       automation_id: automation.id,
       user_id: automation.user_id,
+      // Inherited from the automation. A log filed under the wrong
+      // business is how "why did this fire?" becomes unanswerable.
+      business_id: automation.business_id ?? null,
       contact_id: input.contactId ?? null,
       trigger_event: input.triggerType,
       steps_executed: [],
@@ -241,6 +244,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
       await db.from('automation_pending_executions').insert({
         automation_id: args.automation.id,
         user_id: args.automation.user_id,
+        business_id: args.automation.business_id ?? null,
         contact_id: args.contactId,
         log_id: args.logId,
         parent_step_id: args.parentStepId,

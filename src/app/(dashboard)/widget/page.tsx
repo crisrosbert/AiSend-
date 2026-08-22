@@ -65,10 +65,16 @@ export default function WidgetSettingsPage() {
       if (!user) { setLoading(false); return; }
       setUserId(user.id);
 
+      // Each business gets its own org-wide widget config. Without this
+      // filter a second business would load — and then overwrite — the
+      // first one's greeting, colours and allowed domains.
+      if (!businessId) { setLoading(false); return; }
+
       const { data } = await supabase
         .from("widget_configs")
         .select("*")
         .eq("org_user_id", user.id)
+        .eq("business_id", businessId)
         .is("agent_id", null)
         .maybeSingle();
 
@@ -86,7 +92,7 @@ export default function WidgetSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, businessId]);
 
   useEffect(() => { load(); }, [load]);
 

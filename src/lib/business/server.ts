@@ -15,6 +15,10 @@ import {
   type BusinessRef,
 } from './resolve'
 
+// Re-exported so server callers have one import for business questions.
+// The rule itself lives in parent.ts because it is not server-only.
+export { businessIdForAgent, businessIdForJourney } from './parent'
+
 /** Every business this user owns, default first. */
 export async function listBusinesses(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

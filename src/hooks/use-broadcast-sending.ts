@@ -125,7 +125,15 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     let contacts: Contact[] = [];
 
     if (audience.type === 'all') {
-      const { data, error } = await supabase.from('contacts').select('*');
+      // "All" means all of THIS business. The estimate on the audience
+      // step is scoped the same way, and the two must agree — a send
+      // that reaches more people than the preview said is the worst
+      // direction for this particular mistake.
+      if (!businessId) throw new Error('Still loading your business — try again in a moment');
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('business_id', businessId);
       if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
       contacts = data ?? [];
     } else if (

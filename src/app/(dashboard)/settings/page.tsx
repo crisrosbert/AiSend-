@@ -2,9 +2,10 @@
 
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Settings, MessageSquare, Tag, User, Zap, Download } from 'lucide-react';
+import { Settings, MessageSquare, Tag, User, Zap, Download, Building2 } from 'lucide-react';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { BusinessProfile } from '@/components/settings/business-profile';
+import { BusinessManager } from '@/components/settings/business-manager';
 import { ConnectWhatsApp } from '@/components/settings/connect-whatsapp';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { TagManager } from '@/components/settings/tag-manager';
@@ -14,11 +15,12 @@ import { SessionsCard } from '@/components/settings/sessions-card';
 import { DataExport } from '@/components/settings/data-export';
 import CannedRepliesPage from './canned-replies/page';
 
-const TAB_VALUES = ['profile', 'whatsapp', 'templates', 'tags', 'canned-replies', 'export'] as const;
+const TAB_VALUES = ['profile', 'businesses', 'whatsapp', 'templates', 'tags', 'canned-replies', 'export'] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
 const TABS: { value: TabValue; label: string; icon: typeof User }[] = [
   { value: 'profile',        label: 'Profile',        icon: User },
+  { value: 'businesses',     label: 'Businesses',     icon: Building2 },
   { value: 'whatsapp',       label: 'WhatsApp',       icon: Settings },
   { value: 'templates',      label: 'Templates',      icon: MessageSquare },
   { value: 'tags',           label: 'Tags',           icon: Tag },
@@ -81,6 +83,10 @@ function SettingsInner() {
           <PasswordForm />
           <SessionsCard />
         </div>
+      </div>
+
+      <div className={tab === 'businesses' ? 'block' : 'hidden'}>
+        <BusinessManager />
       </div>
 
       <div className={tab === 'whatsapp' ? 'block' : 'hidden'}>

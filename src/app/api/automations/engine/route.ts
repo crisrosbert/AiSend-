@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { currentBusinessId } from '@/lib/business/server'
 import type { AutomationTriggerType } from '@/types'
 
 /**
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
 
   await runAutomationsForTrigger({
     userId: user.id,
+    businessId: await currentBusinessId(supabase, user.id, request),
     triggerType: body.trigger_type as AutomationTriggerType,
     contactId: body.contact_id ?? null,
     context: body.context ?? {},

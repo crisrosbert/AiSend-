@@ -23,6 +23,7 @@ import {
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
+import { useBusiness } from '@/hooks/use-business';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
@@ -78,6 +79,7 @@ const OUTLINE_TRIGGER =
 
 export default function ContactsPage() {
   const supabase = createClient();
+  const { businessId, loading: businessLoading } = useBusiness();
 
   const [contacts, setContacts] = useState<ContactWithTags[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -128,9 +130,16 @@ export default function ContactsPage() {
   const fetchContacts = useCallback(async () => {
     setLoading(true);
 
+    // Wait for the business rather than listing the account's contacts
+    // and correcting a moment later. On a paginated list the correction
+    // also resets the page count under the reader.
+    if (businessLoading) return;
+    if (!businessId) { setContacts([]); setTotalCount(0); setLoading(false); return; }
+
     let query = supabase
       .from('contacts')
       .select('*, contact_tags(tag_id)', { count: 'exact' })
+      .eq('business_id', businessId)
       .order('created_at', { ascending: false })
       .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -148,6 +157,7 @@ export default function ContactsPage() {
     const { count: ooCount } = await supabase
       .from('contacts')
       .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
       .not('opted_out_at', 'is', null);
     setOptedOutCount(ooCount ?? 0);
 
@@ -159,7 +169,7 @@ export default function ContactsPage() {
     })));
     setTotalCount(count ?? 0);
     setLoading(false);
-  }, [supabase, page, pageSize, debouncedSearch, optOutFilter, tagsMap]);
+  }, [supabase, page, pageSize, debouncedSearch, optOutFilter, tagsMap, businessId, businessLoading]);
 
   useEffect(() => { fetchTags(); }, [fetchTags]);
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
@@ -251,9 +261,12 @@ export default function ContactsPage() {
   async function handleExport() {
     setExporting(true);
     try {
+      if (!businessId) { toast.error('Still loading your business — try again in a moment'); return; }
+
       let query = supabase
         .from('contacts')
         .select('phone, name, email, company, opted_out_at, created_at')
+        .eq('business_id', businessId)
         .order('created_at', { ascending: false });
 
       if (optOutFilter === 'active') query = query.is('opted_out_at', null);

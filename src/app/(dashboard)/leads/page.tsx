@@ -19,6 +19,7 @@ import {
   CheckCircle2, AlertCircle, ChevronRight, X, Bot, CalendarCheck,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
+import { useBusiness } from "@/hooks/use-business";
 
 interface LeadConversation {
   id: string;
@@ -48,6 +49,7 @@ interface Appointment {
 
 export default function LeadsPage() {
   const supabase = createClient();
+  const { businessId, loading: businessLoading } = useBusiness();
   const [leads, setLeads] = useState<LeadConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -64,6 +66,8 @@ export default function LeadsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLeads([]); setLoading(false); return; }
+      if (businessLoading) return;
+      if (!businessId) { setLeads([]); setLoading(false); return; }
 
       const { data, error } = await supabase
         .from("conversations")
@@ -71,6 +75,7 @@ export default function LeadsPage() {
                  last_message_text, last_message_at, created_at,
                  contact:contacts(name, phone)`)
         .eq("user_id", user.id)
+        .eq("business_id", businessId)
         .eq("channel", "website")
         .order("last_message_at", { ascending: false, nullsFirst: false })
         .limit(100);

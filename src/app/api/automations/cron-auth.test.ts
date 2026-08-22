@@ -68,23 +68,52 @@ describe('automations cron auth', () => {
   })
 })
 
-describe('the queue is actually scheduled', () => {
+describe('vercel.json only asks for schedules the plan can run', () => {
   const vercel = JSON.parse(
     readFileSync(join(process.cwd(), 'vercel.json'), 'utf8'),
   ) as { crons?: Array<{ path: string; schedule: string }> }
 
-  it('lists /api/automations/cron', () => {
-    // Correct auth on a route nobody calls is still a dead feature.
-    const paths = (vercel.crons ?? []).map((c) => c.path)
-    expect(paths).toContain('/api/automations/cron')
+  // ── WHY THIS TEST REPLACED "the queue is actually scheduled" ────────
+  //
+  // It used to assert that /api/automations/cron appeared here on a
+  // */15 schedule. That assertion was correct about what the feature
+  // needs and wrong about what the account can do: Vercel's Hobby plan
+  // rejects any cron that runs more than once a day, and it rejects the
+  // whole DEPLOYMENT, not just the cron.
+  //
+  // The result was a silent outage. Every push after that entry landed
+  // produced no deployment at all — no error in the deployments list,
+  // because no deployment was ever created — while CI stayed green and
+  // this test stayed green. Production served day-old code for a day
+  // before anyone noticed.
+  //
+  // So the invariant worth guarding is the opposite one: nothing in
+  // this file may ask for a schedule the plan will refuse. A feature
+  // that wants a faster cadence has to be driven from outside (an
+  // external pinger against the authenticated route above) or wait for
+  // a plan that allows it.
+  //
+  // If you upgrade to Pro, relax DAILY_ONLY and put the */15 back.
+
+  const DAILY_ONLY = /^(\d+|\*) (\d+) \* \* \*$/
+
+  it('has no cron that runs more than once a day', () => {
+    for (const job of vercel.crons ?? []) {
+      expect(
+        DAILY_ONLY.test(job.schedule),
+        `${job.path} uses "${job.schedule}", which Hobby rejects — and a ` +
+          `rejected cron blocks every deployment, not just this job`,
+      ).toBe(true)
+    }
   })
 
-  it('runs it often enough for a delay to feel like a delay', () => {
-    // A "wait 30 minutes" step drained once a day is not a delay, it is
-    // an outage with a schedule. Anything hourly or faster is fine.
-    const job = (vercel.crons ?? []).find((c) => c.path === '/api/automations/cron')
-    expect(job).toBeDefined()
-    expect(job!.schedule).toMatch(/^\*\/\d+ \* \* \* \*$|^0 \* \* \* \*$/)
+  // The automations queue therefore has no scheduler of its own right
+  // now. That is a real gap, recorded here rather than hidden: a `wait`
+  // step will not resume until something calls the route. The route is
+  // authenticated (tested above) precisely so an external pinger can.
+  it('documents that the automations queue is externally driven', () => {
+    const paths = (vercel.crons ?? []).map((c) => c.path)
+    expect(paths).not.toContain('/api/automations/cron')
   })
 
   it('keeps every other cron that was already scheduled', () => {

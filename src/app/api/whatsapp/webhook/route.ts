@@ -627,6 +627,7 @@ async function processMessage(
     automationTriggers.map((triggerType) =>
       runAutomationsForTrigger({
         userId,
+        businessId,
         triggerType,
         contactId: contactRecord.id,
         suppressReplies: journeyReplied || agentReplied,

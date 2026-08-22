@@ -88,7 +88,7 @@ export default function DashboardPage() {
     const db = createClient();
     void loadMetrics(db, businessId).then(setMetrics).catch(console.error).finally(() => setLoading(false));
     void loadActivity(db, 6, businessId).then(setActivity).catch(console.error);
-    void loadConversationsSeries(db, 7).then(setSeries).catch(console.error);
+    void loadConversationsSeries(db, 7, businessId).then(setSeries).catch(console.error);
     // Fetch THIS user's WhatsApp config. The API route scopes by user_id,
     // so a new tenant with no config correctly gets { connected: false }.
     void fetch("/api/whatsapp/config")

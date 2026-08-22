@@ -36,6 +36,15 @@ function db() {
 export interface Agent {
   id: string
   tenant_id: string
+  /**
+   * Which business this agent belongs to. Null on rows created before
+   * migration 030, and on anything written while business_id is still
+   * nullable — so every consumer must handle null rather than assume
+   * it. Everything the agent writes (leads, bookings, knowledge) is
+   * filed under this, not under whatever config happened to route the
+   * request here.
+   */
+  business_id: string | null
   journey_id: string | null
   name: string
   agent_type: string
@@ -242,6 +251,7 @@ export async function submitLeadForm(
 ): Promise<string> {
   return saveLead({
     tenantId: agent.tenant_id,
+    businessId: agent.business_id ?? null,
     agentId: agent.id,
     conversationId,
     firstName: values.first_name,

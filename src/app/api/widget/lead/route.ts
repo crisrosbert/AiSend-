@@ -15,6 +15,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { allowlistFromConfig, originAllowed, corsHeaders } from '@/lib/widget/origin'
+import { businessIdForAgent } from '@/lib/business/server'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -102,8 +103,15 @@ export async function POST(req: Request) {
 
     const conversationId: string | null = session?.conversation_id ?? null
 
+    // The agent's business, falling back to the config's. A lead filed
+    // under the wrong business is worse than a missing one: it shows up
+    // in a list someone trusts, and nothing about it looks wrong.
+    const businessId =
+      (await businessIdForAgent(db(), config.agent_id)) ?? config.business_id ?? null
+
     const record = {
       tenant_id: config.org_user_id,
+      business_id: businessId,
       agent_id: config.agent_id ?? null,
       conversation_id: conversationId,
       first_name: clean(fields.first_name, 80),

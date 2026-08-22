@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { FileEdit, Plus, Radio, Trash2, Play } from 'lucide-react';
+import { useBusiness } from '@/hooks/use-business';
 
 function RateCell({
   value,
@@ -46,13 +47,18 @@ export default function BroadcastsPage() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const { businessId, loading: businessLoading } = useBusiness();
 
   const fetchBroadcasts = useCallback(async () => {
     setLoading(true);
     try {
+      if (businessLoading) return;
+      if (!businessId) { setDrafts([]); setBroadcasts([]); setLoading(false); return; }
+
       const { data, error } = await supabase
         .from('broadcasts')
         .select('*')
+        .eq('business_id', businessId)
         .order('created_at', { ascending: false });
       if (error) throw error;
       const all = data ?? [];
@@ -63,7 +69,7 @@ export default function BroadcastsPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, businessId, businessLoading]);
 
   useEffect(() => { fetchBroadcasts(); }, [fetchBroadcasts]);
 

@@ -9,6 +9,8 @@ export type JourneyStatus = "draft" | "active" | "paused";
 export interface Journey {
   id: string;
   user_id: string;
+  /** Nullable while the business boundary rolls out — see migration 030. */
+  business_id?: string | null;
   name: string;
   status: JourneyStatus;
   created_by?: string | null;

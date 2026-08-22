@@ -13,6 +13,7 @@ import {
   CheckCircle2, XCircle, CalendarClock, MessageSquare,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { useBusiness } from "@/hooks/use-business";
 
 interface Appointment {
   id: string;
@@ -36,6 +37,7 @@ const STATUS_META: Record<string, { label: string; class: string }> = {
 
 export default function BookingsPage() {
   const supabase = createClient();
+  const { businessId, loading: businessLoading } = useBusiness();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -47,10 +49,14 @@ export default function BookingsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setAppointments([]); setLoading(false); return; }
 
+      if (businessLoading) return;
+      if (!businessId) { setAppointments([]); setLoading(false); return; }
+
       const { data, error } = await supabase
         .from("agent_appointments")
         .select("*")
         .eq("tenant_id", user.id)
+        .eq("business_id", businessId)
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -62,7 +68,7 @@ export default function BookingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, businessId, businessLoading]);
 
   useEffect(() => { load(); }, [load]);
 

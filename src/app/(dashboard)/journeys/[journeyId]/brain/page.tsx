@@ -9,6 +9,7 @@ import {
   Trash2, CheckCircle2, AlertCircle, X, Upload, BookOpen,
 } from "lucide-react";
 import type { BrainSource, BrainSourceType, BrainSourceStatus } from "@/types/journey";
+import { businessIdForJourney } from "@/lib/business/parent";
 
 type AddType = BrainSourceType | null;
 
@@ -128,9 +129,12 @@ export default function BrainPage() {
         };
       }
 
+      // The journey's business, not the switcher's: this page is reached
+      // by a URL carrying the journey id, and that journey may belong to
+      // a business other than the one currently selected.
       const { data, error } = await supabase
         .from("brain_sources")
-        .insert(payload)
+        .insert({ ...payload, business_id: await businessIdForJourney(supabase, journeyId) })
         .select().single();
 
       if (error || !data) {

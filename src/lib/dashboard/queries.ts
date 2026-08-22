@@ -39,14 +39,11 @@ type DB = SupabaseClient
  * result. Callers that must not show unscoped numbers should wait for
  * the id instead of passing null.
  *
- * ── WHAT THIS CANNOT SCOPE ───────────────────────────────────────────
- * `messages` and `deals` have no business_id — migration 030 tagged the
- * sixteen tables that had a clear owner column, and these two hang off
- * conversations and contacts instead. So on an account with more than
- * one business the conversation and contact numbers below are per
- * business while the message and deal numbers are account-wide. With
- * one business they agree, which is every account today. Tagging those
- * two tables is the remaining piece.
+ * Every table this file reads now carries business_id: conversations
+ * and contacts from migration 030, messages, deals and broadcasts from
+ * 031. That matters because a dashboard is the one screen where two
+ * numbers meaning different things is worse than either number being
+ * missing — nobody reads a dashboard twice.
  */
 function scoped<T>(query: T, businessId?: string | null): T {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,18 +102,24 @@ export async function loadMetrics(
         .lt('created_at', todayStart),
       businessId,
     ),
-    db.from('deals').select('value, status').eq('status', 'open'),
-    db
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('sender_type', 'agent')
-      .gte('created_at', todayStart),
-    db
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('sender_type', 'agent')
-      .gte('created_at', yesterdayStart)
-      .lt('created_at', todayStart),
+    scoped(db.from('deals').select('value, status').eq('status', 'open'), businessId),
+    scoped(
+      db
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('sender_type', 'agent')
+        .gte('created_at', todayStart),
+      businessId,
+    ),
+    scoped(
+      db
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('sender_type', 'agent')
+        .gte('created_at', yesterdayStart)
+        .lt('created_at', todayStart),
+      businessId,
+    ),
   ])
 
   const openDealsRows = (openDeals.data ?? []) as { value: number | null }[]
@@ -148,13 +151,17 @@ export async function loadMetrics(
 export async function loadConversationsSeries(
   db: DB,
   rangeDays: number,
+  businessId?: string | null,
 ): Promise<ConversationsSeriesPoint[]> {
   const start = daysAgoStart(rangeDays - 1).toISOString()
-  const { data, error } = await db
-    .from('messages')
-    .select('created_at, sender_type')
-    .gte('created_at', start)
-    .order('created_at', { ascending: true })
+  const { data, error } = await scoped(
+    db
+      .from('messages')
+      .select('created_at, sender_type')
+      .gte('created_at', start)
+      .order('created_at', { ascending: true }),
+    businessId,
+  )
   if (error) throw error
 
   const keys = lastNDayKeys(rangeDays)
@@ -174,10 +181,19 @@ export async function loadConversationsSeries(
 
 // --- 3. Pipeline donut -------------------------------------------------
 
-export async function loadPipelineDonut(db: DB): Promise<PipelineDonutData> {
+export async function loadPipelineDonut(
+  db: DB,
+  businessId?: string | null,
+): Promise<PipelineDonutData> {
   const [stagesRes, dealsRes] = await Promise.all([
-    db.from('pipeline_stages').select('id, name, color, pipeline_id, position').order('position'),
-    db.from('deals').select('stage_id, value, status').eq('status', 'open'),
+    // Stages are the shape of the pipeline, deals are the contents.
+    // Both are scoped: a stage belonging to another business would show
+    // as an empty column that nothing can ever be dragged into.
+    scoped(
+      db.from('pipeline_stages').select('id, name, color, pipeline_id, position').order('position'),
+      businessId,
+    ),
+    scoped(db.from('deals').select('stage_id, value, status').eq('status', 'open'), businessId),
   ])
 
   const stages =
@@ -213,19 +229,25 @@ export async function loadPipelineDonut(db: DB): Promise<PipelineDonutData> {
 
 // --- 4. Response time by day of week ----------------------------------
 
-export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
+export async function loadResponseTime(
+  db: DB,
+  businessId?: string | null,
+): Promise<ResponseTimeSummary> {
   // Pull the last 14 days of messages in one shot, then walk per
   // conversation to find each "first inbound" → "first subsequent
   // outbound" pair. 14 days gives us both "this week" + "last week"
   // with enough overlap if the user opens the dashboard late on a
   // Monday.
   const fourteenDaysAgo = daysAgoStart(13).toISOString()
-  const { data, error } = await db
-    .from('messages')
-    .select('conversation_id, sender_type, created_at')
-    .gte('created_at', fourteenDaysAgo)
-    .order('conversation_id', { ascending: true })
-    .order('created_at', { ascending: true })
+  const { data, error } = await scoped(
+    db
+      .from('messages')
+      .select('conversation_id, sender_type, created_at')
+      .gte('created_at', fourteenDaysAgo)
+      .order('conversation_id', { ascending: true })
+      .order('created_at', { ascending: true }),
+    businessId,
+  )
   if (error) throw error
 
   const rows = (data ?? []) as {
@@ -318,12 +340,15 @@ export async function loadActivity(
   // then interleave by timestamp. The individual per-table limits
   // keep the payload small; the final limit is enforced after sort.
   const [msgs, contacts, deals, broadcasts, autoLogs] = await Promise.all([
-    db
-      .from('messages')
-      .select('id, content_text, sender_type, created_at, conversation_id, conversations(contact_id, contacts(name, phone))')
-      .eq('sender_type', 'customer')
-      .order('created_at', { ascending: false })
-      .limit(10),
+    scoped(
+      db
+        .from('messages')
+        .select('id, content_text, sender_type, created_at, conversation_id, conversations(contact_id, contacts(name, phone))')
+        .eq('sender_type', 'customer')
+        .order('created_at', { ascending: false })
+        .limit(10),
+      businessId,
+    ),
     scoped(
       db
         .from('contacts')
@@ -332,21 +357,30 @@ export async function loadActivity(
         .limit(10),
       businessId,
     ),
-    db
-      .from('deals')
-      .select('id, title, updated_at, stage:pipeline_stages(name)')
-      .order('updated_at', { ascending: false })
-      .limit(10),
-    db
-      .from('broadcasts')
-      .select('id, name, status, total_recipients, created_at')
-      .order('created_at', { ascending: false })
-      .limit(5),
-    db
-      .from('automation_logs')
-      .select('id, trigger_event, status, created_at, automation:automations(name), contact:contacts(name, phone)')
-      .order('created_at', { ascending: false })
-      .limit(10),
+    scoped(
+      db
+        .from('deals')
+        .select('id, title, updated_at, stage:pipeline_stages(name)')
+        .order('updated_at', { ascending: false })
+        .limit(10),
+      businessId,
+    ),
+    scoped(
+      db
+        .from('broadcasts')
+        .select('id, name, status, total_recipients, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5),
+      businessId,
+    ),
+    scoped(
+      db
+        .from('automation_logs')
+        .select('id, trigger_event, status, created_at, automation:automations(name), contact:contacts(name, phone)')
+        .order('created_at', { ascending: false })
+        .limit(10),
+      businessId,
+    ),
   ])
 
   const items: ActivityItem[] = []

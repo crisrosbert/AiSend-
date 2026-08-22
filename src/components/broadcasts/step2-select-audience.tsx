@@ -298,6 +298,7 @@ export function Step2SelectAudience({
       setLoadingCount(false);
     }
   }, [
+    businessId,
     audience.type,
     audience.tagIds,
     audience.customField,

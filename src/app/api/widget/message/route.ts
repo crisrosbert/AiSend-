@@ -138,15 +138,37 @@ export async function POST(req: Request) {
     // script tag, so without that check a page could name another
     // tenant's agent and borrow its persona and media.
     let resolvedAgentId: string | undefined = config.agent_id ?? undefined
-    if (!resolvedAgentId && agent_id) {
+    let agentBusinessId: string | null = null
+
+    if (resolvedAgentId) {
+      const { data: own } = await db()
+        .from('agents')
+        .select('business_id')
+        .eq('id', resolvedAgentId)
+        .maybeSingle()
+      agentBusinessId = own?.business_id ?? null
+    } else if (agent_id) {
       const { data: owned } = await db()
         .from('agents')
-        .select('id')
+        .select('id, business_id')
         .eq('id', agent_id)
         .eq('tenant_id', org_id)
         .maybeSingle()
-      if (owned) resolvedAgentId = owned.id
+      if (owned) {
+        resolvedAgentId = owned.id
+        agentBusinessId = owned.business_id ?? null
+      }
     }
+
+    // ── Which business owns this conversation ──
+    //
+    // The agent's, not the config's, whenever an agent is answering.
+    // On the shared-config fallback above, `config` is the tenant's
+    // org-wide row and its business is the tenant default — which is
+    // not necessarily the business this agent belongs to. Reading it
+    // from the config there would file a real-estate lead under the
+    // fashion business, and the number would look plausible.
+    const businessId = agentBusinessId ?? config.business_id ?? null
 
     // 2. Find existing session
     const { data: session } = await db()
@@ -189,6 +211,7 @@ export async function POST(req: Request) {
             user_id: org_id,
             phone: visitorPhone,
             name: `Website Visitor ${String(visitor_id).slice(0, 6)}`,
+            business_id: businessId,
           })
           .select('id')
           .single()
@@ -219,6 +242,7 @@ export async function POST(req: Request) {
             contact_id: contactId,
             channel: 'website',
             status: 'open',
+            business_id: businessId,
           })
           .select('id')
           .single()

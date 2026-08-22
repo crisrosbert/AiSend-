@@ -25,6 +25,7 @@ import {
   type ContactField,
   type PrepareResult,
 } from '@/lib/contacts/import-parse';
+import { useScopedBusinessId } from '@/hooks/use-business';
 
 interface ImportModalProps {
   open: boolean;
@@ -57,6 +58,7 @@ function downloadCsv(filename: string, csv: string) {
 
 export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps) {
   const supabase = createClient();
+  const businessId = useScopedBusinessId();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>('upload');
@@ -206,6 +208,7 @@ export function ImportModal({ open, onOpenChange, onImported }: ImportModalProps
       for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
         const chunk = rows.slice(i, i + CHUNK_SIZE).map((row) => ({
           user_id: userId,
+          business_id: businessId,
           phone: row.phone,
           name: row.name,
           email: row.email,

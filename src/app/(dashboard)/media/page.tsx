@@ -14,6 +14,7 @@ import {
   Image as ImageIcon, FileText, Video, Link2, Loader2, Trash2,
   Upload, Plus, Bot, ArrowLeft, Save, Check,
 } from "lucide-react";
+import { businessIdForAgent } from "@/lib/business/parent";
 
 interface Agent { id: string; name: string; media_enabled: boolean }
 interface MediaItem {
@@ -104,6 +105,9 @@ export default function MediaLibraryPage() {
     const { error: insErr } = await supabase.from("agent_media").insert({
       agent_id: selectedAgent,
       tenant_id: userId,
+      // The agent's business. Media is only ever shown by its agent, so
+      // it belongs wherever that agent does.
+      business_id: await businessIdForAgent(supabase, selectedAgent),
       media_type: isPdf ? "pdf" : "image",
       title: file.name.replace(/\.[^.]+$/, ""),
       url: pub.publicUrl,
@@ -185,6 +189,7 @@ export default function MediaLibraryPage() {
     const { error } = await supabase.from("agent_media").insert({
       agent_id: selectedAgent,
       tenant_id: userId,
+      business_id: await businessIdForAgent(supabase, selectedAgent),
       media_type: linkType,
       title: linkTitle.trim() || (linkType === "video" ? "Video" : "Instagram"),
       url: linkUrl.trim(),

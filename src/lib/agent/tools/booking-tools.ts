@@ -43,6 +43,8 @@ function db() {
 
 export interface BookAppointmentArgs {
   tenantId: string
+  /** The agent's business — see the note on Agent.business_id. */
+  businessId?: string | null
   contactId: string
   conversationId: string
   customerName: string
@@ -93,6 +95,7 @@ export async function bookAppointment(
       .from('agent_appointments')
       .insert({
         tenant_id: args.tenantId,
+        business_id: args.businessId ?? null,
         contact_id: args.contactId,
         conversation_id: args.conversationId,
         customer_name: args.customerName.trim(),

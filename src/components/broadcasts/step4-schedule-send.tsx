@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
+import { useBusiness } from '@/hooks/use-business';
 
 interface AudienceConfig {
   type: string;
@@ -46,6 +47,7 @@ export function Step4ScheduleSend({
   progress,
 }: Step4Props) {
   const [showConfirm, setShowConfirm] = useState(false);
+  const { businessId } = useBusiness();
   const [estimatedReach, setEstimatedReach] = useState<number>(0);
   const [loadingReach, setLoadingReach] = useState(true);
 
@@ -56,9 +58,13 @@ export function Step4ScheduleSend({
         const supabase = createClient();
 
         if (audience.type === 'all') {
+          // Must match step 2's estimate and what the send actually
+          // reaches — three places, one number.
+          if (!businessId) { setEstimatedReach(0); return; }
           const { count } = await supabase
             .from('contacts')
-            .select('*', { count: 'exact', head: true });
+            .select('*', { count: 'exact', head: true })
+            .eq('business_id', businessId);
           setEstimatedReach(count ?? 0);
         } else if (audience.type === 'tags' && audience.tagIds && audience.tagIds.length > 0) {
           const { data: contactTags } = await supabase

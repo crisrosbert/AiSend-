@@ -87,8 +87,21 @@ export async function ingestSource(
     }
 
     // 4. Insert chunks in batches of 50
+    //
+    // The business comes from the journey these chunks belong to, read
+    // once rather than per chunk. Knowledge is the thing that leaked
+    // across agents before, so it is tagged at the row level and not
+    // left to be inferred from a join at query time.
+    const { data: journeyRow } = await db()
+      .from('journeys')
+      .select('business_id')
+      .eq('id', args.journeyId)
+      .maybeSingle()
+    const businessId: string | null = journeyRow?.business_id ?? null
+
     const rows = chunks.map((content, i) => ({
       tenant_id: args.tenantId,
+      business_id: businessId,
       journey_id: args.journeyId,
       source_id: args.sourceId,
       chunk_index: i,

@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Conversation } from "@/types";
+import { useBusiness } from "@/hooks/use-business";
 
 /**
  * Count of conversations with at least one unread inbound message for
@@ -16,6 +17,7 @@ import type { Conversation } from "@/types";
  * "cannot add 'postgres_changes' callbacks ... after subscribe()".
  */
 export function useTotalUnread(): number {
+  const { businessId, loading: businessLoading } = useBusiness();
   const [total, setTotal] = useState(0);
 
   // Keep a live local mirror of {id: unread_count} so INSERT/UPDATE/DELETE
@@ -30,14 +32,21 @@ export function useTotalUnread(): number {
   );
 
   useEffect(() => {
+    // A badge counting another business's unread messages sends people
+    // to an inbox where those messages are not listed — the count and
+    // the screen have to agree.
+    if (businessLoading || !businessId) return;
+
     const supabase = createClient();
     let cancelled = false;
 
-    // Initial load. RLS scopes this to the signed-in user automatically.
+    // Initial load. RLS scopes this to the account; business_id narrows
+    // it to the one on screen.
     (async () => {
       const { data, error } = await supabase
         .from("conversations")
-        .select("id, unread_count");
+        .select("id, unread_count")
+        .eq("business_id", businessId);
       if (cancelled || error || !data) return;
 
       const map = new Map<string, number>();
@@ -76,7 +85,7 @@ export function useTotalUnread(): number {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [businessId, businessLoading]);
 
   return total;
 }

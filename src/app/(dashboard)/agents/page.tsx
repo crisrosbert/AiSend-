@@ -31,6 +31,7 @@ import {
   Bot, Loader2, Save, Plus, Image as ImageIcon, Brain, X, Sparkles,
   Search, Check, Copy, Globe, MessageCircle, Clock, AlertCircle,
 } from "lucide-react";
+import { useScopedBusinessId } from "@/hooks/use-business";
 import {
   AGENT_TEMPLATES,
   TEMPLATE_CATEGORIES,
@@ -84,6 +85,11 @@ export default function AgentsPage() {
   const supabase = useMemo(() => createClient(), []);
 
   const [userId, setUserId] = useState("");
+  // Null while the provider is still loading, and on accounts with no
+  // business row yet. Written as null in both cases rather than
+  // guessed — an untagged agent is fixable, a wrongly tagged one is
+  // indistinguishable from a correct one.
+  const businessId = useScopedBusinessId();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -395,7 +401,7 @@ export default function AgentsPage() {
     try {
       const { data, error } = await supabase
         .from("agents")
-        .insert(agentRowFromTemplate(template, userId))
+        .insert({ ...agentRowFromTemplate(template, userId), business_id: businessId })
         .select("*")
         .single();
       if (error) { toast.error(error.message); return; }
@@ -416,6 +422,7 @@ export default function AgentsPage() {
         .from("agents")
         .insert({
           tenant_id: userId,
+          business_id: businessId,
           name: "New Agent",
           agent_type: "sales",
           persona: "You are a helpful assistant. Be warm and concise.",

@@ -75,12 +75,14 @@ export function DataExport() {
     try {
       const userId = await currentUserId();
       if (!userId) { toast.error("Please sign in again"); return; }
+      if (!businessId) { toast.error("Still loading your business — try again in a moment"); return; }
 
       const rows = await fetchAll((from, to) =>
         supabase
           .from("contacts")
           .select("id, name, phone, email, company, created_at, updated_at")
           .eq("user_id", userId)
+          .eq("business_id", businessId)
           .order("created_at", { ascending: true })
           .range(from, to),
       );
@@ -165,11 +167,14 @@ export function DataExport() {
       // Conversations first, so each message can be labelled with the
       // customer it belongs to. A merchant reading an export wants the
       // name and number beside the text, not a conversation UUID.
+      if (!businessId) { toast.error("Still loading your business — try again in a moment"); return; }
+
       const conversations = await fetchAll((from, to) =>
         supabase
           .from("conversations")
           .select("id, status, created_at, contacts(name, phone)")
           .eq("user_id", userId)
+          .eq("business_id", businessId)
           .order("created_at", { ascending: true })
           .range(from, to),
       );

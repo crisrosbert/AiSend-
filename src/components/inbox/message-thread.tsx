@@ -370,16 +370,45 @@ export function MessageThread({
       formData.append("content_type", contentType);
 
       try {
-        const res = await fetch("/api/whatsapp/media-upload", {
+        // Step 1 — store the file and get a URL WhatsApp can fetch.
+        const upload = await fetch("/api/whatsapp/media-upload", {
           method: "POST",
           body: formData,
         });
+        const uploaded = await upload.json().catch(() => ({}));
 
-        if (!res.ok) throw new Error("Upload error occurred");
-        toast.success(`${contentType} shared successfully!`);
+        if (!upload.ok) {
+          // The old code threw away the server's reason and showed
+          // "Failed to distribute file attachment" for everything —
+          // including "that file is too large" and "media storage is
+          // not set up", both of which have an obvious next step.
+          throw new Error(uploaded?.error || `Upload failed (HTTP ${upload.status})`);
+        }
+
+        // Step 2 — send it like any other media message. Reusing /send
+        // rather than repeating what it does: token decryption, the
+        // Meta call, the message row and the conversation preview all
+        // live there and stay in one place.
+        const sent = await fetch("/api/whatsapp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversation_id: conversation.id,
+            message_type: contentType,
+            media_url: uploaded.media_url,
+            content_text: file.name,
+          }),
+        });
+        const sendResult = await sent.json().catch(() => ({}));
+
+        if (!sent.ok) {
+          throw new Error(sendResult?.error || `Send failed (HTTP ${sent.status})`);
+        }
+
+        toast.success(`${contentType} sent`);
       } catch (err) {
-        console.error(err);
-        toast.error("Failed to distribute file attachment");
+        console.error("[media] send failed:", err);
+        toast.error(err instanceof Error ? err.message : "Could not send that file");
       }
     },
     [conversation]

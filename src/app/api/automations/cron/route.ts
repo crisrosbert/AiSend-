@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { resumePendingExecution } from '@/lib/automations/engine'
 import type { AutomationContext } from '@/lib/automations/engine'
+import { verifyCron } from '@/lib/cron/auth'
 
 /**
  * Drain due `automation_pending_executions` rows. Meant to be hit
@@ -15,35 +16,18 @@ import type { AutomationContext } from '@/lib/automations/engine'
  * two-step UPDATE-by-id.
  */
 export async function GET(request: Request) {
-  // Accepts CRON_SECRET as well, so a deployment that configured only
-  // the one shared secret still drains this queue.
-  const expected = process.env.AUTOMATION_CRON_SECRET || process.env.CRON_SECRET
-  if (!expected) {
-    return NextResponse.json({ error: 'cron not configured' }, { status: 503 })
-  }
-
-  // ── Why three places are read ────────────────────────────────────
-  // This only read `x-cron-secret`, and Vercel Cron does not send that
-  // header — it sends `Authorization: Bearer <CRON_SECRET>`. So this
-  // endpoint was unreachable by the platform that was supposed to call
-  // it, and in fact nothing called it at all: it was never listed in
-  // vercel.json either.
+  // Auth lives in lib/cron/auth.ts now. It used to be inline here and
+  // read only `x-cron-secret`, which Vercel Cron does not send — so the
+  // endpoint meant to drain this queue could not be reached by the
+  // platform meant to call it, and every automation containing a `wait`
+  // ran its first half and stopped forever.
   //
-  // The visible symptom was silent and expensive. A `wait` step
-  // enqueues a row here and stops; the queue is drained by this route.
-  // With nothing draining it, every automation containing a delay ran
-  // its first half and then stopped forever — the log showing it
-  // started, and nothing showing it never finished.
-  //
-  // The other cron routes all read `authorization`; this one being
-  // different is what let the gap hide. Header order matches theirs.
-  const supplied =
-    request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
-    request.headers.get('x-cron-secret') ||
-    new URL(request.url).searchParams.get('secret')
-
-  if (supplied !== expected) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Sharing the check is the point: a route that needs scheduling now
+  // gets the same answer as every other one, instead of inventing its
+  // own and being wrong alone.
+  const auth = verifyCron(request)
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
   }
 
   const admin = supabaseAdmin()

@@ -31,6 +31,8 @@ import {
   deductCredits,
 } from '@/lib/billing/credits'
 import { filterBroadcastPhones } from '@/lib/optin/manager'
+import { verifyCron } from '@/lib/cron/auth'
+import { supabaseAdmin } from '@/lib/automations/admin-client'
 
 interface BroadcastResult {
   phone: string
@@ -54,18 +56,6 @@ interface NewRecipient {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    const limit = checkRateLimit(`broadcast:${user.id}`, RATE_LIMITS.broadcast)
-    if (!limit.success) {
-      return rateLimitResponse(limit)
-    }
     const body = await request.json()
     const {
       recipients: newRecipients,
@@ -76,7 +66,60 @@ export async function POST(request: Request) {
       // The dashboard has always sent this; nothing ever read it, which
       // is why no send was recorded against its campaign.
       broadcast_id,
+      internal_user_id,
     } = body
+
+    // ── Who is asking ────────────────────────────────────────────────
+    //
+    // Two callers, one send path. The dashboard arrives with a session.
+    // The sweep in /api/cron/broadcast-sweep arrives with the cron
+    // secret and names the tenant it is sending for.
+    //
+    // The alternative was to let the sweep do its own sending, and that
+    // means a second copy of the opt-out guard, the credit deduction,
+    // Meta's phone-number variants and the recipient write-back. Two
+    // billing paths drift, and the one that drifts is the one nobody
+    // watches. So the sweep borrows this one instead.
+    //
+    // The internal branch is deliberately narrow: it needs the shared
+    // secret AND an explicit user id, and it grants exactly what a
+    // session for that user would have granted. A request with the
+    // secret but no id gets nothing.
+    const cron = verifyCron(request)
+    const isInternal = cron.ok && typeof internal_user_id === 'string' && !!internal_user_id
+
+    let userId: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let supabase: any
+
+    if (isInternal) {
+      userId = internal_user_id
+      // Service-role client: there is no session to carry, so RLS would
+      // otherwise hide the tenant's own rows from a job acting for them.
+      supabase = supabaseAdmin()
+    } else {
+      supabase = await createClient()
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser()
+      if (authError || !user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      userId = user.id
+    }
+
+    // Same budget either way. A sweep that could outrun the dashboard's
+    // limit would be a way around it.
+    const limit = checkRateLimit(`broadcast:${userId}`, RATE_LIMITS.broadcast)
+    if (!limit.success) {
+      return rateLimitResponse(limit)
+    }
+
+    // Everything below was written against `user.id`. Kept as a local
+    // rather than renamed through 300 lines, so this change stays
+    // reviewable.
+    const user = { id: userId }
     let recipients: NewRecipient[]
     if (Array.isArray(newRecipients) && newRecipients.length > 0) {
       recipients = newRecipients

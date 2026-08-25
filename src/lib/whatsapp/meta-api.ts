@@ -98,14 +98,18 @@ export async function sendTextMessage(
   if (contextMessageId) {
     body.context = { message_id: contextMessageId }
   }
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
+  const response = await metaFetchWithRetry(
+    url,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  })
+    'text message',
+  )
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
@@ -128,6 +132,81 @@ export interface SendTemplateMessageArgs {
  * Send a pre-approved WhatsApp message template. Required outside
  * the 24-hour window and for any first-touch messaging.
  */
+// ============================================================
+// Rate limiting
+// ============================================================
+
+/**
+ * Send to Meta, retrying when Meta says to slow down.
+ *
+ * ── WHY THIS EXISTS ──────────────────────────────────────────────────
+ * Meta's Cloud API does not ban a number for sending quickly — the
+ * documented default throughput is 80 messages per second. What it does
+ * is answer 429 (or error code 4 / 80007, "too many calls") and expect
+ * the caller to back off.
+ *
+ * Without that, a 429 arrived at the broadcast loop as an ordinary
+ * failure: the recipient was marked failed, permanently, and never
+ * retried. On a large campaign that turns a momentary slowdown into a
+ * block of people who simply never received the message, with a report
+ * saying they failed.
+ *
+ * Three attempts, doubling from one second, honouring Retry-After when
+ * Meta sends it. Short enough to stay inside the route's time budget,
+ * long enough to ride out the throttling Meta actually applies.
+ *
+ * Only 429s and 5xx are retried. A 400 means the request is wrong and
+ * sending it again just wastes the customer's credit.
+ */
+const RETRY_ATTEMPTS = 3
+const RETRY_BASE_MS = 1000
+
+function isRetryable(status: number, payload: unknown): boolean {
+  if (status === 429) return true
+  if (status >= 500) return true
+  // Meta also signals throttling inside a 400 body on some endpoints.
+  const code = (payload as { error?: { code?: number } })?.error?.code
+  return code === 4 || code === 80007 || code === 130429
+}
+
+async function metaFetchWithRetry(
+  url: string,
+  init: RequestInit,
+  label: string,
+): Promise<Response> {
+  let lastResponse: Response | null = null
+
+  for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+    const response = await fetch(url, init)
+    if (response.ok) return response
+
+    // Clone before reading: the caller still needs the body to build a
+    // useful error if this turns out to be the final attempt.
+    const payload = await response.clone().json().catch(() => ({}))
+
+    if (!isRetryable(response.status, payload) || attempt === RETRY_ATTEMPTS - 1) {
+      return response
+    }
+
+    // Meta's own number first. It knows when it will accept traffic
+    // again better than any backoff curve we invent.
+    const retryAfter = Number(response.headers.get('retry-after'))
+    const waitMs =
+      Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 10_000)
+        : RETRY_BASE_MS * 2 ** attempt
+
+    console.warn(
+      `[meta] ${label} throttled (${response.status}), retrying in ${waitMs}ms ` +
+        `(attempt ${attempt + 1}/${RETRY_ATTEMPTS})`,
+    )
+    await new Promise((r) => setTimeout(r, waitMs))
+    lastResponse = response
+  }
+
+  return lastResponse!
+}
+
 export async function sendTemplateMessage(
   args: SendTemplateMessageArgs
 ): Promise<MetaSendResult> {
@@ -167,14 +246,18 @@ export async function sendTemplateMessage(
     body.context = { message_id: contextMessageId }
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
+  const response = await metaFetchWithRetry(
+    url,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  })
+    `template ${templateName}`,
+  )
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }

@@ -1,25 +1,53 @@
 // src/app/api/billing/recharge/route.ts
 //
-// Wallet top-up endpoint for the "Buy More" credit purchase modal.
+// Wallet top-up. Creates a Razorpay order; the credit is added by
+// /api/billing/verify once Razorpay confirms the payment.
 //
-// MODES:
-//  • Manual-fallback (DEFAULT, no keys): immediately credits the wallet
-//    via the add_credits RPC and returns { mode: 'manual', newBalance }.
-//    This lets you take "payments" / test the whole flow before Razorpay
-//    is set up. (You can later restrict this to admins.)
-//  • Razorpay (AUTO, when RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET are set):
-//    creates a Razorpay order and returns { mode: 'razorpay', order, keyId }
-//    for the client to open Razorpay Checkout. Actual crediting then
-//    happens in /api/billing/verify after payment succeeds.
+// ── WHAT THIS FILE USED TO DO ────────────────────────────────────────
+// It had a "manual fallback": when RAZORPAY_KEY_ID and
+// RAZORPAY_KEY_SECRET were unset, it called add_credits directly and
+// returned { mode: 'manual' }. The comment described it as a way to
+// test the flow before the gateway was set up.
+//
+// In production that is not a test. It is an endpoint that hands out
+// wallet credit — the thing every message is billed against — to anyone
+// signed in, for free, on request. No payment, no record of one, and
+// nothing in the response to suggest anything was missing. The balance
+// simply went up.
+//
+// The subscribe route had the same shape and lost it for the same
+// reason. This is the other half.
+//
+// If the gateway is not configured, a top-up cannot be sold. Say so.
+// An admin who genuinely wants to grant credit can do it against the
+// wallet directly, deliberately, with a record of who did it.
+//
+// ── WHY IT NO LONGER BUILDS ITS OWN ORDER ────────────────────────────
+// It used to call Razorpay's API inline with its own fetch, its own
+// paise conversion and its own notes. lib/billing/razorpay.ts already
+// does all three, and /api/billing/verify reads the notes that library
+// writes. Two writers and one reader is how the two halves of a payment
+// stop agreeing about what was bought.
 //
 // Body: { amount: number, bonus?: number }
-// Returns 401 if not signed in, 400 on bad amount, 200 otherwise.
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getOrgIdForUser } from '@/lib/billing/credits';
+import { createOrder, isRazorpayEnabled, razorpayKeys } from '@/lib/billing/razorpay';
 
-const MIN_RECHARGE = 100; // keep low for testing; raise for production
+/**
+ * Low enough for a real customer to try the product, high enough that
+ * the gateway fee is not most of the transaction.
+ */
+const MIN_RECHARGE = 100;
+
+/**
+ * A ceiling on a single top-up. Not a business rule — a typo guard. A
+ * misplaced keypress turning ₹5,000 into ₹500,000 should fail here
+ * rather than at a bank.
+ */
+const MAX_RECHARGE = 500_000;
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -31,7 +59,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { amount?: number; bonus?: number };
+  let body: { amount?: number };
   try {
     body = await req.json();
   } catch {
@@ -39,11 +67,16 @@ export async function POST(req: Request) {
   }
 
   const amount = Math.floor(Number(body.amount));
-  const bonus = Math.max(0, Math.floor(Number(body.bonus) || 0));
 
   if (!Number.isFinite(amount) || amount < MIN_RECHARGE) {
     return NextResponse.json(
       { error: `Minimum recharge is ₹${MIN_RECHARGE}` },
+      { status: 400 },
+    );
+  }
+  if (amount > MAX_RECHARGE) {
+    return NextResponse.json(
+      { error: `Maximum recharge is ₹${MAX_RECHARGE.toLocaleString('en-IN')}` },
       { status: 400 },
     );
   }
@@ -53,57 +86,44 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No organization found' }, { status: 400 });
   }
 
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-  // ── RAZORPAY MODE ──────────────────────────────────────────────
-  if (keyId && keySecret) {
-    try {
-      const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-      const res = await fetch('https://api.razorpay.com/v1/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Basic ${auth}`,
-        },
-        body: JSON.stringify({
-          amount: amount * 100, // paise
-          currency: 'INR',
-          receipt: `cr_${orgId}_${Date.now()}`,
-          notes: { org_id: orgId, user_id: user.id, bonus: String(bonus) },
-        }),
-      });
-      const order = await res.json();
-      if (!res.ok) {
-        return NextResponse.json(
-          { error: order?.error?.description || 'Razorpay order failed' },
-          { status: 502 },
-        );
-      }
-      return NextResponse.json({ mode: 'razorpay', order, keyId });
-    } catch (e) {
-      return NextResponse.json(
-        { error: e instanceof Error ? e.message : 'Razorpay error' },
-        { status: 502 },
-      );
-    }
+  // Deliberately a refusal, not a grant. See the note at the top.
+  if (!isRazorpayEnabled()) {
+    console.error('[billing/recharge] top-up requested but Razorpay is not configured');
+    return NextResponse.json(
+      {
+        error:
+          'Card payments are not available right now. Please contact support to add credits.',
+      },
+      { status: 503 },
+    );
   }
 
-  // ── MANUAL FALLBACK MODE ───────────────────────────────────────
-  // No keys configured → credit the wallet directly so the flow works.
-  const { data, error } = await supabase.rpc('add_credits', {
-    p_org_id: orgId,
-    p_user_id: user.id,
-    p_amount: amount,
-    p_bonus: bonus,
-    p_type: 'recharge',
-    p_description: `Manual recharge ₹${amount}${bonus ? ` (+₹${bonus} bonus)` : ''}`,
-    p_reference: null,
-  });
+  try {
+    const order = await createOrder({
+      amountInr: amount,
+      receipt: `cr_${orgId}_${Date.now()}`,
+      // Read back by /api/billing/verify to confirm the payment belongs
+      // to this org. The bonus is deliberately NOT carried here — verify
+      // recomputes it from the amount Razorpay says was actually paid,
+      // so a tampered request cannot buy ₹100 of credit and claim the
+      // bonus for ₹50,000.
+      notes: {
+        kind: 'recharge',
+        org_id: orgId,
+        user_id: user.id,
+      },
+    });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({
+      mode: 'razorpay',
+      order,
+      // The publishable half of the pair. Safe in a browser — it is what
+      // Razorpay Checkout is opened with. The secret never leaves here.
+      keyId: razorpayKeys()!.keyId,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not start the payment';
+    console.error('[billing/recharge] order failed:', message);
+    return NextResponse.json({ error: message }, { status: 502 });
   }
-
-  return NextResponse.json({ mode: 'manual', newBalance: Number(data) });
 }

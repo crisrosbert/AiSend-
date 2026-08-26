@@ -69,7 +69,11 @@ export function CreditsPurchaseModal({
       const res = await fetch("/api/billing/recharge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount, bonus }),
+        // Only the amount. The bonus is recomputed server-side from what
+        // Razorpay says was actually paid — sending it from here would
+        // suggest the client has a say in it, and one day someone would
+        // read it back.
+        body: JSON.stringify({ amount }),
       });
       const data = await res.json();
 
@@ -78,13 +82,12 @@ export function CreditsPurchaseModal({
         return;
       }
 
-      // Manual fallback mode — wallet already credited server-side.
-      if (data.mode === "manual") {
-        toast.success(`₹${amount} added${bonus ? ` (+₹${bonus} bonus)` : ""}!`);
-        onSuccess?.(Number(data.newBalance));
-        onClose();
-        return;
-      }
+      // The 'manual' mode this used to handle is gone. The server used
+      // to credit the wallet directly when Razorpay was unconfigured,
+      // and this branch reported it as a successful purchase — so a
+      // top-up that nobody paid for looked exactly like one that
+      // somebody did. There is now one way credit is added: Razorpay
+      // confirms the payment, /api/billing/verify credits the wallet.
 
       // Razorpay mode — open checkout.
       if (data.mode === "razorpay") {
@@ -106,7 +109,7 @@ export function CreditsPurchaseModal({
             const v = await fetch("/api/billing/verify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...resp, amount, bonus }),
+              body: JSON.stringify({ ...resp, amount }),
             });
             const vd = await v.json();
             if (v.ok) {

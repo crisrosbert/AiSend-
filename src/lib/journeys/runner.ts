@@ -17,8 +17,15 @@
 //   - Credits deducted AFTER each successful Meta send (same pattern as
 //     /api/whatsapp/send and /api/whatsapp/broadcast).
 //   - Gemini fallback is opt-in per user via env. Never hardcoded.
-//   - When no keyword trigger matches, falls back to the AI agent
-//     (runAgentFallback) so conversations aren't left unanswered.
+//   - A journey is a script, not a speaker: when no keyword trigger
+//     matches, this returns false and lets the caller's own AI agent
+//     (the one the merchant assigned to the WhatsApp number, with its
+//     real persona and tools) answer instead. Journeys used to run a
+//     second, thinner AI reply of their own here — a separate persona
+//     scoped to whichever journey happened to be first, with no tools
+//     — which meant the assigned agent never got a turn as long as any
+//     journey existed. Matches how AiSensy splits the two: Flows are
+//     pure trigger+script, one Orchestrator answers everything else.
 
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -36,7 +43,6 @@ import {
   deductCredits,
   MESSAGE_PRICE_INR,
 } from '@/lib/billing/credits'
-import { runAgentFallback } from '@/lib/agent/fallback'
 
 // Lazy admin client — same pattern as the webhook to avoid build-time
 // crashes when env vars are missing.
@@ -101,7 +107,8 @@ export interface RunJourneysArgs {
 /**
  * Try to execute any active journey for this user whose trigger matches
  * the inbound text. Returns true when a journey ran. Returns false when
- * nothing matched.
+ * nothing matched — the caller then falls through to the assigned AI
+ * agent, which is deliberate: journeys don't speak for themselves.
  *
  * Errors are logged and swallowed — never throws.
  */
@@ -141,23 +148,8 @@ export async function runJourneysForInbound(
       }
     }
 
-    // No keyword matched. Try the AI agent fallback on the first active
-    // journey (the one most likely to have a persona configured).
-    const firstJourney = (journeys as JourneyRow[])[0]
-    if (firstJourney) {
-      const agentReplied = await runAgentFallback({
-        userId: args.userId,
-        journeyId: firstJourney.id,
-        conversationId: args.conversationId,
-        contactId: args.contactId,
-        customerPhone: args.customerPhone,
-        inboundText: args.inboundText,
-        phoneNumberId: args.phoneNumberId,
-        accessToken: args.accessToken,
-      })
-      if (agentReplied) return true
-    }
-
+    // No keyword matched any journey. Not this layer's job to answer —
+    // the caller falls through to the assigned AI agent.
     return false
   } catch (err) {
     console.error('[journeys.runner] unhandled error:', err)

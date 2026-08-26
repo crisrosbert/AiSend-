@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -96,6 +97,7 @@ const PRICED_CATEGORIES: MessageCategory[] = ["marketing", "utility", "authentic
 
 export default function BillingPage() {
   const { profile } = useAuth();
+  const router = useRouter();
 
   const [org, setOrg] = useState<OrgBilling | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
@@ -289,6 +291,26 @@ export default function BillingPage() {
           if (v.ok) {
             toast.success(`${data.plan.name} is active`);
             await loadAccount();
+
+            // Send them somewhere that shows the plan doing something.
+            //
+            // Staying here works — the page repaints with the new plan —
+            // but it leaves someone who has just paid staring at a
+            // pricing table, which reads as though the purchase did not
+            // register. The dashboard is where the plan's effects are.
+            //
+            // The pause is for Razorpay: this fires while its modal is
+            // still closing, and navigating out from under it looks like
+            // a crash. It is also long enough to read the toast, which
+            // survives the navigation because Toaster lives in the root
+            // layout.
+            setTimeout(() => {
+              router.push("/dashboard");
+              // Server components on the dashboard cache the old plan
+              // otherwise, so the first thing they see after paying is
+              // the tier they just left.
+              router.refresh();
+            }, 1200);
           } else {
             // The money may well have been taken. Never say "payment
             // failed" here — say what is true and give them the

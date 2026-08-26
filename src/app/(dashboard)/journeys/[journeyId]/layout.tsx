@@ -5,7 +5,7 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
-  ArrowLeft, Workflow, Brain, Zap, Sparkles, Loader2,
+  ArrowLeft, Workflow, Brain, Zap, Loader2,
 } from "lucide-react";
 import type { Journey } from "@/types/journey";
 
@@ -13,7 +13,6 @@ const TABS = [
   { slug: "canvas",  label: "Canvas",  icon: Workflow },
   { slug: "brain",   label: "Brain",   icon: Brain },
   { slug: "actions", label: "Actions", icon: Zap },
-  { slug: "persona", label: "Persona", icon: Sparkles },
 ];
 
 export default function JourneyLayout({ children }: { children: React.ReactNode }) {

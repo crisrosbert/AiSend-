@@ -403,7 +403,8 @@ function CanvasInner() {
             <input
               value={journey?.name ?? ""}
               onChange={(e) => { if (journey) setJourney({ ...journey, name: e.target.value }); }}
-              className="block w-full max-w-xs bg-transparent text-sm font-bold text-[#0c1f17] focus:outline-none focus:underline decoration-emerald-500 decoration-2 underline-offset-4"
+              title="Click to rename this journey"
+              className="block w-full max-w-xs rounded-md border border-transparent bg-transparent px-1.5 py-0.5 -mx-1.5 text-sm font-bold text-[#0c1f17] transition-colors hover:border-[#d1fae5] hover:bg-emerald-50/60 focus:border-emerald-400 focus:bg-emerald-50 focus:outline-none"
             />
             <div className="text-[10px] font-semibold text-slate-400 mt-0.5">{isLive ? "🟢 Running on WhatsApp" : "Draft Mode Active"}</div>
           </div>

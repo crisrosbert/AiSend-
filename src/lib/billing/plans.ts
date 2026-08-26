@@ -41,8 +41,8 @@ export const PLANS: Plan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    priceMonthly: 999,
-    priceYearly: 9990,
+    priceMonthly: 1,
+    priceYearly: 2,
     tagline: 'For small businesses getting started',
     popular: true,
     limits: { contacts: 5000, broadcastsPerMonth: 50, teamMembers: 3, automations: 20 },
@@ -60,8 +60,8 @@ export const PLANS: Plan[] = [
   {
     id: 'growth',
     name: 'Growth',
-    priceMonthly: 1999,
-    priceYearly: 19990,
+    priceMonthly: 1,
+    priceYearly: 2,
     tagline: 'For growing businesses that need scale',
     limits: { contacts: -1, broadcastsPerMonth: -1, teamMembers: 10, automations: -1 },
     features: [
@@ -82,7 +82,7 @@ export const PLANS: Plan[] = [
 // modal and any server-side validation all agree on what a given rupee
 // amount earns. Changing a tier is a one-line change in one file.
 
-export const MIN_TOPUP_INR = 100;
+export const MIN_TOPUP_INR = 10;
 
 interface BonusTier {
   /** Applies once the top-up reaches this amount. */
@@ -126,7 +126,7 @@ function pack(amount: number): CreditPack {
   };
 }
 
-export const CREDIT_PACKS: CreditPack[] = [500, 1000, 2500, 5000].map(pack);
+export const CREDIT_PACKS: CreditPack[] = [5, 1, 25, 50].map(pack);
 
 // Meta's approximate per-conversation cost in India (INR).
 // These are indicative — update from Meta's official rate card.

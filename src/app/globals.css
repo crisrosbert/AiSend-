@@ -267,12 +267,15 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 /* ---- Badges/pills ---- */
 [class*="rounded-full"][class*="border"] { font-weight: 600; }
 
-/* ---- Sidebar: subtle depth (the sidebar's own dark background is set
-   inline in sidebar.tsx, not here — see the file header comment) ---- */
-aside[aria-label="Primary"], aside[aria-label="Primary navigation"] {
-  background: var(--surface) !important;
-  border-right: 1px solid var(--line) !important;
-  box-shadow: var(--shadow-xs);
+/* ---- Sidebar ----
+   The main nav (aria-label="Primary navigation" in sidebar.tsx) is a
+   DARK sidebar by design — its own inline style sets --brand-teal-dark
+   as the background, and its text is white/opacity-based. A rule used
+   to force it white with !important here, which is why the sidebar
+   went blank: white icons on a white background are invisible. Only
+   a shadow belongs here; the background is the component's call. */
+aside[aria-label="Primary navigation"] {
+  box-shadow: var(--shadow-md);
 }
 
 /* ============================================================================

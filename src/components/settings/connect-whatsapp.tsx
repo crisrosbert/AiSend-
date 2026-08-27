@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 
 /**
- * "Connect WhatsApp" — Embedded Signup launcher (AiSensy-style).
+ * "Connect WhatsApp" — a one-click Embedded Signup launcher.
  *
  * Loads the Facebook JS SDK, opens Meta's hosted signup popup, captures
  * the returned code + waba_id + phone_number_id, and posts them to

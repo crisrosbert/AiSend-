@@ -243,8 +243,13 @@ export function MessageBubble({
       <div
         className={cn(
           "relative rounded-2xl px-3 py-2",
+          // A light tint, not a solid fill — WhatsApp's own outgoing
+          // bubble is light green with dark text, not a dark bubble
+          // with light text. bg-violet-600 read as a medium-dark green
+          // here (this file's globals.css remap), which put dark ink
+          // text on a background too close to it in value.
           isAgent
-            ? "rounded-br-md bg-violet-600 text-[#0c1f17]"
+            ? "rounded-br-md bg-[var(--brand-100,#C8F5D6)] text-[#0c1f17]"
             : "rounded-bl-md bg-[#f2f4f7] text-slate-100",
         )}
       >

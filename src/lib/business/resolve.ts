@@ -17,6 +17,7 @@ export interface BusinessRef {
   id: string
   name: string
   is_default: boolean
+  logo_url: string | null
 }
 
 /**

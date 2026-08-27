@@ -5,8 +5,7 @@ import { createTemplate } from '@/lib/whatsapp/meta-api'
 
 /**
  * Create a WhatsApp message template AND submit it to Meta for approval
- * — the AiSensy "create template" flow. The client never touches the
- * Meta dashboard.
+ * in one step. The client never touches the Meta dashboard.
  *
  * Flow:
  *   1. Submit components to Meta (POST /{waba_id}/message_templates).

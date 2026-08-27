@@ -317,7 +317,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               <DropdownMenuItem
                 render={
                   <Link
-                    href={`${slugPrefix}/billing`}
+                    href="/billing"
                     onClick={onClose}
                     className="focus:bg-white/5"
                   />

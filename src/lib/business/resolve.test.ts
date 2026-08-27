@@ -11,6 +11,7 @@ const biz = (id: string, is_default = false): BusinessRef => ({
   id,
   name: `Business ${id}`,
   is_default,
+  logo_url: null,
 })
 
 describe('resolveBusiness', () => {

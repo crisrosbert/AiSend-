@@ -29,8 +29,9 @@
 // ── THE NUMBER THAT ACTUALLY MATTERS ─────────────────────────────────
 // Deflection: conversations the AI handled end to end, with no human
 // message at all. That is the reason a business buys an AI agent, and
-// it is the one figure that says whether it is working. AiSensy has no
-// equivalent because it has no AI to measure.
+// it is the one figure that says whether it is working. A plain
+// broadcast/automation platform has no equivalent metric to show here,
+// since it has no AI conversation to measure.
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'

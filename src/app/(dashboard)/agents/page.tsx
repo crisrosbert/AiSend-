@@ -1583,7 +1583,7 @@ const css = `
 .ag-hours-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:420px){.ag-hours-pair{grid-template-columns:1fr}}
 
-.ag-save{margin-top:24px}
+.ag-save{margin-top:24px;margin-bottom:10px}
 
 @media(prefers-reduced-motion:reduce){.ag *{transition:none!important;animation:none!important}}
 `;

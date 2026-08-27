@@ -291,7 +291,7 @@ export default function JourneysPage() {
         />
       )}
       {tab === "blueprints" && <StubPanel title="Blueprints" subtitle="Pre-built journeys by industry — coming in Phase 4." icon={<Sparkles className="size-7" />} />}
-      {tab === "routing" && <StubPanel title="AI Routing" subtitle="Configure when AI takes over and when humans handle the chat — coming next." icon={<BarChart3 className="size-7" />} />}
+      {tab === "routing" && <AIRoutingPanel journeys={journeys} businessId={businessId} />}
       {tab === "catalogue" && <CataloguePanel />}
       {tab === "test_number" && <StubPanel title="Test Number" subtitle="Send your journey to a test number before going live — coming next." icon={<FlaskConical className="size-7" />} />}
     </div>
@@ -585,6 +585,117 @@ function CataloguePanel() {
             and paste it into a Catalogue / Single Product / Multi Product step on the Canvas
             when you build that part of a flow.
           </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AIRoutingPanel({
+  journeys, businessId,
+}: {
+  journeys: Journey[];
+  businessId: string | null;
+}) {
+  const supabase = createClient();
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!businessId) { setLoading(false); return; }
+      const { data } = await supabase
+        .from("businesses")
+        .select("ai_routing_enabled")
+        .eq("id", businessId)
+        .maybeSingle();
+      if (!cancelled) {
+        setEnabled(Boolean((data as { ai_routing_enabled?: boolean } | null)?.ai_routing_enabled));
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [businessId, supabase]);
+
+  async function toggle() {
+    if (!businessId || saving) return;
+    const next = !enabled;
+    setSaving(true);
+    setEnabled(next); // optimistic
+    const { error } = await supabase
+      .from("businesses")
+      .update({ ai_routing_enabled: next })
+      .eq("id", businessId);
+    if (error) {
+      setEnabled(!next);
+      toast.error("Couldn't update AI Routing");
+    } else {
+      toast.success(next ? "AI Routing turned on" : "AI Routing turned off");
+    }
+    setSaving(false);
+  }
+
+  // A journey with no name (or the default placeholder) gives the
+  // router nothing to match against, so it's excluded from the count
+  // the merchant sees here — same rule the router itself uses.
+  const candidates = journeys.filter(
+    (j) => j.status === "active" && j.name?.trim() && j.name.trim().toLowerCase() !== "untitled journey",
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-2xl border border-[#e7ece9] bg-white shadow-sm">
+        <div className="flex items-start justify-between gap-4 p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+              <BarChart3 className="size-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-[#0c1f17]">AI Routing</h2>
+              <p className="mt-1 max-w-xl text-xs text-slate-500">
+                When a message doesn&apos;t match any journey&apos;s exact keyword, let AI read it
+                and send it to whichever active journey best fits — instead of going straight
+                to your assigned Agent. Off by default, since it spends one AI call on every
+                unmatched message.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={toggle}
+            disabled={loading || saving || !businessId}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${enabled ? "bg-emerald-500" : "bg-slate-200"}`}
+            aria-pressed={enabled}
+            aria-label="Toggle AI Routing"
+          >
+            <span
+              className={`absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform ${enabled ? "translate-x-5" : "translate-x-0.5"}`}
+            />
+          </button>
+        </div>
+
+        <div className="border-t border-[#e7ece9] bg-[#f8faf9] px-5 py-4">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            Journeys AI Routing can choose between ({candidates.length})
+          </p>
+          {candidates.length === 0 ? (
+            <p className="mt-2 text-xs text-slate-400">
+              No named, active journeys yet — give a journey a real name and an active status
+              for it to show up here.
+            </p>
+          ) : (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {candidates.map((j) => (
+                <span
+                  key={j.id}
+                  className="rounded-full border border-[#e7ece9] bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600"
+                >
+                  {j.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

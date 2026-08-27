@@ -251,7 +251,7 @@ export default function PipelinesPage() {
 
     const { data: pipeline, error } = await supabase
       .from("pipelines")
-      .insert({ user_id: user.id, name })
+      .insert({ user_id: user.id, business_id: businessId, name })
       .select()
       .single();
 

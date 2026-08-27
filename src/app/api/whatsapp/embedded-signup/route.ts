@@ -6,7 +6,7 @@ import { currentBusinessId } from '@/lib/business/server'
 /**
  * Embedded Signup — token exchange + auto-connect.
  *
- * This is the AiSensy "Connect WhatsApp" flow. The client clicks the
+ * This is the "Connect WhatsApp" flow. The client clicks the
  * button, completes Meta's hosted popup (picks/creates their WABA and
  * phone number), and Meta hands the browser a short-lived `code` plus
  * the selected `waba_id` / `phone_number_id`. The browser POSTs those

@@ -3,30 +3,86 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ============================================================
-   CLICKSTREAM WA — AISENSY-STYLE LIGHT THEME
-   This file overrides the original dark theme globally.
-   No need to edit individual component files.
-   ============================================================ */
+/* ============================================================================
+   AISEND THEME
+   ============================================================================
+   HOW TO CHANGE THE APP'S COLOR THEME
+   ------------------------------------
+   Edit ONLY the ":root" block right below this comment. Every color used
+   anywhere in the app (buttons, links, focus rings, badges, the sidebar's
+   active-item highlight, etc.) is built from these variables — nothing
+   else in this file needs to change.
+
+   Right now the palette below IS WhatsApp's own brand green. To use a
+   different color, replace the six --brand-* values with your new color
+   and its darker/lighter shades — everything else updates automatically.
+
+   ONE THING THIS FILE CANNOT REACH: a few components set a gradient
+   directly in their own .tsx file with a hardcoded hex value (mostly the
+   left sidebar background and a handful of card gradients), because CSS
+   variables can't reach into inline React styles. Those are a separate,
+   small find-and-replace job — ask for it by name if you want them
+   folded into this same palette.
+   ============================================================================ */
 
 :root {
-  --brand:#10b981;
-  --brand-deep:#059669;
-  --brand-50:#ecfdf5;
-  --brand-100:#d1fae5;
-  --radius:0.75rem;
+  /* ---- Brand green (WhatsApp's palette) ----
+     --brand        = primary buttons, links, the active nav rail
+     --brand-deep   = hover state
+     --brand-press  = active/pressed state (mouse held down)
+     --brand-50/100/200 = light tints, used for badges and soft backgrounds */
+  --brand:       #25D366;   /* WhatsApp green */
+  --brand-deep:  #1DA851;   /* hover — same hue, darker */
+  --brand-press: #178F48;   /* pressed — darker still */
+  --brand-50:    #E9FBEF;
+  --brand-100:   #C8F5D6;
+  --brand-200:   #98E9B4;
+
+  /* ---- WhatsApp's secondary teal ----
+     Not wired into any component yet — kept here so the dark
+     header/sidebar look can be switched to it later without hunting
+     for the hex value again. */
+  --brand-teal:      #128C7E;
+  --brand-teal-dark: #075E54;
+
+  /* ---- Text ---- */
+  --ink:       #0b231a;   /* primary text */
+  --ink-soft:  #46584f;   /* secondary text */
+  --ink-muted: #7c8a83;   /* placeholder / tertiary text */
+
+  /* ---- Surfaces ---- */
+  --line:    #e6ece9;   /* hairline borders */
+  --surface: #ffffff;   /* cards, panels, the sidebar */
+  --canvas:  #f5f8f6;   /* page background behind cards */
+
+  /* ---- Elevation (box-shadow) ---- */
+  --shadow-xs:    0 1px 2px rgba(11,35,26,.05);
+  --shadow-sm:    0 1px 3px rgba(11,35,26,.06), 0 1px 2px rgba(11,35,26,.04);
+  --shadow-md:    0 4px 12px rgba(11,35,26,.07), 0 2px 4px rgba(11,35,26,.04);
+  --shadow-lg:    0 12px 32px rgba(11,35,26,.10), 0 4px 8px rgba(11,35,26,.05);
+  --shadow-brand: 0 8px 20px rgba(37,211,102,.28);
+
+  /* ---- Layout ---- */
+  --radius: 0.75rem;
+
+  /* ---- Fonts ---- */
   --font-display: 'Sora', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans:    'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
+/* Wires the tokens above into Tailwind's own theme (bg-background, etc). */
 @theme inline {
-  --color-background: #f4f7f5;
-  --color-foreground: #0c1f17;
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
   --font-sans: var(--font-sans);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
 }
+
+/* ============================================================================
+   BASE ELEMENTS
+   ============================================================================ */
 
 * { box-sizing: border-box; }
 
@@ -36,215 +92,129 @@ html {
 }
 
 body {
-  background: #f4f7f5;
-  color: #0c1f17;
+  background: var(--canvas);
+  color: var(--ink);
   font-family: var(--font-sans);
+  letter-spacing: -0.005em;
   min-height: 100vh;
 }
 
 h1, h2, h3, h4, .font-display {
   font-family: var(--font-display);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.022em;
+  color: var(--ink);
 }
 
-/* ============================================================
-   DARK → LIGHT CLASS REMAPPING
-   Every slate-dark class from the original theme is remapped
-   to AiSensy-style light equivalents using !important so it
-   wins against the inline Tailwind utilities.
-   ============================================================ */
+h1 { font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem); font-weight: 700; }
+h2 { font-weight: 700; }
 
-/* --- BACKGROUNDS --- */
-.bg-slate-950 { background-color: #f4f7f5 !important; }   /* app shell bg */
-.bg-slate-900 { background-color: #ffffff !important; }   /* cards / sidebar */
-.bg-slate-800 { background-color: #ffffff !important; }   /* inputs / surfaces */
+/* ============================================================================
+   LEGACY CLASS REMAPPING
+   ============================================================================
+   The codebase was built in three passes and still mixes three different
+   sets of Tailwind color classes across components:
+     - bg-slate-900/800/700... (from an original dark theme)
+     - bg-violet-500/600...    (from an earlier purple brand)
+     - bg-emerald-500/600...   (the current green brand)
+   Rather than hunt down and rewrite every component that uses one of
+   these, every one of them is redirected here to the SAME --brand
+   variables above. This is why editing :root at the top of this file is
+   enough to re-theme the whole app without touching component files.
+   ============================================================================ */
+
+/* ---- Old dark-theme backgrounds → light surfaces ---- */
+.bg-slate-950 { background-color: var(--canvas) !important; }
+.bg-slate-900 { background-color: var(--surface) !important; }
+.bg-slate-800 { background-color: var(--surface) !important; }
 .bg-slate-700 { background-color: #f1f5f4 !important; }
-.bg-slate-600 { background-color: #e7ece9 !important; }
+.bg-slate-600 { background-color: var(--line) !important; }
 .bg-slate-500 { background-color: #d8e0dc !important; }
 
-/* --- ALL opacity variants (the /40 /50 /60 etc that were invisible) --- */
-.bg-slate-950\/50,
-.bg-slate-950\/70 { background-color: rgba(12,31,23,.45) !important; }
-.bg-slate-900\/40,
-.bg-slate-900\/50,
-.bg-slate-900\/60,
-.bg-slate-900\/80,
-.bg-slate-900\/95 { background-color: #ffffff !important; }
-.bg-slate-800\/40,
-.bg-slate-800\/70,
-.bg-slate-800\/80 { background-color: #f8faf9 !important; }
-.bg-slate-800\/30,
-.bg-slate-800\/50,
-.bg-slate-800\/60 { background-color: #f8faf9 !important; }
-.bg-slate-700\/40,
-.bg-slate-700\/50 { background-color: #f1f5f4 !important; }
+.bg-slate-950\/50, .bg-slate-950\/70 { background-color: rgba(11,35,26,.45) !important; }
+.bg-slate-900\/40, .bg-slate-900\/50, .bg-slate-900\/60, .bg-slate-900\/80, .bg-slate-900\/95 { background-color: var(--surface) !important; }
+.bg-slate-800\/30, .bg-slate-800\/40, .bg-slate-800\/50, .bg-slate-800\/60, .bg-slate-800\/70, .bg-slate-800\/80 { background-color: #f8faf9 !important; }
+.bg-slate-700\/40, .bg-slate-700\/50 { background-color: #f1f5f4 !important; }
 .bg-slate-600\/20 { background-color: #eef2f0 !important; }
-.bg-slate-500\/10 { background-color: #f4f7f5 !important; }
+.bg-slate-500\/10 { background-color: var(--canvas) !important; }
 
-/* --- TEXT --- */
-.text-white   { color: #0c1f17 !important; }
-.text-slate-100 { color: #0c1f17 !important; }
+.hover\:bg-slate-800:hover, .hover\:bg-slate-800\/60:hover { background-color: #f1f5f4 !important; }
+.hover\:bg-slate-800\/30:hover { background-color: #f8faf9 !important; }
+.hover\:bg-slate-700:hover { background-color: var(--line) !important; }
+.focus\:bg-slate-800:focus, .focus\:bg-slate-800\/60:focus { background-color: #f1f5f4 !important; }
+
+/* ---- Old dark-theme text → dark-on-light text ---- */
+.text-white     { color: var(--ink) !important; }
+.text-slate-100 { color: var(--ink) !important; }
 .text-slate-200 { color: #1a2b23 !important; }
 .text-slate-300 { color: #334155 !important; }
-.text-slate-400 { color: #5b6b63 !important; }
+.text-slate-400 { color: var(--ink-muted) !important; }
 .text-slate-500 { color: #6b7c73 !important; }
 .text-slate-600 { color: #8a978f !important; }
+.hover\:text-white:hover { color: var(--ink) !important; }
 
-/* --- BORDERS --- */
-.border-slate-500 { border-color: #cfd8d3 !important; }
-.border-slate-600 { border-color: #dde4e0 !important; }
-.border-slate-700 { border-color: #e7ece9 !important; }
-.border-slate-800 { border-color: #eef2f0 !important; }
-
-/* --- BRAND COLOR REMAP (violet → emerald) --- */
-.bg-violet-500 { background-color: #10b981 !important; }
-.bg-violet-600 { background-color: #059669 !important; }
-.bg-violet-400 { background-color: #34d399 !important; }
-.hover\:bg-violet-500:hover { background-color: #10b981 !important; }
-.hover\:bg-violet-400:hover { background-color: #34d399 !important; }
-.hover\:bg-violet-500\/10:hover { background-color: #ecfdf5 !important; }
-.text-violet-500 { color: #059669 !important; }
-.text-violet-400 { color: #059669 !important; }
-.hover\:text-violet-400:hover { color: #047857 !important; }
-.bg-violet-500\/10 { background-color: #ecfdf5 !important; }
-.bg-violet-500\/20 { background-color: #d1fae5 !important; }
-.border-violet-500 { border-color: #10b981 !important; }
-.focus-visible\:border-violet-500:focus-visible { border-color: #10b981 !important; }
-.ring-violet-500\/20 { --tw-ring-color: rgba(16,185,129,.2) !important; }
-.focus-visible\:ring-violet-500\/20:focus-visible { --tw-ring-color: rgba(16,185,129,.2) !important; }
-
-/* --- ALL remaining violet shades (50,200,300,700) --- */
-.bg-violet-700 { background-color: #047857 !important; }
-.hover\:bg-violet-700:hover { background-color: #047857 !important; }
-.bg-violet-50 { background-color: #ecfdf5 !important; }
-.bg-violet-200 { background-color: #a7f3d0 !important; }
-.bg-violet-300 { background-color: #6ee7b7 !important; }
-.text-violet-200 { color: #047857 !important; }
-.text-violet-300 { color: #059669 !important; }
-.text-violet-600 { color: #047857 !important; }
-.border-violet-400 { border-color: #34d399 !important; }
-.border-violet-600 { border-color: #059669 !important; }
-.outline-violet-400 { outline-color: #34d399 !important; }
-.bg-violet-500\/5 { background-color: #f0fdf9 !important; }
-.text-violet-50 { color: #ecfdf5 !important; }
-.ring-violet-500 { --tw-ring-color: #10b981 !important; }
-
-/* --- HOVER STATES --- */
-.hover\:bg-slate-800:hover { background-color: #f1f5f4 !important; }
-.hover\:bg-slate-800\/30:hover { background-color: #f8faf9 !important; }
-.hover\:bg-slate-800\/60:hover { background-color: #f1f5f4 !important; }
-.hover\:bg-slate-700:hover { background-color: #e7ece9 !important; }
-.hover\:text-white:hover { color: #0c1f17 !important; }
-.focus\:bg-slate-800:focus { background-color: #f1f5f4 !important; }
-.focus\:bg-slate-800\/60:focus { background-color: #f1f5f4 !important; }
-
-/* --- PLACEHOLDERS --- */
-.placeholder\:text-slate-500::placeholder { color: #9aa8a0 !important; }
+.placeholder\:text-slate-500::placeholder,
 .placeholder\:text-slate-600::placeholder { color: #9aa8a0 !important; }
 
-/* --- RINGS / DIVIDERS --- */
+/* ---- Old dark-theme borders / rings / dividers ---- */
+.border-slate-500 { border-color: #cfd8d3 !important; }
+.border-slate-600 { border-color: #dde4e0 !important; }
+.border-slate-700 { border-color: var(--line) !important; }
+.border-slate-800 { border-color: #eef2f0 !important; }
 .divide-slate-800 > * + * { border-color: #eef2f0 !important; }
-.ring-slate-700 { --tw-ring-color: #e7ece9 !important; }
+.ring-slate-700 { --tw-ring-color: var(--line) !important; }
 .ring-slate-800 { --tw-ring-color: #eef2f0 !important; }
-.ring-white\/10 { --tw-ring-color: rgba(12,31,23,.08) !important; }
+.ring-white\/10 { --tw-ring-color: rgba(11,35,26,.08) !important; }
 
-/* --- SIDEBAR special: only the main nav aside, scoped tightly --- */
-aside[aria-label="Primary"] {
-  background-color: #ffffff !important;
-  border-right: 1px solid #e7ece9 !important;
-}
+/* ---- Violet AND emerald (both legacy brand colors) → the one --brand ---- */
+.bg-violet-500, .bg-emerald-500 { background-color: var(--brand) !important; }
+.bg-violet-600, .bg-emerald-600 { background-color: var(--brand-deep) !important; }
+.bg-violet-700 { background-color: var(--brand-press) !important; }
+.hover\:bg-violet-600:hover, .hover\:bg-emerald-600:hover,
+.hover\:bg-violet-700:hover { background-color: var(--brand-deep) !important; }
+.hover\:bg-violet-500:hover, .hover\:bg-emerald-500:hover { background-color: var(--brand) !important; }
+.bg-violet-400 { background-color: var(--brand-200) !important; }
+.bg-violet-50  { background-color: var(--brand-50) !important; }
+.bg-violet-200 { background-color: var(--brand-100) !important; }
+.bg-violet-300 { background-color: var(--brand-200) !important; }
+.bg-violet-500\/5  { background-color: var(--brand-50) !important; }
+.bg-violet-500\/10 { background-color: var(--brand-50) !important; }
+.bg-violet-500\/20 { background-color: var(--brand-100) !important; }
+.hover\:bg-violet-500\/10:hover { background-color: var(--brand-50) !important; }
+.hover\:bg-violet-400:hover { background-color: var(--brand-200) !important; }
 
-/* ============================================================
-   GLOBAL POLISH
-   ============================================================ */
+.text-violet-500, .text-violet-400,
+.text-emerald-500, .text-emerald-600 { color: var(--brand-deep) !important; }
+.text-violet-600 { color: var(--brand-press) !important; }
+.text-violet-300 { color: var(--brand-deep) !important; }
+.text-violet-200, .text-violet-50 { color: var(--brand-press) !important; }
+.hover\:text-violet-400:hover { color: var(--brand-press) !important; }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d8e0dc; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #c2cdc7; }
+.border-emerald-500, .border-violet-500, .border-violet-600 { border-color: var(--brand) !important; }
+.border-violet-400 { border-color: var(--brand-200) !important; }
+.focus-visible\:border-violet-500:focus-visible { border-color: var(--brand) !important; }
+.outline-violet-400 { outline-color: var(--brand-200) !important; }
 
-::selection { background: rgba(16,185,129,.2); color: #053b2a; }
+.ring-emerald-500, .ring-violet-500 { --tw-ring-color: var(--brand) !important; }
+.ring-violet-500\/20 { --tw-ring-color: rgba(37,211,102,.2) !important; }
+.focus-visible\:ring-violet-500\/20:focus-visible { --tw-ring-color: rgba(37,211,102,.2) !important; }
 
-:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
-
-/* Buttons get emerald primary treatment */
-button.bg-violet-600,
-button.bg-violet-500 {
-  box-shadow: 0 6px 18px rgba(16,185,129,.28);
-}
-
-/* Loading spinner color */
-.border-violet-500 { border-color: #10b981 !important; }
+/* Spinners use the same border trick, so the "loading" color follows too. */
+.border-violet-500 { border-color: var(--brand) !important; }
 .border-t-transparent { border-top-color: transparent !important; }
 
-/* Animations */
-@keyframes fade-in { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:none; } }
-.animate-fade-in { animation: fade-in .3s ease forwards; }
+/* ============================================================================
+   COMPONENT TREATMENTS
+   ============================================================================ */
 
-/* ============================================================
-   DESIGN SYSTEM UPGRADE — v2 (professional / AiSensy-grade)
-   Appended below the legacy remaps so it wins by source order
-   without removing anything that already works. Refines the
-   palette, depth, typography, and mobile behavior.
-   ============================================================ */
-
-:root {
-  /* AiSensy-grade green: a confident forest/emerald, not neon.
-     Primary actions use --brand; deep variant for hover/press. */
-  --brand:        #1aa260;   /* primary */
-  --brand-deep:   #14834e;   /* hover */
-  --brand-press:  #0f6b40;   /* active */
-  --brand-50:     #effaf4;
-  --brand-100:    #d6f1e2;
-  --brand-200:    #aee3c6;
-  --ink:          #0b231a;   /* near-black green text */
-  --ink-soft:     #46584f;   /* secondary text */
-  --ink-muted:    #7c8a83;   /* tertiary / placeholder */
-  --line:         #e6ece9;   /* hairline borders */
-  --surface:      #ffffff;   /* cards */
-  --canvas:       #f5f8f6;   /* app background */
-
-  /* Elevation tokens — soft, layered, never harsh */
-  --shadow-xs: 0 1px 2px rgba(11,35,26,.05);
-  --shadow-sm: 0 1px 3px rgba(11,35,26,.06), 0 1px 2px rgba(11,35,26,.04);
-  --shadow-md: 0 4px 12px rgba(11,35,26,.07), 0 2px 4px rgba(11,35,26,.04);
-  --shadow-lg: 0 12px 32px rgba(11,35,26,.10), 0 4px 8px rgba(11,35,26,.05);
-  --shadow-brand: 0 8px 20px rgba(26,162,96,.22);
-}
-
-/* App canvas + base type rhythm */
-body { background: var(--canvas); color: var(--ink); letter-spacing: -0.005em; }
-
-/* ---- Brand remap to the refined green (overrides the neon emerald) ---- */
-.bg-violet-500,
-.bg-emerald-500 { background-color: var(--brand) !important; }
-.bg-violet-600,
-.bg-emerald-600 { background-color: var(--brand-deep) !important; }
-.hover\:bg-violet-600:hover,
-.hover\:bg-emerald-600:hover { background-color: var(--brand-deep) !important; }
-.hover\:bg-violet-500:hover,
-.hover\:bg-emerald-500:hover { background-color: var(--brand) !important; }
-.text-violet-500,
-.text-violet-400,
-.text-emerald-500,
-.text-emerald-600 { color: var(--brand-deep) !important; }
-.border-emerald-500,
-.border-violet-500 { border-color: var(--brand) !important; }
-.ring-emerald-500 { --tw-ring-color: var(--brand) !important; }
-
-/* ---- Cards: soft elevation + hairline, gentle hover lift ---- */
-.bg-white {
-  background-color: var(--surface) !important;
-}
+/* ---- Cards: soft elevation + hairline border, gentle hover lift ---- */
+.bg-white { background-color: var(--surface) !important; }
 [class*="rounded-"][class*="border"].bg-white,
 .card, [data-slot="card"] {
   border-color: var(--line) !important;
   box-shadow: var(--shadow-sm);
   transition: box-shadow .2s ease, transform .2s ease;
 }
-[data-slot="card"]:hover {
-  box-shadow: var(--shadow-md);
-}
+[data-slot="card"]:hover { box-shadow: var(--shadow-md); }
 
 /* ---- Primary buttons: weighty, confident, tactile ---- */
 button.bg-violet-600, button.bg-violet-500,
@@ -259,7 +229,7 @@ button.bg-emerald-600, button.bg-emerald-500,
 button.bg-violet-600:hover, button.bg-violet-500:hover,
 button.bg-emerald-600:hover, button.bg-emerald-500:hover {
   filter: brightness(1.03);
-  box-shadow: 0 10px 26px rgba(26,162,96,.30) !important;
+  box-shadow: 0 10px 26px rgba(37,211,102,.32) !important;
 }
 button.bg-violet-600:active, button.bg-violet-500:active,
 button.bg-emerald-600:active, button.bg-emerald-500:active {
@@ -267,7 +237,7 @@ button.bg-emerald-600:active, button.bg-emerald-500:active {
   filter: brightness(.97);
 }
 
-/* ---- Danger buttons: red destructive actions ---- */
+/* ---- Danger buttons: destructive actions stay red regardless of brand ---- */
 button.ag-btn-danger {
   background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%) !important;
   color: #fff !important;
@@ -284,79 +254,70 @@ button.ag-btn-danger:active {
   filter: brightness(.95);
 }
 
-/* ---- Inputs: clean, calm focus ring in brand green ---- */
+/* ---- Inputs: clean, calm focus ring in the brand color ---- */
 input, textarea, select {
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 input:focus-visible, textarea:focus-visible, select:focus-visible {
   border-color: var(--brand) !important;
-  box-shadow: 0 0 0 3px rgba(26,162,96,.15) !important;
+  box-shadow: 0 0 0 3px rgba(37,211,102,.18) !important;
   outline: none !important;
 }
-:focus-visible { outline-color: var(--brand); }
-::selection { background: rgba(26,162,96,.18); color: var(--brand-press); }
 
-/* ---- Typography scale: tighter, more editorial headings ---- */
-h1 { font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem); font-weight: 700; }
-h2 { font-weight: 700; }
-h1, h2, h3, h4, .font-display { letter-spacing: -0.022em; color: var(--ink); }
+/* ---- Badges/pills ---- */
+[class*="rounded-full"][class*="border"] { font-weight: 600; }
 
-/* ---- Sidebar: subtle depth, active item gets a brand rail ---- */
-aside[aria-label="Primary"] {
+/* ---- Sidebar: subtle depth (the sidebar's own dark background is set
+   inline in sidebar.tsx, not here — see the file header comment) ---- */
+aside[aria-label="Primary"], aside[aria-label="Primary navigation"] {
   background: var(--surface) !important;
   border-right: 1px solid var(--line) !important;
   box-shadow: var(--shadow-xs);
 }
 
-/* ---- Badges/pills get rounded, soft-tinted look (status colors) ---- */
-[class*="rounded-full"][class*="border"] {
-  font-weight: 600;
-}
+/* ============================================================================
+   GLOBAL POLISH
+   ============================================================================ */
 
-/* ---- Scrollbar refinement ---- */
-::-webkit-scrollbar-thumb { background: #d3ddd7; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d3ddd7; border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: #b9c7c0; }
 
-/* ============================================================
+::selection { background: rgba(37,211,102,.22); color: var(--brand-press); }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+@keyframes fade-in { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:none; } }
+.animate-fade-in { animation: fade-in .3s ease forwards; }
+
+/* ============================================================================
    MOBILE RESPONSIVENESS HARDENING
-   Generic safeguards so dense desktop layouts don't overflow
-   on phones. Page components keep their own responsive classes;
-   these are the safety net.
-   ============================================================ */
+   Generic safeguards so dense desktop layouts don't overflow on phones.
+   Page components keep their own responsive classes; these are the
+   safety net. Nothing in this section is color — no theme edits needed.
+   ============================================================================ */
 
 @media (max-width: 640px) {
-  /* Prevent horizontal scroll from wide fixed-width children */
   html, body { overflow-x: hidden; }
 
-  /* Tables become horizontally scrollable instead of breaking layout */
   table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-  /* Multi-column grids collapse to single column on phones unless a
-     component explicitly opts into a mobile grid via sm:/grid-cols. */
   .grid.grid-cols-2:not([class*="sm:"]):not([class*="xs:"]),
   .grid.grid-cols-3:not([class*="sm:"]),
   .grid.grid-cols-4:not([class*="sm:"]) {
     grid-template-columns: 1fr !important;
   }
 
-  /* Dialogs/sheets: full-width with comfortable insets on phones */
-  [role="dialog"] {
-    max-width: calc(100vw - 1.5rem) !important;
-  }
+  [role="dialog"] { max-width: calc(100vw - 1.5rem) !important; }
 
-  /* Tighter heading sizes on phones */
   h1 { font-size: 1.375rem; }
-
-  /* Big stat numbers shouldn't overflow cards */
   .text-3xl, .text-4xl { font-size: 1.5rem !important; }
 }
 
-/* Tap targets: ensure buttons/links are finger-friendly on touch */
 @media (pointer: coarse) {
   button, a[role="button"], .btn { min-height: 40px; }
 }
 
-/* Respect reduced-motion preferences (accessibility / pro polish) */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .001ms !important;

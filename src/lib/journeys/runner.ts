@@ -43,6 +43,7 @@ import {
   deductCredits,
   MESSAGE_PRICE_INR,
 } from '@/lib/billing/credits'
+import { callLLM, hasProviderKey } from '@/lib/agent/llm-provider'
 
 // Lazy admin client — same pattern as the webhook to avoid build-time
 // crashes when env vars are missing.
@@ -96,6 +97,9 @@ interface JourneyRow {
 
 export interface RunJourneysArgs {
   userId: string
+  /** Needed only to check whether AI Routing is turned on for this
+   *  business. Absent (e.g. legacy callers) just skips that check. */
+  businessId?: string | null
   conversationId: string
   contactId: string
   customerPhone: string
@@ -148,8 +152,18 @@ export async function runJourneysForInbound(
       }
     }
 
-    // No keyword matched any journey. Not this layer's job to answer —
-    // the caller falls through to the assigned AI agent.
+    // No keyword matched. If this business has AI Routing on, let a
+    // model pick the best-fitting journey by intent before giving up —
+    // this is the one place a journey is chosen without an exact
+    // keyword, matching how AiSensy's AI Routing sits above its Flows.
+    const routed = await routeByIntent(journeys as JourneyRow[], args)
+    if (routed) {
+      await executeJourney(routed, args, orgId)
+      return true
+    }
+
+    // Nothing matched, keyword or AI-routed. Not this layer's job to
+    // answer — the caller falls through to the assigned AI agent.
     return false
   } catch (err) {
     console.error('[journeys.runner] unhandled error:', err)
@@ -200,6 +214,88 @@ function containsWord(haystack: string, needle: string): boolean {
     : haystack[idx + needle.length]
   const isBoundary = (c: string) => !c || !/[\p{L}\p{N}]/u.test(c)
   return isBoundary(before) && isBoundary(after)
+}
+
+// ── AI Routing ──
+//
+// Off by default (businesses.ai_routing_enabled), and only even
+// attempted once no exact keyword matched — a merchant who wrote
+// "book" as a trigger gets exactly that script; AI Routing only
+// covers what nobody predicted. A journey's name and its own trigger
+// keywords are the only description the model gets of what it does;
+// there is no separate "purpose" field to write yet, so those double
+// as the hint.
+
+/**
+ * Is AI Routing turned on for this business? False (and silent) for
+ * every reason it might not apply — no businessId, no row, the column
+ * not existing yet on an unmigrated database — so a missing setting
+ * degrades to "off" rather than breaking the webhook.
+ */
+async function aiRoutingEnabled(businessId: string | null | undefined): Promise<boolean> {
+  if (!businessId) return false
+  try {
+    const { data } = await admin()
+      .from('businesses')
+      .select('ai_routing_enabled')
+      .eq('id', businessId)
+      .maybeSingle()
+    return data?.ai_routing_enabled === true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * When no keyword matched, ask the model which active journey (if any)
+ * the inbound message was actually trying to reach. Returns null on
+ * anything short of a confident, valid match — a wrong guess sends the
+ * customer into the wrong script, which is worse than the plain agent
+ * reply this falls back to.
+ */
+async function routeByIntent(
+  journeys: JourneyRow[],
+  args: RunJourneysArgs,
+): Promise<JourneyRow | null> {
+  if (journeys.length === 0) return null
+  if (!(await aiRoutingEnabled(args.businessId))) return null
+  if (!hasProviderKey()) return null
+
+  // Only journeys that actually describe themselves are worth offering
+  // to the model — an untitled draft with no keywords gives it nothing
+  // to match against and is more likely to be guessed into by mistake.
+  const candidates = journeys.filter(
+    (j) => j.name && j.name.trim() && j.name.trim().toLowerCase() !== 'untitled journey',
+  )
+  if (candidates.length === 0) return null
+
+  const menu = candidates
+    .map((j, i) => {
+      const kw = (j.trigger?.keywords || []).filter(Boolean).join(', ')
+      return `${i + 1}. id=${j.id} — "${j.name}"${kw ? ` (also triggers on: ${kw})` : ''}`
+    })
+    .join('\n')
+
+  const system =
+    'You route an inbound WhatsApp message to the ONE existing automated flow that best ' +
+    "matches what the customer wants, using only the flow names/keywords below — never invent " +
+    'a flow. Reply with ONLY the id of the best match, nothing else. If none of them are a ' +
+    'confident match for this specific message, reply with exactly: NONE.\n\nFlows:\n' + menu
+
+  try {
+    const resp = await callLLM(system, [{ role: 'user', text: args.inboundText }], [])
+    const answer = resp.text.trim()
+    if (!answer || /^none$/i.test(answer)) return null
+
+    // The model is asked to answer with only the id — but is not
+    // trusted to. Anything other than an exact id from the menu we
+    // actually offered is treated as no match.
+    const picked = candidates.find((j) => answer === j.id || answer.includes(j.id))
+    return picked ?? null
+  } catch (err) {
+    console.warn('[journeys.runner] AI routing call failed:', err)
+    return null
+  }
 }
 
 // ── Graph execution ──

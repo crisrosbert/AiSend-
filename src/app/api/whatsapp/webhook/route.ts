@@ -580,6 +580,7 @@ async function processMessage(
   try {
     journeyReplied = await runJourneysForInbound({
       userId,
+      businessId,
       conversationId: conversation.id,
       contactId: contactRecord.id,
       customerPhone: senderPhone,

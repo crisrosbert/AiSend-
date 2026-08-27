@@ -83,6 +83,7 @@ export function DataExport() {
           .select("id, name, phone, email, company, created_at, updated_at")
           .eq("user_id", userId)
           .eq("business_id", businessId)
+          .not("phone", "ilike", "web%")
           .order("created_at", { ascending: true })
           .range(from, to),
       );

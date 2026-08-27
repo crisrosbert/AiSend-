@@ -27,7 +27,7 @@ export async function listBusinesses(
 ): Promise<BusinessRef[]> {
   const { data, error } = await supabase
     .from('businesses')
-    .select('id, name, is_default')
+    .select('id, name, is_default, logo_url')
     .eq('owner_user_id', userId)
     // Default first so resolve.ts's last-resort fallback (owned[0])
     // lands somewhere sensible even if the flag is missing entirely.
@@ -98,7 +98,7 @@ export async function ensureBusiness(
       name: opts.name?.trim() || 'My Business',
       is_default: true,
     })
-    .select('id, name, is_default')
+    .select('id, name, is_default, logo_url')
     .single()
 
   if (error) {

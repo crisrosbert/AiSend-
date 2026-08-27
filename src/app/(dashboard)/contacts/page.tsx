@@ -140,6 +140,12 @@ export default function ContactsPage() {
       .from('contacts')
       .select('*, contact_tags(tag_id)', { count: 'exact' })
       .eq('business_id', businessId)
+      // Website widget visitors are stored as contacts too (there's
+      // nowhere else to attach their conversation to), with a phone
+      // starting "web_" because there is no real number yet. They
+      // already have a home — Website Leads and the inbox thread —
+      // so they don't belong in the real, message-able contact list.
+      .not('phone', 'ilike', 'web%')
       .order('created_at', { ascending: false })
       .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -158,6 +164,7 @@ export default function ContactsPage() {
       .from('contacts')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
+      .not('phone', 'ilike', 'web%')
       .not('opted_out_at', 'is', null);
     setOptedOutCount(ooCount ?? 0);
 
@@ -267,6 +274,7 @@ export default function ContactsPage() {
         .from('contacts')
         .select('phone, name, email, company, opted_out_at, created_at')
         .eq('business_id', businessId)
+        .not('phone', 'ilike', 'web%')
         .order('created_at', { ascending: false });
 
       if (optOutFilter === 'active') query = query.is('opted_out_at', null);

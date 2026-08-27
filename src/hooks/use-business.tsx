@@ -106,7 +106,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("businesses")
-      .select("id, name, is_default")
+      .select("id, name, is_default, logo_url")
       .eq("owner_user_id", user.id)
       .order("is_default", { ascending: false })
       .order("created_at", { ascending: true });

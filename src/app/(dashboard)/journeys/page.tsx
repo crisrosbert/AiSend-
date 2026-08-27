@@ -9,7 +9,7 @@ import {
   Plus, Search, MoreHorizontal, Copy, Edit2, Trash2, Loader2,
   Sparkles, Workflow, FlaskConical, Phone, BarChart3,
   CheckCircle2, AlertCircle, Power, PowerOff,
-  ShoppingBag, Send, Smartphone, UserPlus, Bot, PlugZap, Lock,
+  ShoppingBag, Send, Smartphone, UserPlus, Bot, PlugZap,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -538,57 +538,53 @@ function CataloguePanel() {
         </div>
       </div>
 
-      {/* Facebook catalogue connect */}
+      {/* Product catalog — managed in Meta's own tools, not re-built here.
+          Connecting a catalog involves Business Manager permissions and a
+          WABA-level link that only Meta's own flow can guarantee stays
+          correct as their API changes. Pointing to it directly avoids
+          shipping a from-scratch OAuth integration nobody here can test
+          against a real catalog before it reaches a live account. */}
       <div className="overflow-hidden rounded-2xl border border-[#e7ece9] bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-4 border-b border-[#e7ece9] px-5 py-4">
-          <div>
-            <p className="text-sm font-bold text-[#0c1f17]">Connect your Facebook account</p>
-            <p className="mt-0.5 text-xs text-slate-500">Allow AiSend to fetch catalogues and products from Facebook.</p>
+        <div className="flex items-start gap-3 border-b border-[#e7ece9] px-5 py-4">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <ShoppingBag className="size-4" />
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-amber-600">
-              <Lock className="size-3" /> Coming soon
-            </span>
-            <button
-              onClick={() => toast("Facebook Commerce Manager connection is coming soon")}
-              className="flex items-center gap-1.5 rounded-lg border border-[#e7ece9] px-3 py-1.5 text-xs font-bold text-slate-400"
-            >
-              <PlugZap className="size-3.5" /> Connect
-            </button>
+          <div>
+            <p className="text-sm font-bold text-[#0c1f17]">Product catalog</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Catalogs are created and connected to your WhatsApp number in Meta&apos;s own
+              Commerce Manager — that keeps your product data and permissions exactly where
+              Meta expects them, and it&apos;s the same place Meta will send you to fix anything
+              that goes wrong with a catalog.
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-b border-[#e7ece9] px-5 py-4">
-          <div>
-            <p className="text-sm font-bold text-[#0c1f17]">Choose your Facebook catalogue</p>
-            <p className="mt-0.5 text-xs text-slate-500">Pick which product catalogue this business sends from.</p>
-          </div>
-          <select
-            disabled
-            className="w-52 shrink-0 cursor-not-allowed rounded-lg border border-[#e7ece9] bg-[#f8faf9] px-3 py-2 text-xs text-slate-400"
+        <div className="flex flex-wrap items-center gap-2.5 px-5 py-4">
+          <a
+            href="https://business.facebook.com/commerce_manager"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-600"
           >
-            <option>Choose your catalogue</option>
-          </select>
+            <PlugZap className="size-3.5" /> Open Commerce Manager
+          </a>
+          <a
+            href="https://www.facebook.com/business/help/158662536425974"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#e7ece9] bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
+          >
+            How to connect a catalog to WhatsApp (Meta&apos;s guide)
+          </a>
         </div>
 
-        <div className="flex items-center justify-between gap-4 px-5 py-4">
-          <div>
-            <p className="text-sm font-bold text-[#0c1f17]">Display catalogue on Business profile</p>
-            <p className="mt-0.5 text-xs text-slate-500">Show your product catalogue on the WhatsApp business profile.</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <span className="h-5 w-9 shrink-0 cursor-not-allowed rounded-full bg-slate-200" aria-hidden />
-            <div
-              className="flex w-40 items-center gap-2 rounded-xl px-2.5 py-2 text-white shadow-sm"
-              style={{ background: "linear-gradient(135deg,#111827,#1f2937)" }}
-            >
-              <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white/15">
-                <ShoppingBag className="size-3" />
-              </div>
-              <span className="truncate text-[11px] font-semibold">Your Brand Name</span>
-              <CheckCircle2 className="ml-auto size-3 shrink-0 text-emerald-400" />
-            </div>
-          </div>
+        <div className="border-t border-[#e7ece9] bg-[#f8faf9] px-5 py-3">
+          <p className="text-[11px] text-slate-500">
+            Once connected, copy the catalog&apos;s ID from Commerce Manager (Settings → Catalog ID)
+            and paste it into a Catalogue / Single Product / Multi Product step on the Canvas
+            when you build that part of a flow.
+          </p>
         </div>
       </div>
     </div>

@@ -747,8 +747,21 @@ export function MessageThread({
         </div>
       </div>
 
-      {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+      {/* Messages Area — a light, textured backdrop (our own pattern, not
+          a copy of WhatsApp's wallpaper) so message bubbles have some
+          visual separation instead of sitting on flat white. */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-4 py-4"
+        style={{
+          backgroundColor: "var(--brand-50, #E9FBEF)",
+          backgroundImage:
+            "radial-gradient(rgba(37,211,102,0.16) 1px, transparent 1.5px), " +
+            "radial-gradient(rgba(37,211,102,0.10) 1px, transparent 1.5px)",
+          backgroundSize: "28px 28px, 28px 28px",
+          backgroundPosition: "0 0, 14px 14px",
+        }}
+      >
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />

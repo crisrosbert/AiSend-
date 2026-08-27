@@ -236,7 +236,7 @@ export default function IntegrationsPage() {
           if (!map["dialogflow"]) {
             map["dialogflow"] = {
               status: "connected",
-              config: { project_id: "aisensy-dialogflow-agent", agent_name: "Default Dialogflow" },
+              config: { project_id: "your-dialogflow-agent", agent_name: "Default Dialogflow" },
             };
           }
           setConnections(map);
@@ -259,7 +259,7 @@ export default function IntegrationsPage() {
           const defaultMap = {
             dialogflow: {
               status: "connected",
-              config: { project_id: "aisensy-dialogflow-agent", agent_name: "Default Dialogflow" },
+              config: { project_id: "your-dialogflow-agent", agent_name: "Default Dialogflow" },
             },
           };
           setConnections(defaultMap);

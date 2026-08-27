@@ -64,7 +64,8 @@ export function Step4ScheduleSend({
           const { count } = await supabase
             .from('contacts')
             .select('*', { count: 'exact', head: true })
-            .eq('business_id', businessId);
+            .eq('business_id', businessId)
+            .not('phone', 'ilike', 'web%');
           setEstimatedReach(count ?? 0);
         } else if (audience.type === 'tags' && audience.tagIds && audience.tagIds.length > 0) {
           const { data: contactTags } = await supabase

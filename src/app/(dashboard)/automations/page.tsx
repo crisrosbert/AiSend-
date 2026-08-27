@@ -34,7 +34,6 @@ import {
   Zap, Plus, MoreVertical, Copy, Pencil, Trash2, FileText,
   MessageCircle, Clock, Users, PhoneCall, Loader2, Search,
 } from "lucide-react"
-import { BotTemplates } from "@/components/automations/bot-templates"
 import { createClient } from "@/lib/supabase/client"
 import type { Automation } from "@/types"
 import {
@@ -303,8 +302,6 @@ export default function AutomationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <BotTemplates onCreated={load} />
     </div>
   )
 }

@@ -163,6 +163,23 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // ── Logo ──
+  //
+  // `null` clears it (the "remove logo" case); any other value must be
+  // the string URL the client already uploaded to storage — this route
+  // only records where it lives, it never receives the file itself.
+  if (body.logo_url !== undefined) {
+    const logoUrl = body.logo_url === null ? null : String(body.logo_url).slice(0, 2048)
+    const { error } = await supabase
+      .from('businesses')
+      .update({ logo_url: logoUrl, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('owner_user_id', user.id)
+    if (error) {
+      return NextResponse.json({ error: 'Could not save the logo' }, { status: 500 })
+    }
+  }
+
   // ── Changing which one is default ──
   //
   // Two writes that must not half-apply: clear the old default, set the

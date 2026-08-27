@@ -290,7 +290,10 @@ export function Step2SelectAudience({
         const { count } = await supabase
           .from('contacts')
           .select('*', { count: 'exact', head: true })
-          .eq('business_id', businessId);
+          .eq('business_id', businessId)
+          // Website widget visitors have no real WhatsApp number
+          // ("web_..." placeholder) — a broadcast can't reach them.
+          .not('phone', 'ilike', 'web%');
         const total = count ?? 0;
         setEstimatedCount(excludeSet ? Math.max(0, total - excludeSet.size) : total);
       }

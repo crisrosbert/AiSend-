@@ -98,8 +98,8 @@ export function TemplateManager() {
       setSaving(true);
       if (!user) { toast.error('Not authenticated'); return; }
 
-      // Submit to Meta for approval (AiSensy-style) via the create
-      // route. This both POSTs to Meta AND mirrors the row locally with
+      // Submit to Meta for approval via the create route. This both
+      // POSTs to Meta AND mirrors the row locally with
       // status Pending. The old behavior (Supabase-only insert) created
       // templates Meta never saw, which then failed on send with #132001.
       const res = await fetch('/api/whatsapp/templates/create', {
@@ -383,7 +383,7 @@ export function TemplateManager() {
               />
             </div>
 
-            {/* Live WhatsApp-style preview (AiSensy-style) */}
+            {/* Live WhatsApp-style preview */}
             <div className="space-y-2">
               <Label className="text-slate-700">Preview</Label>
               <div className="rounded-xl bg-[#e5ddd5] p-4">

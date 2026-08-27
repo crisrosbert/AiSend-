@@ -123,12 +123,15 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
-    <div className="flex h-full w-[280px] flex-col border-l border-[#e7ece9] bg-white">
+    <div className="flex h-full w-[280px] flex-col border-l border-[#e7ece9] bg-[#f8faf9]">
       <ScrollArea className="flex-1">
-        <div className="p-4">
+        <div className="space-y-3 p-3">
           {/* Contact Info */}
-          <div className="flex flex-col items-center text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#e8f4ee] text-lg font-semibold text-[#0c1f17]">
+          <div className="flex flex-col items-center rounded-2xl border border-[#e7ece9] bg-white p-4 text-center shadow-sm">
+            <div
+              className="flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold text-white shadow-sm ring-4 ring-emerald-50"
+              style={{ background: "linear-gradient(135deg,#10b981,#059669)" }}
+            >
               {contact.avatar_url ? (
                 <img
                   src={contact.avatar_url}
@@ -139,56 +142,55 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 initials
               )}
             </div>
-            <h3 className="mt-3 text-sm font-semibold text-[#0c1f17]">
+            <h3 className="mt-3 text-sm font-bold text-[#0c1f17]">
               {displayName}
             </h3>
             {contact.company && (
               <p className="text-xs text-slate-400">{contact.company}</p>
             )}
-          </div>
 
-          {/* Phone */}
-          <div className="mt-4 space-y-2">
-            <button
-              onClick={handleCopyPhone}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-[#f2f4f7]"
-            >
-              <Phone className="h-4 w-4 text-slate-400" />
-              <span className="flex-1 text-left">{contact.phone}</span>
-              {copied ? (
-                <Check className="h-3 w-3 text-emerald-600" />
-              ) : (
-                <Copy className="h-3 w-3 text-slate-400" />
+            {/* Phone / email */}
+            <div className="mt-3 w-full space-y-1 border-t border-[#e7ece9] pt-3">
+              <button
+                onClick={handleCopyPhone}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-[#f2f4f7]"
+              >
+                <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <span className="flex-1 truncate text-left">{contact.phone}</span>
+                {copied ? (
+                  <Check className="h-3 w-3 shrink-0 text-emerald-600" />
+                ) : (
+                  <Copy className="h-3 w-3 shrink-0 text-slate-400" />
+                )}
+              </button>
+
+              {contact.email && (
+                <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-slate-500">
+                  <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  <span className="truncate">{contact.email}</span>
+                </div>
               )}
-            </button>
-
-            {contact.email && (
-              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400">
-                <Mail className="h-4 w-4 text-slate-400" />
-                <span className="truncate">{contact.email}</span>
-              </div>
-            )}
+            </div>
           </div>
-
-          {/* Divider */}
-          <div className="my-4 border-t border-[#e7ece9]" />
 
           {/* Tags */}
-          <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-slate-400">
+          <div className="rounded-2xl border border-[#e7ece9] bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <TagIcon className="h-3 w-3" />
               Tags
             </div>
-            <div className="mt-2 flex flex-wrap gap-1">
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
               {tags.length === 0 ? (
-                <p className="px-1 text-xs text-slate-400">No tags</p>
+                <div className="w-full rounded-lg border border-dashed border-[#e7ece9] py-2 text-center text-[11px] text-slate-400">
+                  No tags yet
+                </div>
               ) : (
                 tags.map((tag) => (
                   <span
                     key={tag.contact_tag_id}
-                    className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                    className="rounded-full px-2.5 py-1 text-[10px] font-bold"
                     style={{
-                      backgroundColor: `${tag.color}20`,
+                      backgroundColor: `${tag.color}18`,
                       color: tag.color,
                     }}
                   >
@@ -199,37 +201,36 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="my-4 border-t border-[#e7ece9]" />
-
           {/* Active Deals */}
-          <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-slate-400">
+          <div className="rounded-2xl border border-[#e7ece9] bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <DollarSign className="h-3 w-3" />
               Active Deals
             </div>
-            <div className="mt-2 space-y-2">
+            <div className="mt-2.5 space-y-2">
               {deals.length === 0 ? (
-                <p className="px-1 text-xs text-slate-400">No deals</p>
+                <div className="rounded-lg border border-dashed border-[#e7ece9] py-2 text-center text-[11px] text-slate-400">
+                  No deals yet
+                </div>
               ) : (
                 deals.map((deal) => (
                   <div
                     key={deal.id}
-                    className="rounded-lg bg-[#f2f4f7] px-3 py-2"
+                    className="rounded-xl bg-[#f8faf9] px-3 py-2.5"
                   >
-                    <p className="text-sm font-medium text-[#0c1f17]">
+                    <p className="text-sm font-semibold text-[#0c1f17]">
                       {deal.title}
                     </p>
                     <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
-                      <span>
+                      <span className="font-semibold text-emerald-700">
                         {deal.currency ?? "$"}
                         {deal.value.toLocaleString()}
                       </span>
                       {deal.stage && (
                         <span
-                          className="rounded-full px-1.5 py-0.5 text-[10px]"
+                          className="rounded-full px-2 py-0.5 text-[10px] font-bold"
                           style={{
-                            backgroundColor: `${deal.stage.color}20`,
+                            backgroundColor: `${deal.stage.color}18`,
                             color: deal.stage.color,
                           }}
                         >
@@ -243,44 +244,41 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="my-4 border-t border-[#e7ece9]" />
-
           {/* Notes */}
-          <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-slate-400">
+          <div className="rounded-2xl border border-[#e7ece9] bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <StickyNote className="h-3 w-3" />
               Notes
             </div>
-            <div className="mt-2">
+            <div className="mt-2.5">
               <div className="flex gap-2">
                 <textarea
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
                   placeholder="Add a note..."
                   rows={2}
-                  className="flex-1 resize-none rounded-lg border border-[#e7ece9] bg-[#f2f4f7] px-3 py-2 text-xs text-[#0c1f17] placeholder-slate-500 outline-none focus:border-emerald-500/50"
+                  className="flex-1 resize-none rounded-lg border border-[#e7ece9] bg-[#f8faf9] px-3 py-2 text-xs text-[#0c1f17] placeholder-slate-400 outline-none transition-colors focus:border-emerald-500/60 focus:bg-white focus:ring-2 focus:ring-emerald-500/10"
                 />
                 <Button
                   size="sm"
-                  className="h-auto bg-emerald-600 px-2 hover:bg-emerald-500"
+                  className="h-auto self-stretch bg-emerald-600 px-2.5 hover:bg-emerald-500"
                   onClick={handleAddNote}
                   disabled={!newNote.trim() || addingNote}
                 >
-                  <Plus className="h-3 w-3" />
+                  <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>
 
-              <div className="mt-2 space-y-2">
+              <div className="mt-2.5 space-y-2">
                 {notes.map((note) => (
                   <div
                     key={note.id}
-                    className="rounded-lg bg-[#f2f4f7] px-3 py-2"
+                    className="rounded-xl border-l-2 border-emerald-300 bg-[#f8faf9] px-3 py-2.5"
                   >
-                    <p className="whitespace-pre-wrap text-xs text-slate-400">
+                    <p className="whitespace-pre-wrap text-xs text-slate-600">
                       {note.note_text}
                     </p>
-                    <p className="mt-1 text-[10px] text-slate-400">
+                    <p className="mt-1 text-[10px] font-medium text-slate-400">
                       {format(new Date(note.created_at), "MMM d, yyyy HH:mm")}
                     </p>
                   </div>

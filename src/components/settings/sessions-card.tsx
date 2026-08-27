@@ -49,13 +49,13 @@ export function SessionsCard() {
 
   return (
     <>
-      <Card className="bg-slate-900/40 border-slate-800">
+      <Card className="bg-white border-[#e7ece9]">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <LogOut className="size-4 text-violet-400" />
+          <CardTitle className="flex items-center gap-2 text-[#0c1f17]">
+            <LogOut className="size-4 text-emerald-600" />
             Active sessions
           </CardTitle>
-          <CardDescription className="text-slate-400">
+          <CardDescription className="text-slate-500">
             Sign out of every device where you&apos;re logged in — including
             this one. Useful if you lost a laptop or shared your password.
           </CardDescription>
@@ -65,6 +65,7 @@ export function SessionsCard() {
             type="button"
             variant="outline"
             onClick={() => setOpen(true)}
+            className="border-[#e7ece9] text-slate-600 hover:bg-[#f8faf9]"
           >
             <LogOut className="size-4" />
             Sign out of all devices

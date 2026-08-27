@@ -42,8 +42,8 @@ export async function OPTIONS() {
  * This is the only signal, anywhere on the contact row itself, that
  * distinguishes it from a real WhatsApp contact (its phone is a
  * "web_..." placeholder, not the source of truth other code should
- * rely on). Mirrors how AiSensy tags a contact's source rather than
- * keeping a separate table for it. Best-effort: a failure here must
+ * rely on). Tags the contact's source rather than keeping a separate
+ * table for it. Best-effort: a failure here must
  * never break the chat reply itself.
  */
 async function tagAsWebsiteVisitor(orgId: string | null, contactId: string): Promise<void> {

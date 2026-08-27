@@ -18,7 +18,7 @@ import {
   Search, Plus, Upload, MoreHorizontal, Pencil, Trash2, Loader2,
   ChevronLeft, ChevronRight, ChevronDown, Mail, MessageSquare, Filter,
   ShieldOff, ShieldCheck, Send, Bot, UserPlus, Radio, Download,
-  ExternalLink, X,
+  X, Users,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
@@ -35,40 +35,12 @@ interface ContactWithTags extends Contact {
 
 type OptOutFilter = 'all' | 'active' | 'opted_out';
 
-/** The "What would you like to do next?" cards, mirroring AiSensy's quick guide. */
+/** Compact shortcut chips shown alongside the real contact stats. */
 const NEXT_ACTIONS = [
-  {
-    href: '/broadcasts/new',
-    icon: Send,
-    tint: 'bg-emerald-50 text-emerald-600',
-    title: 'Launch Broadcast Campaign',
-    badge: { label: 'POPULAR', className: 'bg-amber-100 text-amber-700' },
-    description: 'Reach your WhatsApp audience with offers, updates and alerts.',
-  },
-  {
-    href: '/agents',
-    icon: Bot,
-    tint: 'bg-violet-50 text-violet-600',
-    title: 'Create AI Agent',
-    badge: { label: 'AI', className: 'bg-violet-100 text-violet-700' },
-    description: 'Qualify leads, answer questions and close sales automatically.',
-  },
-  {
-    href: '/ads',
-    icon: Radio,
-    tint: 'bg-emerald-50 text-emerald-600',
-    title: 'Launch WhatsApp Ads',
-    badge: { label: 'NEW', className: 'bg-amber-100 text-amber-700' },
-    description: 'Publish scroll-stopping offers and click-to-WhatsApp ads.',
-  },
-  {
-    href: '/leads',
-    icon: UserPlus,
-    tint: 'bg-blue-50 text-blue-600',
-    title: 'Capture Leads',
-    badge: null,
-    description: 'Capture high-intent leads and follow up instantly on WhatsApp.',
-  },
+  { href: '/broadcasts/new', icon: Send, label: 'Broadcast campaign' },
+  { href: '/agents', icon: Bot, label: 'AI Agent' },
+  { href: '/ads', icon: Radio, label: 'WhatsApp Ads' },
+  { href: '/leads', icon: UserPlus, label: 'Capture leads' },
 ] as const;
 
 /** This project's DropdownMenuTrigger renders its own element, so it is styled
@@ -316,62 +288,36 @@ export default function ContactsPage() {
 
   return (
     <div className="space-y-5">
-      {/* ── Quick guide ── */}
-      <div className="grid gap-4 rounded-2xl border border-[#e7ece9] bg-white p-5 lg:grid-cols-[minmax(0,280px)_1fr]">
-        <div className="lg:border-r lg:border-[#e7ece9] lg:pr-5">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-            Contacts quick guide
-          </p>
-          <h2 className="mt-1.5 text-base font-bold text-[#0c1f17]">
-            Grow and organise your audience
-          </h2>
-          <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-            Import contacts, create audiences and launch campaigns, all from one place.
-          </p>
-          <div className="mt-3 flex flex-col gap-1.5">
-            <button
-              onClick={() => setImportOpen(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:underline"
-            >
-              Import contacts from Excel or CSV <ExternalLink className="size-3" />
-            </button>
-            <Link
-              href="/broadcasts/new"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:underline"
-            >
-              Send your first broadcast <ExternalLink className="size-3" />
-            </Link>
-          </div>
+      {/* ── Audience overview — real numbers first, shortcuts second.
+          Deliberately not a "here's what to try next" nudge panel: the
+          hero is what your audience actually looks like right now. */}
+      <div className="overflow-hidden rounded-2xl border border-[#d1fae5] bg-gradient-to-br from-white to-emerald-50 p-5 shadow-sm">
+        <div className="flex flex-wrap items-center gap-6">
+          <StatChip icon={Users} label="Total contacts" value={totalCount} />
+          <div className="hidden h-9 w-px bg-[#d1fae5] sm:block" />
+          <StatChip icon={ShieldCheck} label="Active" value={Math.max(0, totalCount - optedOutCount)} />
+          <div className="hidden h-9 w-px bg-[#d1fae5] sm:block" />
+          <StatChip icon={ShieldOff} label="Opted out" value={optedOutCount} warn={optedOutCount > 0} />
+
+          <button
+            onClick={() => setImportOpen(true)}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50"
+          >
+            <Upload className="size-3.5" /> Import CSV / Excel
+          </button>
         </div>
 
-        <div>
-          <h3 className="text-sm font-bold text-[#0c1f17]">What would you like to do next?</h3>
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-            {NEXT_ACTIONS.map((action) => (
-              <Link
-                key={action.title}
-                href={action.href}
-                className="flex items-start gap-3 rounded-xl border border-[#e7ece9] bg-white p-3 transition-all hover:border-emerald-300 hover:shadow-sm"
-              >
-                <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${action.tint}`}>
-                  <action.icon className="size-[18px]" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[13px] font-semibold text-[#0c1f17]">{action.title}</span>
-                    {action.badge && (
-                      <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${action.badge.className}`}>
-                        {action.badge.label}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
-                    {action.description}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-[#d1fae5] pt-4">
+          {NEXT_ACTIONS.map((action) => (
+            <Link
+              key={action.label}
+              href={action.href}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#e7ece9] bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-emerald-300 hover:text-emerald-700"
+            >
+              <action.icon className="size-3.5" />
+              {action.label}
+            </Link>
+          ))}
         </div>
       </div>
 
@@ -789,6 +735,29 @@ export default function ContactsPage() {
           onConfirm={handleBulkDelete}
         />
       )}
+    </div>
+  );
+}
+
+function StatChip({
+  icon: Icon, label, value, warn,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: number;
+  warn?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${warn ? 'bg-amber-100 text-amber-600' : 'bg-white text-emerald-600'}`}>
+        <Icon className="size-4" />
+      </div>
+      <div>
+        <div className="text-lg font-extrabold leading-none text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>
+          {value.toLocaleString()}
+        </div>
+        <div className="mt-0.5 text-[11px] font-semibold text-slate-500">{label}</div>
+      </div>
     </div>
   );
 }

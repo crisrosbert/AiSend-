@@ -136,7 +136,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           /* desktop: always-visible narrow icon+label column */
           "lg:static lg:z-0 lg:w-[72px] lg:translate-x-0 lg:transition-none",
         )}
-        style={{ background: "#112118" }}
+        style={{ background: "var(--brand-teal-dark, #075E54)" }}
         aria-label="Primary navigation"
       >
         {/* ── Logo / Brand ── */}
@@ -304,7 +304,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               side="right"
               sideOffset={8}
               className="min-w-52 border-white/10 text-slate-200"
-              style={{ background: "#112118" }}
+              style={{ background: "var(--brand-teal-dark, #075E54)" }}
             >
               {/* User info */}
               <div className="px-3 py-2 border-b border-white/5">

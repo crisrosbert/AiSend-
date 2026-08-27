@@ -133,6 +133,10 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       const { data, error } = await supabase
         .from('contacts')
         .select('*')
+        // Website widget visitors carry a "web_..." placeholder, not a
+        // real WhatsApp number — sending to it would just fail Meta's
+        // send and count as a bogus failure.
+        .not('phone', 'ilike', 'web%')
         .eq('business_id', businessId);
       if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
       contacts = data ?? [];

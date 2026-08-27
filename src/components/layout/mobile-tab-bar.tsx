@@ -8,7 +8,7 @@ import { useTotalUnread } from "@/hooks/use-total-unread";
 import { LayoutDashboard, MessageSquare, Users, Radio, Settings } from "lucide-react";
 
 /* Bottom tab bar — mobile only (hidden on lg+). Gives the app a
- * native feel. AiSensy has no equivalent. */
+ * native mobile-app feel on small screens. */
 const tabs = [
   { path: "dashboard",  label: "Home",      icon: LayoutDashboard },
   { path: "inbox",      label: "Chat",      icon: MessageSquare, badge: true },

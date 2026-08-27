@@ -24,8 +24,8 @@
 //     second, thinner AI reply of their own here — a separate persona
 //     scoped to whichever journey happened to be first, with no tools
 //     — which meant the assigned agent never got a turn as long as any
-//     journey existed. Matches how AiSensy splits the two: Flows are
-//     pure trigger+script, one Orchestrator answers everything else.
+//     journey existed. Flows should be pure trigger+script; one
+//     Orchestrator (the assigned agent) answers everything else.
 
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -155,7 +155,7 @@ export async function runJourneysForInbound(
     // No keyword matched. If this business has AI Routing on, let a
     // model pick the best-fitting journey by intent before giving up —
     // this is the one place a journey is chosen without an exact
-    // keyword, matching how AiSensy's AI Routing sits above its Flows.
+    // keyword — a model-driven routing layer sitting above the Flows.
     const routed = await routeByIntent(journeys as JourneyRow[], args)
     if (routed) {
       await executeJourney(routed, args, orgId)

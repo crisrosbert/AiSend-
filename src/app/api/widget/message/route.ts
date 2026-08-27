@@ -36,6 +36,45 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: OPEN_CORS })
 }
 
+/**
+ * Marks a widget visitor's contact row with a "Website Visitor" tag.
+ *
+ * This is the only signal, anywhere on the contact row itself, that
+ * distinguishes it from a real WhatsApp contact (its phone is a
+ * "web_..." placeholder, not the source of truth other code should
+ * rely on). Mirrors how AiSensy tags a contact's source rather than
+ * keeping a separate table for it. Best-effort: a failure here must
+ * never break the chat reply itself.
+ */
+async function tagAsWebsiteVisitor(orgId: string | null, contactId: string): Promise<void> {
+  if (!orgId) return
+  try {
+    const { data: existingTag } = await db()
+      .from('tags')
+      .select('id')
+      .eq('user_id', orgId)
+      .ilike('name', 'Website Visitor')
+      .maybeSingle()
+
+    let tagId: string | null = existingTag?.id ?? null
+    if (!tagId) {
+      const { data: newTag, error } = await db()
+        .from('tags')
+        .insert({ user_id: orgId, name: 'Website Visitor' })
+        .select('id')
+        .single()
+      if (error || !newTag) return
+      tagId = newTag.id
+    }
+
+    await db()
+      .from('contact_tags')
+      .upsert({ contact_id: contactId, tag_id: tagId }, { onConflict: 'contact_id,tag_id' })
+  } catch (err) {
+    console.error('[widget/message] tag website visitor failed:', err)
+  }
+}
+
 export async function POST(req: Request) {
   // The embed code is public by design, so org_id and agent_id are
   // public too: anyone can read them off a customer's page. The Origin
@@ -223,6 +262,7 @@ export async function POST(req: Request) {
           )
         }
         contactId = contact.id
+        await tagAsWebsiteVisitor(org_id, contact.id)
       }
 
       const { data: existingConv } = await db()

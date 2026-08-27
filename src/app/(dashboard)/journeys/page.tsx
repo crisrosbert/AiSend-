@@ -9,6 +9,7 @@ import {
   Plus, Search, MoreHorizontal, Copy, Edit2, Trash2, Loader2,
   Sparkles, Workflow, FlaskConical, Phone, BarChart3,
   CheckCircle2, AlertCircle, Power, PowerOff,
+  ShoppingBag, Send, Smartphone, UserPlus, Bot, PlugZap, Lock,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -19,12 +20,13 @@ import type { Journey, JourneyStatus, Trigger } from "@/types/journey";
 import { triggerSummary } from "@/types/journey";
 import { useBusiness } from "@/hooks/use-business";
 
-type TabValue = "yours" | "blueprints" | "routing" | "test_number";
+type TabValue = "yours" | "blueprints" | "routing" | "catalogue" | "test_number";
 
 const TABS: { value: TabValue; label: string; icon: typeof Workflow }[] = [
   { value: "yours",       label: "Your Journeys", icon: Workflow },
   { value: "blueprints",  label: "Blueprints",    icon: Sparkles },
   { value: "routing",     label: "AI Routing",    icon: BarChart3 },
+  { value: "catalogue",   label: "Catalogue",     icon: ShoppingBag },
   { value: "test_number", label: "Test Number",   icon: Phone },
 ];
 
@@ -290,6 +292,7 @@ export default function JourneysPage() {
       )}
       {tab === "blueprints" && <StubPanel title="Blueprints" subtitle="Pre-built journeys by industry — coming in Phase 4." icon={<Sparkles className="size-7" />} />}
       {tab === "routing" && <StubPanel title="AI Routing" subtitle="Configure when AI takes over and when humans handle the chat — coming next." icon={<BarChart3 className="size-7" />} />}
+      {tab === "catalogue" && <CataloguePanel />}
       {tab === "test_number" && <StubPanel title="Test Number" subtitle="Send your journey to a test number before going live — coming next." icon={<FlaskConical className="size-7" />} />}
     </div>
   );
@@ -429,12 +432,18 @@ function JourneyRow({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <button className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <button className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors" />
             }
           >
             <MoreHorizontal className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-white border-[#e7ece9]">
+            <DropdownMenuItem
+              render={<Link href={`/journeys/${journey.id}/canvas`} />}
+              className="text-slate-700 focus:bg-slate-100"
+            >
+              <Edit2 className="size-4" /> Edit
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onDuplicate(journey)} className="text-slate-700 focus:bg-slate-100">
               <Copy className="size-4" /> Duplicate
             </DropdownMenuItem>
@@ -444,6 +453,143 @@ function JourneyRow({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
+const LAUNCH_CARDS: {
+  icon: typeof Send;
+  title: string;
+  subtitle: string;
+  badge?: string;
+  href?: string;
+  soon?: boolean;
+}[] = [
+  {
+    icon: Send,
+    title: "Launch Broadcast Campaign",
+    subtitle: "Reach your WhatsApp audience with offers, updates and alerts.",
+    href: "/broadcasts/new",
+  },
+  {
+    icon: Smartphone,
+    title: "Launch WhatsApp Status Ad",
+    subtitle: "Publish scroll-stopping offers directly to WhatsApp Status.",
+    badge: "SOON",
+    soon: true,
+  },
+  {
+    icon: UserPlus,
+    title: "Launch Lead Form Ads",
+    subtitle: "Capture high-intent leads and follow up instantly on WhatsApp.",
+    badge: "SOON",
+    soon: true,
+  },
+  {
+    icon: Bot,
+    title: "Create AI Agent",
+    subtitle: "Qualify leads, answer questions and close sales automatically.",
+    badge: "AI",
+    href: "/agents",
+  },
+];
+
+function CataloguePanel() {
+  const router = useRouter();
+
+  return (
+    <div className="space-y-5">
+      {/* Launch cards */}
+      <div>
+        <h2 className="mb-3 text-sm font-bold text-[#0c1f17]">What would you like to launch?</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {LAUNCH_CARDS.map((card) => (
+            <button
+              key={card.title}
+              onClick={() => {
+                if (card.soon) { toast("Coming soon"); return; }
+                if (card.href) router.push(card.href);
+              }}
+              className={`group flex items-start gap-3 rounded-2xl border border-[#e7ece9] bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md ${card.soon ? "opacity-80" : ""}`}
+            >
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-700">
+                <card.icon className="size-4.5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-[#0c1f17]">{card.title}</span>
+                  {card.badge && (
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                        card.badge === "AI"
+                          ? "bg-purple-100 text-purple-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {card.badge}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500">{card.subtitle}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Facebook catalogue connect */}
+      <div className="overflow-hidden rounded-2xl border border-[#e7ece9] bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-4 border-b border-[#e7ece9] px-5 py-4">
+          <div>
+            <p className="text-sm font-bold text-[#0c1f17]">Connect your Facebook account</p>
+            <p className="mt-0.5 text-xs text-slate-500">Allow AiSend to fetch catalogues and products from Facebook.</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-amber-600">
+              <Lock className="size-3" /> Coming soon
+            </span>
+            <button
+              onClick={() => toast("Facebook Commerce Manager connection is coming soon")}
+              className="flex items-center gap-1.5 rounded-lg border border-[#e7ece9] px-3 py-1.5 text-xs font-bold text-slate-400"
+            >
+              <PlugZap className="size-3.5" /> Connect
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 border-b border-[#e7ece9] px-5 py-4">
+          <div>
+            <p className="text-sm font-bold text-[#0c1f17]">Choose your Facebook catalogue</p>
+            <p className="mt-0.5 text-xs text-slate-500">Pick which product catalogue this business sends from.</p>
+          </div>
+          <select
+            disabled
+            className="w-52 shrink-0 cursor-not-allowed rounded-lg border border-[#e7ece9] bg-[#f8faf9] px-3 py-2 text-xs text-slate-400"
+          >
+            <option>Choose your catalogue</option>
+          </select>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 px-5 py-4">
+          <div>
+            <p className="text-sm font-bold text-[#0c1f17]">Display catalogue on Business profile</p>
+            <p className="mt-0.5 text-xs text-slate-500">Show your product catalogue on the WhatsApp business profile.</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="h-5 w-9 shrink-0 cursor-not-allowed rounded-full bg-slate-200" aria-hidden />
+            <div
+              className="flex w-40 items-center gap-2 rounded-xl px-2.5 py-2 text-white shadow-sm"
+              style={{ background: "linear-gradient(135deg,#111827,#1f2937)" }}
+            >
+              <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white/15">
+                <ShoppingBag className="size-3" />
+              </div>
+              <span className="truncate text-[11px] font-semibold">Your Brand Name</span>
+              <CheckCircle2 className="ml-auto size-3 shrink-0 text-emerald-400" />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

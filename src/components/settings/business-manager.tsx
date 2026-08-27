@@ -17,18 +17,25 @@
 // delete path asks for the name to be typed, and says plainly what
 // goes with it. Friction is the feature.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Check, Loader2, Plus, Star, Trash2, X } from "lucide-react";
+import { Building2, Camera, Check, Loader2, Plus, Star, Trash2, X } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { useBusiness } from "@/hooks/use-business";
+import { createClient } from "@/lib/supabase/client";
 import type { BusinessRef } from "@/lib/business/resolve";
 
 export function BusinessManager() {
+  const { user } = useAuth();
   const { businesses, businessId, loading, refresh, switchTo } = useBusiness();
+  const supabase = createClient();
 
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [uploadingLogoId, setUploadingLogoId] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const logoTargetId = useRef<string | null>(null);
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -96,6 +103,49 @@ export function BusinessManager() {
     setBusy(null);
   }
 
+  function triggerLogoUpload(id: string) {
+    logoTargetId.current = id;
+    logoInputRef.current?.click();
+  }
+
+  async function handleLogoFile(file: File) {
+    const id = logoTargetId.current;
+    if (!id || !user?.id) return;
+
+    if (!/^image\/(png|jpeg|webp|gif|svg\+xml)$/.test(file.type)) {
+      toast.error("Use a PNG, JPG, WebP, GIF or SVG image.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error(`That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 2 MB.`);
+      return;
+    }
+
+    setUploadingLogoId(id);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+      // Timestamped rather than overwritten: a stable filename would be
+      // served from cache long after the change, and the merchant would
+      // conclude the upload silently failed.
+      const path = `${user.id}/business-${id}-${Date.now()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { cacheControl: "3600", upsert: true, contentType: file.type });
+      if (upErr) {
+        toast.error(`Upload failed: ${upErr.message}`);
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
+      if (await call("PATCH", { id, logo_url: publicUrl })) {
+        toast.success("Logo updated");
+      }
+    } finally {
+      setUploadingLogoId(null);
+    }
+  }
+
   async function handleDelete(b: BusinessRef) {
     setBusy(b.id);
     const ok = await call(
@@ -121,6 +171,18 @@ export function BusinessManager() {
   return (
     <div id="businesses" className="bm">
       <style>{css}</style>
+
+      <input
+        ref={logoInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+        className="bm-hidden-input"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void handleLogoFile(file);
+        }}
+      />
 
       <div className="bm-head">
         <div>
@@ -180,7 +242,23 @@ export function BusinessManager() {
         <ul className="bm-list">
           {businesses.map((b) => (
             <li key={b.id} className={b.id === businessId ? "bm-row current" : "bm-row"}>
-              <span className="bm-mark"><Building2 size={15} /></span>
+              <button
+                type="button"
+                className="bm-mark"
+                title={b.logo_url ? "Change logo" : "Add a logo"}
+                disabled={uploadingLogoId === b.id}
+                onClick={() => triggerLogoUpload(b.id)}
+              >
+                {uploadingLogoId === b.id ? (
+                  <Loader2 size={14} className="bm-spin" />
+                ) : b.logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={b.logo_url} alt="" className="bm-mark-img" />
+                ) : (
+                  <Building2 size={15} />
+                )}
+                <span className="bm-mark-hint"><Camera size={10} /></span>
+              </button>
 
               <div className="bm-main">
                 {renamingId === b.id ? (
@@ -343,10 +421,26 @@ const css = `
 }
 .bm-row.current { border-color: #bfe8d5; background: #f7fdfa; }
 
+.bm-hidden-input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+
 .bm-mark {
+  position: relative;
   width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
-  background: #ecfdf5; color: #059669;
+  background: #ecfdf5; color: #059669; border: none; padding: 0;
   display: flex; align-items: center; justify-content: center;
+  cursor: pointer; overflow: hidden;
+}
+.bm-mark:hover { background: #d8f5e6; }
+.bm-mark:disabled { cursor: default; }
+
+.bm-mark-img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+
+.bm-mark-hint {
+  position: absolute; right: -1px; bottom: -1px;
+  width: 13px; height: 13px; border-radius: 4px;
+  background: #0c1f17; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid #fff;
 }
 
 .bm-main { flex: 1; min-width: 140px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }

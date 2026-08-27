@@ -99,6 +99,10 @@ export function BusinessSwitcher({ fallbackName }: BusinessSwitcherProps) {
         aria-expanded={open}
         title={business.name}
       >
+        {business.logo_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={business.logo_url} alt="" className="bsw-logo" />
+        )}
         <span className="bsw-name">{business.name}</span>
         <ChevronDown size={14} className={open ? "bsw-chev open" : "bsw-chev"} />
       </button>
@@ -121,7 +125,13 @@ export function BusinessSwitcher({ fallbackName }: BusinessSwitcherProps) {
                   if (b.id !== business.id) switchTo(b.id);
                 }}
               >
-                <span className="bsw-item-name">{b.name}</span>
+                <span className="bsw-item-left">
+                  {b.logo_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={b.logo_url} alt="" className="bsw-logo" />
+                  )}
+                  <span className="bsw-item-name">{b.name}</span>
+                </span>
                 {b.id === business.id && <Check size={13} />}
               </button>
             </li>
@@ -171,6 +181,13 @@ const css = `
   font-size: 16px; font-weight: 700; color: #0c1f17;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+
+.bsw-logo {
+  width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+  object-fit: cover; border: 1px solid #e8ede9;
+}
+
+.bsw-item-left { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
 
 .bsw-chev { color: #8a978f; flex-shrink: 0; transition: transform .15s; }
 .bsw-chev.open { transform: rotate(180deg); }

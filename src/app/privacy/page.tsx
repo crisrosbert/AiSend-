@@ -3,6 +3,7 @@ import LegalShell from '../(marketing)/legal-shell'
 export const metadata = {
   title: 'Privacy Policy — AiSend',
   description: 'How AiSend collects, uses, and protects your data.',
+  robots: { index: true, follow: true },
 }
 
 /**

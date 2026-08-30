@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   Eye, EyeOff, Copy, CheckCircle2, XCircle, Loader2,
-  ExternalLink, Zap, AlertTriangle, RotateCcw, ShieldCheck,
+  ExternalLink, Zap, AlertTriangle, RotateCcw, ShieldCheck, AtSign,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -44,6 +44,12 @@ export function WhatsAppConfig() {
   const [tokenEdited, setTokenEdited] = useState(false);
   const [autoSaving, setAutoSaving] = useState<string | null>(null); // field name being saved
   const [autoSaved, setAutoSaved] = useState<string | null>(null);   // field name just saved
+
+  const [username, setUsername] = useState('');
+  const [savedUsername, setSavedUsername] = useState<string | null>(null);
+  const [usernameLoading, setUsernameLoading] = useState(false);
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameError, setUsernameError] = useState('');
 
   const webhookUrl =
     typeof window !== 'undefined'
@@ -109,6 +115,53 @@ export function WhatsAppConfig() {
     if (!user) { setLoading(false); return; }
     fetchConfig(user.id);
   }, [authLoading, user, fetchConfig]);
+
+  // A username only means anything once the number is actually
+  // connected — fetch it the moment the health check confirms that.
+  useEffect(() => {
+    if (connectionStatus !== 'connected') return;
+    let cancelled = false;
+    (async () => {
+      setUsernameLoading(true);
+      try {
+        const res = await fetch('/api/whatsapp/username');
+        const data = await res.json();
+        if (!cancelled && res.ok) {
+          setSavedUsername(data.username ?? null);
+          setUsername(data.username ?? '');
+        }
+      } catch {
+        // Non-fatal — the field just starts empty.
+      } finally {
+        if (!cancelled) setUsernameLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [connectionStatus]);
+
+  async function handleSaveUsername() {
+    setUsernameError('');
+    setUsernameSaving(true);
+    try {
+      const res = await fetch('/api/whatsapp/username', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setUsernameError(data.error || 'Could not save the username');
+        return;
+      }
+      setSavedUsername(data.username);
+      setUsername(data.username);
+      toast.success(`@${data.username} is now your WhatsApp username`);
+    } catch {
+      setUsernameError('Could not reach the server');
+    } finally {
+      setUsernameSaving(false);
+    }
+  }
 
   // Auto-save Phone Number ID or WABA ID directly to Supabase on blur.
   // Does NOT call the Meta API — just persists the field value so the
@@ -383,6 +436,58 @@ export function WhatsAppConfig() {
             </div>
           </div>
         </div>
+
+        {/* WhatsApp Username card — only meaningful once connected */}
+        {connectionStatus === 'connected' && (
+          <div className="rounded-xl border border-[#e7ece9] bg-white shadow-sm">
+            <div className="border-b border-[#e7ece9] px-6 py-4">
+              <h2 className="flex items-center gap-1.5 text-base font-bold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>
+                <AtSign className="size-4 text-emerald-600" /> WhatsApp Username
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Let customers message this number by username instead of its phone number — your number stays hidden.
+              </p>
+            </div>
+            <div className="space-y-3 px-6 py-5">
+              {usernameLoading ? (
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <Loader2 className="size-4 animate-spin" /> Checking current username…
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">@</span>
+                      <Input
+                        placeholder="yourbusiness"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value.replace(/^@/, ''))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveUsername(); }}
+                        className="border-[#e7ece9] bg-white pl-7 text-[#0c1f17] placeholder:text-slate-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleSaveUsername}
+                      disabled={usernameSaving || !username.trim() || username.trim() === savedUsername}
+                      className="shrink-0 bg-emerald-500 text-white hover:bg-emerald-600"
+                    >
+                      {usernameSaving ? <Loader2 className="size-4 animate-spin" /> : savedUsername ? 'Update' : 'Claim'}
+                    </Button>
+                  </div>
+                  {savedUsername && (
+                    <p className="text-[11px] text-emerald-600 flex items-center gap-1">
+                      <CheckCircle2 className="size-3" /> Live as @{savedUsername}
+                    </p>
+                  )}
+                  {usernameError && (
+                    <p className="text-[11px] text-red-600">{usernameError}</p>
+                  )}
+                  <p className="text-[11px] text-slate-400">3-30 characters — letters, numbers, dots or underscores only.</p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Webhook URL card */}
         <div className="rounded-xl border border-[#e7ece9] bg-white shadow-sm">

@@ -375,8 +375,12 @@ export interface CreateTemplateArgs {
   /** Meta language code, e.g. en_US, hi */
   language: string
   bodyText: string
-  /** Optional plain-text header. Media headers aren't supported here yet. */
+  /** Plain-text header. Mutually exclusive with headerMediaFormat. */
   headerText?: string
+  /** IMAGE | VIDEO | DOCUMENT — set together with headerMediaHandle. */
+  headerMediaFormat?: 'IMAGE' | 'VIDEO' | 'DOCUMENT'
+  /** A handle from uploadProfilePhoto(), used as Meta's review sample for the header. */
+  headerMediaHandle?: string
   footerText?: string
 }
 
@@ -421,6 +425,8 @@ export async function createTemplate(
     language,
     bodyText,
     headerText,
+    headerMediaFormat,
+    headerMediaHandle,
     footerText,
   } = args
 
@@ -428,7 +434,16 @@ export async function createTemplate(
 
   const components: Record<string, unknown>[] = []
 
-  if (headerText && headerText.trim()) {
+  if (headerMediaFormat && headerMediaHandle) {
+    // Media headers take no header text — the handle is only a sample
+    // for Meta's reviewers; the real image/video/doc is supplied per
+    // send, via the `link` on that message's header component.
+    components.push({
+      type: 'HEADER',
+      format: headerMediaFormat,
+      example: { header_handle: [headerMediaHandle] },
+    })
+  } else if (headerText && headerText.trim()) {
     components.push({
       type: 'HEADER',
       format: 'TEXT',

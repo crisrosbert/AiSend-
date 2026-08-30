@@ -6,13 +6,19 @@ import { Contact, CustomField, MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Eye, Loader2 } from 'lucide-react';
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCheck,
+  ChevronLeft,
+  Copy,
+  Loader2,
+  Sparkles,
+  Tag,
+  Type,
+  User,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
 type VariableType = 'static' | 'field' | 'custom_field';
 
@@ -34,6 +40,12 @@ const contactFields = [
   { value: 'phone', label: 'Phone Number' },
   { value: 'email', label: 'Email Address' },
   { value: 'company', label: 'Company' },
+];
+
+const TYPE_OPTIONS: { value: VariableType; label: string; icon: typeof Type }[] = [
+  { value: 'static', label: 'Static', icon: Type },
+  { value: 'field', label: 'Contact Field', icon: User },
+  { value: 'custom_field', label: 'Custom Field', icon: Tag },
 ];
 
 const SAMPLE_CONTACT: Contact = {
@@ -137,213 +149,295 @@ export function Step3Personalize({
     });
   }
 
+  const previewContact = firstContact ?? SAMPLE_CONTACT;
+  const previewCustomValues = useMemo(
+    () => (firstContact ? firstContactCustomValues : new Map<string, string>()),
+    [firstContact, firstContactCustomValues],
+  );
+
   /**
-   * Substitute placeholders using the first real contact where
-   * possible. Placeholders keyed by "{{N}}" map to variable key "N".
+   * Preview text broken into segments so each substituted placeholder
+   * can be highlighted inline — showing at a glance which words in the
+   * bubble are dynamic and where each one comes from, rather than a
+   * flat wall of text that reads identically to the final message.
    */
-  const previewText = useMemo(() => {
-    const contact = firstContact ?? SAMPLE_CONTACT;
-    const customValues = firstContact
-      ? firstContactCustomValues
-      : new Map<string, string>();
+  const previewSegments = useMemo(() => {
+    const parts = template.body_text.split(/(\{\{\d+\}\})/g);
+    return parts
+      .filter((part) => part.length > 0)
+      .map((part) => {
+        const match = part.match(/^\{\{(\d+)\}\}$/);
+        if (!match) return { text: part, dynamic: false, source: '' };
 
-    let text = template.body_text;
-    for (const placeholder of placeholders) {
-      const key = placeholder.replace(/^\{\{|\}\}$/g, '');
-      const mapping = variables[key];
-      let replacement = placeholder;
+        const key = match[1];
+        const mapping = variables[key];
+        let text = part;
+        let source = 'Not mapped yet';
 
-      if (mapping) {
-        if (mapping.type === 'static' && mapping.value) {
-          replacement = mapping.value;
-        } else if (mapping.type === 'field' && mapping.value) {
-          const fieldMap: Record<string, string | undefined> = {
-            name: contact.name,
-            phone: contact.phone,
-            email: contact.email,
-            company: contact.company,
-          };
-          replacement = fieldMap[mapping.value] ?? placeholder;
-        } else if (mapping.type === 'custom_field' && mapping.value) {
-          replacement = customValues.get(mapping.value) || placeholder;
+        if (mapping?.value) {
+          if (mapping.type === 'static') {
+            text = mapping.value;
+            source = 'Static value';
+          } else if (mapping.type === 'field') {
+            const fieldMap: Record<string, string | undefined> = {
+              name: previewContact.name,
+              phone: previewContact.phone,
+              email: previewContact.email,
+              company: previewContact.company,
+            };
+            text = fieldMap[mapping.value] ?? part;
+            source = contactFields.find((f) => f.value === mapping.value)?.label ?? 'Contact field';
+          } else if (mapping.type === 'custom_field') {
+            text = previewCustomValues.get(mapping.value) || part;
+            source = customFields.find((f) => f.id === mapping.value)?.field_name ?? 'Custom field';
+          }
         }
-      }
-      text = text.replaceAll(placeholder, replacement);
-    }
-    return text;
-  }, [
-    template.body_text,
-    variables,
-    placeholders,
-    firstContact,
-    firstContactCustomValues,
-  ]);
+        return { text, dynamic: true, source };
+      });
+  }, [template.body_text, variables, previewContact, previewCustomValues, customFields]);
+
+  const previewText = useMemo(
+    () => previewSegments.map((s) => s.text).join(''),
+    [previewSegments],
+  );
 
   const previewLabel = firstContact
     ? firstContact.name || firstContact.phone
     : 'sample data';
 
+  function copyPreview() {
+    navigator.clipboard.writeText(previewText).then(
+      () => toast.success('Preview text copied'),
+      () => toast.error('Could not copy'),
+    );
+  }
+
+  const now = new Date();
+  const timeLabel = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white">Personalize Message</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Map template variables to contact fields, custom fields, or static
-          values.
+        <h2 className="text-lg font-bold text-[#0c1f17]">Personalize Message</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Map each template variable to a contact field, custom field, or a
+          fixed value — then check the live preview on the right.
         </p>
       </div>
 
-      {placeholders.length === 0 ? (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 text-center">
-          <p className="text-sm text-slate-400">
-            This template has no variables to personalize.
-          </p>
-        </div>
-      ) : (
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+        {/* ── Variable mapping ── */}
         <div className="space-y-4">
-          {placeholders.map((placeholder) => {
-            const key = placeholder.replace(/^\{\{|\}\}$/g, '');
-            const mapping = variables[key] ?? { type: 'static', value: '' };
+          {placeholders.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[#e7ece9] bg-white p-8 text-center">
+              <Sparkles className="mx-auto h-6 w-6 text-emerald-400" />
+              <p className="mt-3 text-sm font-medium text-[#0c1f17]">
+                Nothing to personalize
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                This template has no variables — every recipient gets the
+                exact same message.
+              </p>
+            </div>
+          ) : (
+            placeholders.map((placeholder) => {
+              const key = placeholder.replace(/^\{\{|\}\}$/g, '');
+              const mapping = variables[key] ?? { type: 'static' as VariableType, value: '' };
+              const filled = !!mapping.value?.trim();
 
-            return (
-              <div
-                key={placeholder}
-                className="rounded-xl border border-slate-800 bg-slate-900/50 p-4"
-              >
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="inline-flex items-center rounded-md bg-violet-500/10 px-2 py-0.5 text-xs font-mono font-medium text-violet-400">
-                    {placeholder}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-400">
-                      Mapping Type
-                    </label>
-                    <Select
-                      value={mapping.type}
-                      onValueChange={(val) =>
-                        updateVariable(key, {
-                          type: val as VariableType,
-                          value: '',
-                        })
-                      }
-                    >
-                      <SelectTrigger className="w-full border-slate-700 bg-slate-800 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="border-slate-700 bg-slate-800">
-                        <SelectItem value="static">Static Value</SelectItem>
-                        <SelectItem value="field">Contact Field</SelectItem>
-                        <SelectItem value="custom_field">
-                          Custom Field
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-400">
-                      {mapping.type === 'static' ? 'Value' : 'Field'}
-                    </label>
-                    {mapping.type === 'static' ? (
-                      <Input
-                        value={mapping.value}
-                        onChange={(e) =>
-                          updateVariable(key, { value: e.target.value })
-                        }
-                        placeholder="Enter value..."
-                        className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500"
-                      />
-                    ) : mapping.type === 'field' ? (
-                      <Select
-                        value={mapping.value || undefined}
-                        onValueChange={(val) =>
-                          updateVariable(key, { value: val || '' })
-                        }
-                      >
-                        <SelectTrigger className="w-full border-slate-700 bg-slate-800 text-white">
-                          <SelectValue placeholder="Select field..." />
-                        </SelectTrigger>
-                        <SelectContent className="border-slate-700 bg-slate-800">
-                          {contactFields.map((field) => (
-                            <SelectItem key={field.value} value={field.value}>
-                              {field.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+              return (
+                <div
+                  key={placeholder}
+                  className={`rounded-xl border bg-white p-4 shadow-sm transition-colors ${
+                    filled ? 'border-[#e7ece9]' : 'border-amber-200'
+                  }`}
+                >
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-mono font-semibold text-emerald-700">
+                      {placeholder}
+                    </span>
+                    {filled ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+                        <Check className="h-3 w-3" /> Mapped
+                      </span>
                     ) : (
-                      <Select
-                        value={mapping.value || undefined}
-                        onValueChange={(val) =>
-                          updateVariable(key, { value: val || '' })
-                        }
-                      >
-                        <SelectTrigger className="w-full border-slate-700 bg-slate-800 text-white">
-                          <SelectValue
-                            placeholder={
-                              loadingFields
-                                ? 'Loading…'
-                                : customFields.length === 0
-                                  ? 'No custom fields'
-                                  : 'Select custom field…'
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent className="border-slate-700 bg-slate-800">
-                          {customFields.map((f) => (
-                            <SelectItem key={f.id} value={f.id}>
-                              {f.field_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <span className="text-xs font-medium text-amber-600">Needs a value</span>
                     )}
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
-      {/* Live Preview — rendered as a WhatsApp-style bubble so the user
-          sees approximately what the recipient will see. */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Eye className="h-4 w-4 text-violet-400" />
-          <p className="text-sm font-medium text-white">Live Preview</p>
-          <span className="text-xs text-slate-500">({previewLabel})</span>
-          {loadingPreview && (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />
+                  {/* Segmented type picker — a tap-to-switch pill row reads
+                      faster than a dropdown for a 3-option choice, and
+                      keeps all options visible at once. */}
+                  <div className="mb-3 inline-flex rounded-lg border border-[#e7ece9] bg-[#f8faf9] p-0.5">
+                    {TYPE_OPTIONS.map((opt) => {
+                      const active = mapping.type === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => updateVariable(key, { type: opt.value, value: '' })}
+                          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            active
+                              ? 'bg-emerald-500 text-white shadow-sm'
+                              : 'text-slate-500 hover:text-[#0c1f17]'
+                          }`}
+                        >
+                          <opt.icon className="h-3.5 w-3.5" />
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {mapping.type === 'static' ? (
+                    <Input
+                      value={mapping.value}
+                      onChange={(e) => updateVariable(key, { value: e.target.value })}
+                      placeholder="Enter the value every recipient sees…"
+                      className="border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400"
+                    />
+                  ) : mapping.type === 'field' ? (
+                    <div className="flex flex-wrap gap-2">
+                      {contactFields.map((field) => (
+                        <button
+                          key={field.value}
+                          type="button"
+                          onClick={() => updateVariable(key, { value: field.value })}
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            mapping.value === field.value
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                              : 'border-[#e7ece9] bg-white text-slate-600 hover:border-emerald-200 hover:bg-emerald-50/50'
+                          }`}
+                        >
+                          {field.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : loadingFields ? (
+                    <p className="text-xs text-slate-400">Loading custom fields…</p>
+                  ) : customFields.length === 0 ? (
+                    <p className="text-xs text-slate-400">
+                      You have no custom fields yet — add one in Contacts.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {customFields.map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => updateVariable(key, { value: f.id })}
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            mapping.value === f.id
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                              : 'border-[#e7ece9] bg-white text-slate-600 hover:border-emerald-200 hover:bg-emerald-50/50'
+                          }`}
+                        >
+                          {f.field_name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+
+          {unmappedKeys.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+              Map every placeholder before continuing — still missing{' '}
+              <span className="font-mono font-semibold">{unmappedKeys.join(', ')}</span>.
+              Otherwise those placeholders ship to Meta as empty strings.
+            </div>
           )}
         </div>
-        <div className="rounded-lg bg-[#0e1a12] p-3">
-          <div className="ml-auto max-w-[85%] rounded-lg bg-violet-700/30 px-3 py-2 shadow-sm">
-            <p className="whitespace-pre-wrap text-sm text-violet-50">
-              {previewText}
+
+        {/* ── Live preview — a phone-style mockup so this reads as what
+            the recipient will actually see, not an abstract text block ── */}
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Live Preview
             </p>
+            <button
+              type="button"
+              onClick={copyPreview}
+              className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700"
+            >
+              <Copy className="h-3 w-3" /> Copy
+            </button>
           </div>
+
+          <div className="overflow-hidden rounded-[22px] border border-[#e7ece9] bg-white shadow-sm">
+            {/* WhatsApp-style header bar */}
+            <div
+              className="flex items-center gap-2 px-3 py-2.5"
+              style={{ background: 'var(--brand-teal-dark, #075E54)' }}
+            >
+              <ChevronLeft className="h-4 w-4 text-white/70" />
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white">
+                {(template.name || 'B').charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-semibold text-white">
+                  {template.name || 'Your Business'}
+                </p>
+                <p className="text-[10px] text-white/60">
+                  {loadingPreview ? 'Loading preview…' : `Previewing as ${previewLabel}`}
+                </p>
+              </div>
+              {loadingPreview && (
+                <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-white/70" />
+              )}
+            </div>
+
+            {/* Chat area */}
+            <div
+              className="p-3"
+              style={{
+                backgroundColor: 'var(--brand-50, #E9FBEF)',
+                backgroundImage:
+                  'radial-gradient(rgba(37,211,102,0.16) 1px, transparent 1.5px), ' +
+                  'radial-gradient(rgba(37,211,102,0.10) 1px, transparent 1.5px)',
+                backgroundSize: '28px 28px, 28px 28px',
+                backgroundPosition: '0 0, 14px 14px',
+                minHeight: 180,
+              }}
+            >
+              <div className="ml-auto max-w-[92%] rounded-lg rounded-tr-sm bg-[var(--brand-100,#C8F5D6)] px-3 py-2 shadow-sm">
+                <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#0c1f17]">
+                  {previewSegments.map((seg, i) =>
+                    seg.dynamic ? (
+                      <mark
+                        key={i}
+                        title={seg.source}
+                        className="rounded bg-emerald-500/20 px-0.5 font-medium text-emerald-900"
+                      >
+                        {seg.text}
+                      </mark>
+                    ) : (
+                      <span key={i}>{seg.text}</span>
+                    ),
+                  )}
+                </p>
+                <div className="mt-1 flex items-center justify-end gap-1">
+                  <span className="text-[10px] text-[#0c1f17]/45">{timeLabel}</span>
+                  <CheckCheck className="h-3 w-3" style={{ color: '#53bdeb' }} />
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">
+            Highlighted words are filled in per recipient — hover one to see
+            where it comes from.
+          </p>
         </div>
       </div>
 
-      {unmappedKeys.length > 0 && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-          Map every placeholder before continuing — still missing{' '}
-          <span className="font-mono font-semibold">
-            {unmappedKeys.join(', ')}
-          </span>
-          . Otherwise those placeholders will ship to Meta as empty strings.
-        </div>
-      )}
-
-      <div className="flex items-center justify-between border-t border-slate-800 pt-4">
+      <div className="flex items-center justify-between border-t border-[#e7ece9] pt-4">
         <Button
           variant="outline"
           onClick={onBack}
-          className="border-slate-700 text-slate-300"
+          className="border-[#e7ece9] text-slate-600 hover:bg-[#f8faf9]"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -351,7 +445,7 @@ export function Step3Personalize({
         <Button
           onClick={onNext}
           disabled={unmappedKeys.length > 0}
-          className="bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+          className="bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
         >
           Next
           <ArrowRight className="h-4 w-4" />

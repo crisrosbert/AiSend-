@@ -2,7 +2,7 @@
 import { TemplateLibrary } from './template-library';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Loader2, RefreshCw, Link2, Upload } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -65,6 +65,8 @@ export function TemplateManager() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [form, setForm] = useState<TemplateFormData>(emptyForm);
+  const [mediaMode, setMediaMode] = useState<'link' | 'upload'>('link');
+  const [mediaUploading, setMediaUploading] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -91,9 +93,44 @@ export function TemplateManager() {
     }
   }
 
+  async function handleMediaUpload(file: File) {
+    if (!user) return;
+    const isImage = form.header_type === 'image';
+    if (isImage && !file.type.startsWith('image/')) {
+      toast.error('Choose an image file.');
+      return;
+    }
+    if (!isImage && !file.type.startsWith('video/')) {
+      toast.error('Choose a video file.');
+      return;
+    }
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error(`That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 16 MB.`);
+      return;
+    }
+    setMediaUploading(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || (isImage ? 'jpg' : 'mp4');
+      const path = `${user.id}/template-header-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { cacheControl: '3600', upsert: true, contentType: file.type });
+      if (upErr) { toast.error(`Upload failed: ${upErr.message}`); return; }
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+      setForm((f) => ({ ...f, header_content: publicUrl }));
+      toast.success('Uploaded — this is the sample Meta will review');
+    } finally {
+      setMediaUploading(false);
+    }
+  }
+
   async function handleSave() {
     if (!form.name.trim()) { toast.error('Template name is required'); return; }
     if (!form.body_text.trim()) { toast.error('Body text is required'); return; }
+    if ((form.header_type === 'image' || form.header_type === 'video') && !form.header_content.trim()) {
+      toast.error(`Add ${form.header_type === 'image' ? 'an image' : 'a video'} for the header, or set Header Type to None.`);
+      return;
+    }
     try {
       setSaving(true);
       if (!user) { toast.error('Not authenticated'); return; }
@@ -110,7 +147,12 @@ export function TemplateManager() {
           category: form.category,
           language: form.language.trim() || 'en_US',
           body_text: form.body_text.trim(),
+          header_type: form.header_type || undefined,
           header_text: form.header_type === 'text' ? form.header_content?.trim() || undefined : undefined,
+          header_media_url:
+            form.header_type === 'image' || form.header_type === 'video'
+              ? form.header_content?.trim() || undefined
+              : undefined,
           footer_text: form.footer_text.trim() || undefined,
         }),
       });
@@ -127,6 +169,7 @@ export function TemplateManager() {
       }
       setDialogOpen(false);
       setForm(emptyForm);
+      setMediaMode('link');
       await fetchTemplates(user.id);
     } catch (err) {
       console.error('Save error:', err);
@@ -217,7 +260,7 @@ export function TemplateManager() {
             {syncing ? 'Syncing…' : 'Sync from Meta'}
           </Button>
           <Button
-            onClick={() => { setForm(emptyForm); setDialogOpen(true); }}
+            onClick={() => { setForm(emptyForm); setMediaMode('link'); setDialogOpen(true); }}
             className="bg-emerald-500 hover:bg-emerald-600 text-white"
           >
             <Plus className="size-4" />
@@ -362,6 +405,73 @@ export function TemplateManager() {
               </div>
             )}
 
+            {(form.header_type === 'image' || form.header_type === 'video') && (
+              <div className="space-y-2">
+                <Label className="text-slate-700">
+                  Header {form.header_type === 'image' ? 'Image' : 'Video'}
+                </Label>
+                <div className="inline-flex rounded-lg border border-[#e7ece9] bg-[#f8faf9] p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setMediaMode('link')}
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      mediaMode === 'link' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:text-[#0c1f17]'
+                    }`}
+                  >
+                    <Link2 className="h-3.5 w-3.5" /> Paste a link
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMediaMode('upload')}
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      mediaMode === 'upload' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:text-[#0c1f17]'
+                    }`}
+                  >
+                    <Upload className="h-3.5 w-3.5" /> Upload a file
+                  </button>
+                </div>
+
+                {mediaMode === 'link' ? (
+                  <Input
+                    placeholder={form.header_type === 'image' ? 'https://…/photo.jpg' : 'https://…/clip.mp4'}
+                    value={form.header_content}
+                    onChange={(e) => setForm({ ...form, header_content: e.target.value })}
+                    className="border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400"
+                  />
+                ) : (
+                  <Input
+                    type="file"
+                    accept={form.header_type === 'image' ? 'image/*' : 'video/*'}
+                    disabled={mediaUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) void handleMediaUpload(file);
+                    }}
+                    className="border-[#e7ece9] bg-white text-[#0c1f17]"
+                  />
+                )}
+                {mediaUploading && (
+                  <p className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <Loader2 className="size-3 animate-spin" /> Uploading…
+                  </p>
+                )}
+                {form.header_content && (
+                  <p className="text-[11px] text-emerald-600 truncate">✓ {form.header_content}</p>
+                )}
+                <p className="text-[11px] text-slate-400">
+                  This is only the sample Meta reviews the template with — you pick the real{' '}
+                  {form.header_type} per contact when you actually send.
+                </p>
+              </div>
+            )}
+
+            {form.header_type === 'document' && (
+              <p className="text-[11px] text-amber-600">
+                Document headers aren&apos;t supported here yet — create this one from Meta Business Manager instead.
+              </p>
+            )}
+
             <div className="space-y-2">
               <Label className="text-slate-700">Body Text</Label>
               <Textarea
@@ -392,6 +502,21 @@ export function TemplateManager() {
                     <p className="mb-1 text-sm font-bold text-[#0c1f17] whitespace-pre-line">
                       {form.header_content}
                     </p>
+                  )}
+                  {form.header_type === 'image' && form.header_content.trim() && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={form.header_content}
+                      alt=""
+                      className="mb-1.5 max-h-40 w-full rounded-md object-cover"
+                    />
+                  )}
+                  {form.header_type === 'video' && form.header_content.trim() && (
+                    <video
+                      src={form.header_content}
+                      controls
+                      className="mb-1.5 max-h-40 w-full rounded-md bg-black"
+                    />
                   )}
                   <p className="text-sm text-[#0c1f17] whitespace-pre-line">
                     {form.body_text.trim() || 'Your message body will appear here…'}

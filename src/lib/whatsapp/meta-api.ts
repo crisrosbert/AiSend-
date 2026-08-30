@@ -630,6 +630,68 @@ export async function uploadProfilePhoto(
   return uploaded.h as string // the media handle
 }
 
+// ============================================================
+// Username — a public @handle for the number (2026 Meta feature)
+// ============================================================
+
+export interface GetUsernameArgs {
+  phoneNumberId: string
+  accessToken: string
+}
+
+/**
+ * Read the WhatsApp username currently claimed for this phone number.
+ * `username` is undefined when none has been set yet.
+ */
+export async function getWhatsAppUsername(
+  args: GetUsernameArgs,
+): Promise<{ username?: string }> {
+  const { phoneNumberId, accessToken } = args
+  const url = `${META_API_BASE}/${phoneNumberId}?fields=username`
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  return response.json()
+}
+
+export interface SetUsernameArgs {
+  phoneNumberId: string
+  accessToken: string
+  username: string
+}
+
+/**
+ * Claim or change the @username for this phone number, so a customer
+ * can message it without ever seeing the underlying phone number.
+ *
+ * This hits a Meta endpoint that only shipped in 2026 (POST
+ * /{phone_number_id}/username) — Meta's own error message surfaces via
+ * throwMetaError() rather than failing silently, so if the exact field
+ * name Meta expects ever differs from what's sent here, that shows up
+ * as a clear message on the first real attempt rather than a mystery.
+ */
+export async function setWhatsAppUsername(
+  args: SetUsernameArgs,
+): Promise<{ success: boolean }> {
+  const { phoneNumberId, accessToken, username } = args
+  const url = `${META_API_BASE}/${phoneNumberId}/username`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ messaging_product: 'whatsapp', username }),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  return { success: true }
+}
+
 // ════════════════════════════════════════════════════════════════════
 // INTERACTIVE MESSAGES
 //

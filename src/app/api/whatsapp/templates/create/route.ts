@@ -107,13 +107,22 @@ export async function POST(request: Request) {
         }
         buttons.push({ type: 'URL', text, url: value })
       } else if (b.type === 'phone') {
-        if (!isValidE164(value)) {
+        // Meta needs the actual country code. A bare local number (e.g.
+        // a 10-digit Indian mobile with no +91) still passes a generic
+        // "is this plausibly a phone number" check, so requiring '+'
+        // here is what actually catches it — silently prepending '+'
+        // to a country-code-less number used to produce a number for
+        // no real country, which Meta then rejected with a message
+        // that didn't say why.
+        if (!value.startsWith('+') || !isValidE164(value)) {
           return NextResponse.json(
-            { error: `"${text}" button needs a valid phone number, e.g. +919876543210.` },
+            {
+              error: `"${text}" button needs the country code too, e.g. +919876543210 — not just 9876543210.`,
+            },
             { status: 400 },
           )
         }
-        buttons.push({ type: 'PHONE_NUMBER', text, phoneNumber: value.startsWith('+') ? value : `+${value}` })
+        buttons.push({ type: 'PHONE_NUMBER', text, phoneNumber: value })
       }
     }
 

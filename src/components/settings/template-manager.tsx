@@ -142,6 +142,18 @@ export function TemplateManager() {
       toast.error(`Add ${form.header_type === 'image' ? 'an image' : 'a video'} for the header, or set Header Type to None.`);
       return;
     }
+    for (const btn of form.buttons) {
+      const value = btn.value.trim();
+      if (!btn.text.trim() || !value) continue;
+      if (btn.type === 'phone' && !value.startsWith('+')) {
+        toast.error(`"${btn.text}" button needs the country code too, e.g. +919876543210 — not just ${value}.`);
+        return;
+      }
+      if (btn.type === 'url' && !/^https?:\/\/.+/i.test(value)) {
+        toast.error(`"${btn.text}" button needs a full https:// link.`);
+        return;
+      }
+    }
     try {
       setSaving(true);
       if (!user) { toast.error('Not authenticated'); return; }
@@ -575,6 +587,7 @@ export function TemplateManager() {
               </div>
               <p className="text-[11px] text-slate-400">
                 Up to {URL_BUTTON_LIMIT} website buttons and {PHONE_BUTTON_LIMIT} call button — Meta&apos;s limit per template.
+                Phone numbers need the country code, e.g. <code>+91…</code>, not just the 10 digits.
               </p>
             </div>
 

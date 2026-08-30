@@ -3,6 +3,7 @@ import LegalShell from '../(marketing)/legal-shell'
 export const metadata = {
   title: 'Terms & Conditions — AiSend',
   description: 'The terms governing your use of AiSend.',
+  robots: { index: true, follow: true },
 }
 
 /**

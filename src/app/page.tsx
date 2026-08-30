@@ -1,4 +1,13 @@
+import type { Metadata } from 'next'
 import LandingPage from './(marketing)/landing-page'
+
+// The root layout defaults every page to noindex — correct for the
+// authed app, wrong here. Without this override the actual public
+// homepage was invisible to Google, which defeats the entire point of
+// a marketing page (and of anything else meant to rank, like /tools).
+export const metadata: Metadata = {
+  robots: { index: true, follow: true },
+}
 
 /**
  * Public homepage. Previously redirected straight to /dashboard, which

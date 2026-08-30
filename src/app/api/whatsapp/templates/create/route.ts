@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import { createTemplate } from '@/lib/whatsapp/meta-api'
+import { createTemplate, uploadProfilePhoto } from '@/lib/whatsapp/meta-api'
+
+const MEDIA_HEADER_FORMATS = { image: 'IMAGE', video: 'VIDEO' } as const
+type MediaHeaderType = keyof typeof MEDIA_HEADER_FORMATS
 
 /**
  * Create a WhatsApp message template AND submit it to Meta for approval
@@ -59,14 +62,36 @@ export async function POST(request: Request) {
       category,
       language,
       body_text,
+      header_type,
       header_text,
+      header_media_url,
       footer_text,
-    } = body
+    } = body as {
+      name?: string
+      category?: string
+      language?: string
+      body_text?: string
+      header_type?: string
+      header_text?: string
+      header_media_url?: string
+      footer_text?: string
+    }
 
     if (!name || !body_text) {
       return NextResponse.json(
         { error: 'name and body_text are required' },
         { status: 400 }
+      )
+    }
+
+    const mediaHeaderType =
+      header_type && header_type in MEDIA_HEADER_FORMATS
+        ? (header_type as MediaHeaderType)
+        : null
+    if (mediaHeaderType && !header_media_url) {
+      return NextResponse.json(
+        { error: `Add an ${header_type} for the header, or set Header Type to None.` },
+        { status: 400 },
       )
     }
 
@@ -96,6 +121,55 @@ export async function POST(request: Request) {
 
     const accessToken = decrypt(config.access_token)
 
+    // 0) For an image/video header, Meta wants a sample file uploaded
+    //    through its resumable upload API (returns a "handle") as the
+    //    review example — the actual link is supplied per-send later.
+    //    header_media_url may be a Supabase Storage URL (user uploaded a
+    //    file) or a URL the user pasted directly; either way we fetch
+    //    the bytes ourselves so Meta never has to trust a client-given
+    //    handle.
+    let headerMediaHandle: string | undefined
+    if (mediaHeaderType && header_media_url) {
+      const appId = process.env.META_APP_ID
+      if (!appId) {
+        return NextResponse.json(
+          { error: 'Server not configured for media headers (missing META_APP_ID).' },
+          { status: 500 },
+        )
+      }
+      let mediaRes: Response
+      try {
+        mediaRes = await fetch(header_media_url)
+      } catch {
+        return NextResponse.json(
+          { error: 'Could not reach the header media URL.' },
+          { status: 400 },
+        )
+      }
+      if (!mediaRes.ok) {
+        return NextResponse.json(
+          { error: `Header media URL returned ${mediaRes.status}. Check it's public and reachable.` },
+          { status: 400 },
+        )
+      }
+      const contentType =
+        mediaRes.headers.get('content-type') ||
+        (mediaHeaderType === 'image' ? 'image/jpeg' : 'video/mp4')
+      const fileBytes = await mediaRes.arrayBuffer()
+      try {
+        headerMediaHandle = await uploadProfilePhoto({
+          appId,
+          accessToken,
+          fileBytes,
+          mimeType: contentType,
+          fileName: mediaHeaderType === 'image' ? 'header.jpg' : 'header.mp4',
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Meta rejected the header media'
+        return NextResponse.json({ error: `Header media upload failed: ${message}` }, { status: 422 })
+      }
+    }
+
     // 1) Submit to Meta. Errors (bad category, duplicate name, button
     //    mismatch, etc.) surface here with Meta's own message so the
     //    user can fix and retry.
@@ -108,7 +182,9 @@ export async function POST(request: Request) {
         category: category || 'Marketing',
         language: language || 'en_US',
         bodyText: body_text,
-        headerText: header_text || undefined,
+        headerText: !mediaHeaderType ? header_text || undefined : undefined,
+        headerMediaFormat: mediaHeaderType ? MEDIA_HEADER_FORMATS[mediaHeaderType] : undefined,
+        headerMediaHandle,
         footerText: footer_text || undefined,
       })
     } catch (err) {
@@ -124,8 +200,8 @@ export async function POST(request: Request) {
       name: normalizedName,
       category: titleCaseCategory(metaResult.category),
       language: language || 'en_US',
-      header_type: header_text ? 'text' : null,
-      header_content: header_text || null,
+      header_type: mediaHeaderType || (header_text ? 'text' : null),
+      header_content: mediaHeaderType ? header_media_url || null : header_text || null,
       body_text,
       footer_text: footer_text || null,
       status: titleCaseStatus(metaResult.status),

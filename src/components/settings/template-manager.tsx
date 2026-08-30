@@ -2,7 +2,7 @@
 import { TemplateLibrary } from './template-library';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, Loader2, RefreshCw, Link2, Upload } from 'lucide-react';
+import { Plus, Trash2, Loader2, RefreshCw, Link2, Upload, Phone, ExternalLink } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,12 @@ const statusColors: Record<string, string> = {
   Rejected: 'bg-red-50 text-red-700 border-red-200',
 };
 
+interface TemplateButtonForm {
+  type: 'url' | 'phone';
+  text: string;
+  value: string;
+}
+
 interface TemplateFormData {
   name: string;
   category: MessageTemplate['category'];
@@ -43,12 +49,17 @@ interface TemplateFormData {
   header_type: string;
   header_content: string;
   footer_text: string;
+  buttons: TemplateButtonForm[];
 }
 
 const emptyForm: TemplateFormData = {
   name: '', category: 'Marketing', language: 'en_US',
   body_text: '', header_type: '', header_content: '', footer_text: '',
+  buttons: [],
 };
+
+const URL_BUTTON_LIMIT = 2;
+const PHONE_BUTTON_LIMIT = 1;
 
 const COMMON_LANGUAGE_CODES = [
   'en_US', 'en_GB', 'en', 'hi', 'es', 'es_ES', 'es_MX', 'fr', 'fr_FR',
@@ -154,6 +165,9 @@ export function TemplateManager() {
               ? form.header_content?.trim() || undefined
               : undefined,
           footer_text: form.footer_text.trim() || undefined,
+          buttons: form.buttons
+            .filter((b) => b.text.trim() && b.value.trim())
+            .map((b) => ({ type: b.type, text: b.text.trim(), value: b.value.trim() })),
         }),
       });
 
@@ -493,6 +507,77 @@ export function TemplateManager() {
               />
             </div>
 
+            {/* Call-to-action buttons — "Visit Website" / "Call Now",
+                the row shown under a template on real WhatsApp business
+                messages. Meta allows at most 2 URL + 1 phone button. */}
+            <div className="space-y-2">
+              <Label className="text-slate-700">Buttons</Label>
+              <div className="space-y-2">
+                {form.buttons.map((btn, i) => (
+                  <div key={i} className="flex items-center gap-2 rounded-lg border border-[#e7ece9] bg-[#f8faf9] p-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-white text-emerald-600 border border-[#e7ece9]">
+                      {btn.type === 'url' ? <ExternalLink className="h-3.5 w-3.5" /> : <Phone className="h-3.5 w-3.5" />}
+                    </span>
+                    <Input
+                      placeholder={btn.type === 'url' ? 'Visit Website' : 'Call Now'}
+                      value={btn.text}
+                      maxLength={25}
+                      onChange={(e) => {
+                        const next = [...form.buttons];
+                        next[i] = { ...next[i], text: e.target.value };
+                        setForm({ ...form, buttons: next });
+                      }}
+                      className="w-32 shrink-0 border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400"
+                    />
+                    <Input
+                      placeholder={btn.type === 'url' ? 'https://performancemktg.net' : '+919876543210'}
+                      value={btn.value}
+                      onChange={(e) => {
+                        const next = [...form.buttons];
+                        next[i] = { ...next[i], value: e.target.value };
+                        setForm({ ...form, buttons: next });
+                      }}
+                      className="border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setForm({ ...form, buttons: form.buttons.filter((_, j) => j !== i) })}
+                      className="shrink-0 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={form.buttons.filter((b) => b.type === 'url').length >= URL_BUTTON_LIMIT}
+                  onClick={() => setForm({ ...form, buttons: [...form.buttons, { type: 'url', text: 'Visit Website', value: '' }] })}
+                  className="border-[#e7ece9] text-slate-600 hover:bg-[#f8faf9]"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> Visit Website
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={form.buttons.filter((b) => b.type === 'phone').length >= PHONE_BUTTON_LIMIT}
+                  onClick={() => setForm({ ...form, buttons: [...form.buttons, { type: 'phone', text: 'Call Now', value: '' }] })}
+                  className="border-[#e7ece9] text-slate-600 hover:bg-[#f8faf9]"
+                >
+                  <Phone className="h-3.5 w-3.5" /> Call Now
+                </Button>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Up to {URL_BUTTON_LIMIT} website buttons and {PHONE_BUTTON_LIMIT} call button — Meta&apos;s limit per template.
+              </p>
+            </div>
+
             {/* Live WhatsApp-style preview */}
             <div className="space-y-2">
               <Label className="text-slate-700">Preview</Label>
@@ -530,6 +615,19 @@ export function TemplateManager() {
                     {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
+                {form.buttons.filter((b) => b.text.trim()).length > 0 && (
+                  <div className="ml-auto max-w-[85%] overflow-hidden rounded-lg bg-white shadow-sm">
+                    {form.buttons.filter((b) => b.text.trim()).map((btn, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-center gap-1.5 border-t border-[#e7ece9] px-3 py-2 text-sm font-medium text-[#128C7E]"
+                      >
+                        {btn.type === 'url' ? <ExternalLink className="h-3.5 w-3.5" /> : <Phone className="h-3.5 w-3.5" />}
+                        {btn.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <p className="text-[11px] text-slate-400">
                 Variables like <code>{'{{1}}'}</code> are filled per-contact when you send.

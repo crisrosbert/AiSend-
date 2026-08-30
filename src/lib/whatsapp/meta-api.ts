@@ -382,7 +382,13 @@ export interface CreateTemplateArgs {
   /** A handle from uploadProfilePhoto(), used as Meta's review sample for the header. */
   headerMediaHandle?: string
   footerText?: string
+  /** Call-to-action buttons shown below the message — max 2 URL + 1 phone (Meta's limit). */
+  buttons?: TemplateButton[]
 }
+
+export type TemplateButton =
+  | { type: 'URL'; text: string; url: string }
+  | { type: 'PHONE_NUMBER'; text: string; phoneNumber: string }
 
 export interface CreateTemplateResult {
   id: string
@@ -428,6 +434,7 @@ export async function createTemplate(
     headerMediaFormat,
     headerMediaHandle,
     footerText,
+    buttons,
   } = args
 
   const url = `${META_API_BASE}/${wabaId}/message_templates`
@@ -472,6 +479,23 @@ export async function createTemplate(
       type: 'FOOTER',
       text: footerText.trim(),
     })
+  }
+
+  if (buttons && buttons.length > 0) {
+    // Meta's hard caps: at most 2 URL buttons and 1 phone-number button
+    // per template. Enforced here rather than trusted from the caller,
+    // same as the interactive-message limits above — a caller that
+    // exceeds it gets a working template with the extras dropped,
+    // instead of a 400 from Meta with no indication which button broke it.
+    const urlButtons = buttons.filter((b): b is Extract<TemplateButton, { type: 'URL' }> => b.type === 'URL').slice(0, 2)
+    const phoneButtons = buttons.filter((b): b is Extract<TemplateButton, { type: 'PHONE_NUMBER' }> => b.type === 'PHONE_NUMBER').slice(0, 1)
+    const metaButtons = [
+      ...urlButtons.map((b) => ({ type: 'URL', text: clamp(b.text, 25), url: b.url.trim() })),
+      ...phoneButtons.map((b) => ({ type: 'PHONE_NUMBER', text: clamp(b.text, 25), phone_number: b.phoneNumber.trim() })),
+    ]
+    if (metaButtons.length > 0) {
+      components.push({ type: 'BUTTONS', buttons: metaButtons })
+    }
   }
 
   const payload = {

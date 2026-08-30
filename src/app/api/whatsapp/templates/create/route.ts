@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import { createTemplate, uploadProfilePhoto } from '@/lib/whatsapp/meta-api'
+import { createTemplate, uploadProfilePhoto, type TemplateButton } from '@/lib/whatsapp/meta-api'
+import { isValidE164 } from '@/lib/whatsapp/phone-utils'
 
 const MEDIA_HEADER_FORMATS = { image: 'IMAGE', video: 'VIDEO' } as const
 type MediaHeaderType = keyof typeof MEDIA_HEADER_FORMATS
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
       header_text,
       header_media_url,
       footer_text,
+      buttons: rawButtons,
     } = body as {
       name?: string
       category?: string
@@ -75,6 +77,7 @@ export async function POST(request: Request) {
       header_text?: string
       header_media_url?: string
       footer_text?: string
+      buttons?: Array<{ type?: string; text?: string; value?: string }>
     }
 
     if (!name || !body_text) {
@@ -82,6 +85,36 @@ export async function POST(request: Request) {
         { error: 'name and body_text are required' },
         { status: 400 }
       )
+    }
+
+    // Call-to-action buttons — "Visit Website" / "Call Now", the row
+    // big brands show under a template message. Meta caps these at 2
+    // URL buttons + 1 phone button; anything past that is silently
+    // dropped by createTemplate(), so the only thing checked here is
+    // that what WAS provided is well-formed enough not to earn a
+    // confusing rejection from Meta.
+    const buttons: TemplateButton[] = []
+    for (const b of rawButtons ?? []) {
+      const text = (b.text ?? '').trim()
+      const value = (b.value ?? '').trim()
+      if (!text || !value) continue
+      if (b.type === 'url') {
+        if (!/^https?:\/\/.+/i.test(value)) {
+          return NextResponse.json(
+            { error: `"${text}" button needs a full https:// link.` },
+            { status: 400 },
+          )
+        }
+        buttons.push({ type: 'URL', text, url: value })
+      } else if (b.type === 'phone') {
+        if (!isValidE164(value)) {
+          return NextResponse.json(
+            { error: `"${text}" button needs a valid phone number, e.g. +919876543210.` },
+            { status: 400 },
+          )
+        }
+        buttons.push({ type: 'PHONE_NUMBER', text, phoneNumber: value.startsWith('+') ? value : `+${value}` })
+      }
     }
 
     const mediaHeaderType =
@@ -186,6 +219,7 @@ export async function POST(request: Request) {
         headerMediaFormat: mediaHeaderType ? MEDIA_HEADER_FORMATS[mediaHeaderType] : undefined,
         headerMediaHandle,
         footerText: footer_text || undefined,
+        buttons: buttons.length > 0 ? buttons : undefined,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Meta rejected the template'
@@ -204,6 +238,7 @@ export async function POST(request: Request) {
       header_content: mediaHeaderType ? header_media_url || null : header_text || null,
       body_text,
       footer_text: footer_text || null,
+      buttons: buttons.length > 0 ? buttons : null,
       status: titleCaseStatus(metaResult.status),
       meta_template_id: metaResult.id,
       updated_at: new Date().toISOString(),

@@ -341,15 +341,15 @@ export function TemplateManager() {
 
       {/* New Template Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-white border-[#e7ece9] sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden bg-white border-[#e7ece9] p-0 sm:max-w-lg">
+          <DialogHeader className="border-b border-[#e7ece9] px-4 pt-4 pb-3">
             <DialogTitle className="text-[#0c1f17]">New Message Template</DialogTitle>
             <DialogDescription className="text-slate-500">
               Create a new WhatsApp message template.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-3">
             <div className="space-y-2">
               <Label className="text-slate-700">Template Name</Label>
               <Input
@@ -648,7 +648,7 @@ export function TemplateManager() {
             </div>
           </div>
 
-          <DialogFooter className="bg-white">
+          <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t border-[#e7ece9] bg-white px-4 py-3 shadow-[0_-6px_12px_-6px_rgba(12,31,23,0.12)]">
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}

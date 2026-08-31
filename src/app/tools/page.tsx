@@ -24,10 +24,10 @@ const TOOLS: Array<{ href: string; name: string; desc: string; live: boolean }> 
     live: true,
   },
   {
-    href: '#',
+    href: '/tools/whatsapp-qr-code',
     name: 'WhatsApp QR Code',
     desc: 'Download a scannable QR code for your WhatsApp number.',
-    live: false,
+    live: true,
   },
 ]
 

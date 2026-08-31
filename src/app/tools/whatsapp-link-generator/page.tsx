@@ -10,6 +10,15 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://app.performancemktg.net/tools/whatsapp-link-generator' },
 }
 
+const PLACES = [
+  { t: 'Instagram / Facebook bio', d: 'The one link you get in your bio — send it straight to a chat instead of a generic contact page.' },
+  { t: 'Website "Chat with us" button', d: 'Skip building a contact form; a button linking here opens a real conversation in one tap.' },
+  { t: 'Google Business Profile', d: 'Add it as your website or a custom link so people searching for you locally can message immediately.' },
+  { t: 'Email signature', d: 'Under your name and title — a faster reply channel than "please call the office."' },
+  { t: 'Online marketplace listings', d: 'Justdial, IndiaMART, Etsy — anywhere a buyer wants to ask something before they order.' },
+  { t: 'WhatsApp Status / broadcast', d: 'Forward it to prospects who’ve messaged before, so they can share it onward with a friend.' },
+]
+
 const FAQS = [
   {
     q: 'What is a WhatsApp click-to-chat link?',
@@ -26,6 +35,22 @@ const FAQS = [
   {
     q: 'Can I edit the link later without breaking it?',
     a: 'A plain wa.me link is fixed to one number and message — regenerate a new one if either changes. If you need an editable, trackable branded link, that\'s a feature we\'re adding to AiSend.',
+  },
+  {
+    q: 'Why does the link start with wa.me and not whatsapp.com?',
+    a: 'wa.me is WhatsApp\'s own official short domain for click-to-chat links, owned and operated by Meta — the same company behind WhatsApp. It isn\'t a third-party redirect.',
+  },
+  {
+    q: 'Does the pre-filled message get sent automatically?',
+    a: 'No — it only fills the text box. The person opening the chat still has to tap send themselves, so nothing goes out without them choosing to.',
+  },
+  {
+    q: 'Will this work if the person doesn\'t have my number saved?',
+    a: 'Yes, that\'s the entire point — a wa.me link opens a chat with a number regardless of whether it\'s already in the other person\'s contacts.',
+  },
+  {
+    q: 'Can I use this for a WhatsApp Business number?',
+    a: 'Yes, wa.me links work identically for personal and WhatsApp Business numbers — there\'s no separate format for business accounts.',
   },
 ]
 
@@ -56,7 +81,57 @@ export default function WhatsAppLinkGeneratorPage() {
 
         <LinkGeneratorTool />
 
-        <section style={{ marginTop: 70, maxWidth: 720, marginLeft: 'auto', marginRight: 'auto' }}>
+        {/* What is it */}
+        <section style={{ marginTop: 70, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 12px' }}>
+            How a WhatsApp link actually works
+          </h2>
+          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: '0 0 12px', maxWidth: 760 }}>
+            A normal phone number, on its own, isn&apos;t clickable into a chat — someone has to save it as a
+            contact first, then find it, then open WhatsApp, then start typing. A wa.me link skips every one of
+            those steps: it&apos;s a single URL (<code>https://wa.me/&lt;countrycode&gt;&lt;number&gt;</code>) that,
+            when tapped, opens a chat with that exact number directly, with an optional message already sitting in
+            the box.
+          </p>
+          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: 0, maxWidth: 760 }}>
+            It&apos;s an official WhatsApp feature (the <code>wa.me</code> domain belongs to Meta), not a
+            third-party workaround — which is why it works the same way everywhere it&apos;s placed: a bio, a
+            button, a QR code, a text message.
+          </p>
+        </section>
+
+        {/* Where to use it */}
+        <section style={{ marginTop: 40 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 20px', textAlign: 'center' }}>
+            Where this link actually gets used
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 16 }}>
+            {PLACES.map((p) => (
+              <div key={p.t} style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
+                <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 6px' }}>{p.t}</h3>
+                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#5b6b63', margin: 0 }}>{p.d}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Need a physical version */}
+        <section style={{ marginTop: 40, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30, display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ maxWidth: 560 }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, margin: '0 0 6px' }}>
+              Putting this somewhere printed instead?
+            </h2>
+            <p style={{ fontSize: 13.5, lineHeight: 1.6, color: '#5b6b63', margin: 0 }}>
+              A link needs something to tap. For posters, packaging, or a storefront, generate the same link as a
+              scannable QR code instead.
+            </p>
+          </div>
+          <Link href="/tools/whatsapp-qr-code" style={{ background: '#075E54', color: '#fff', textDecoration: 'none', fontSize: 14, fontWeight: 700, padding: '11px 20px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+            Get a QR code →
+          </Link>
+        </section>
+
+        <section style={{ marginTop: 50, maxWidth: 720, marginLeft: 'auto', marginRight: 'auto' }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 22px' }}>
             Common questions
           </h2>

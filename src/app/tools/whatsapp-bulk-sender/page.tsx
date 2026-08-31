@@ -40,6 +40,18 @@ const FAQS = [
     q: 'What happens to contacts who reply STOP?',
     a: 'They’re automatically marked opted-out and excluded from every future broadcast — this is handled for you, not something you have to remember to filter yourself.',
   },
+  {
+    q: 'How many people can I actually message in one broadcast?',
+    a: 'There’s no hard cap in AiSend itself — the limit is Meta’s own messaging tier for your number, which starts at 250 unique recipients per rolling 24 hours for a new number and rises automatically as you send quality messages with good delivery and low block rates.',
+  },
+  {
+    q: 'What is a message template, and why can’t I just send free text to everyone?',
+    a: 'Outside a 24-hour conversation window, WhatsApp only allows pre-approved "template" messages — this is a platform-wide anti-spam rule, not an AiSend limitation. You write the template once, Meta reviews it (usually within minutes to a few hours), and you reuse it for every broadcast.',
+  },
+  {
+    q: 'Can I schedule a broadcast for later, or send it right now?',
+    a: 'Both — send immediately or schedule for a specific date and time, useful for time-zone-sensitive offers or coordinating with a launch.',
+  },
 ]
 
 export default function WhatsAppBulkSenderPage() {
@@ -143,6 +155,28 @@ export default function WhatsAppBulkSenderPage() {
                 </div>
                 <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: '0 0 6px' }}>{s.t}</h3>
                 <p style={{ fontSize: 13.5, lineHeight: 1.55, color: '#5b6b63', margin: 0 }}>{s.d}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Who this is for */}
+        <section style={{ marginBottom: 20 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 16px', textAlign: 'center' }}>
+            Built for the businesses actually sending in bulk
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            {[
+              { t: 'E-commerce & D2C', d: 'Order confirmations, shipping updates, abandoned-cart nudges, and flash-sale drops to your whole list at once.' },
+              { t: 'Real estate & property', d: 'New-listing alerts and price-drop notices to every buyer who’s enquired, segmented by budget or locality.' },
+              { t: 'Coaching, courses & education', d: 'Batch reminders, assignment nudges, and enrolment offers to students and leads without a group-chat mess.' },
+              { t: 'Clinics & healthcare', d: 'Appointment reminders and health-camp announcements — utility templates, not marketing, so open rates stay high.' },
+              { t: 'Agencies managing multiple clients', d: 'Run separate broadcasts per client number from one dashboard instead of juggling logins.' },
+              { t: 'Events & webinars', d: 'Registration confirmations, day-before reminders, and post-event follow-ups to everyone who signed up.' },
+            ].map((v) => (
+              <div key={v.t} style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
+                <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 6px' }}>{v.t}</h3>
+                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#5b6b63', margin: 0 }}>{v.d}</p>
               </div>
             ))}
           </div>

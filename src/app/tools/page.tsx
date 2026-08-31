@@ -18,10 +18,10 @@ const TOOLS: Array<{ href: string; name: string; desc: string; live: boolean }> 
     live: true,
   },
   {
-    href: '#',
+    href: '/tools/whatsapp-bulk-sender',
     name: 'WhatsApp Bulk Sender',
     desc: 'Send templated WhatsApp messages to thousands of contacts, officially.',
-    live: false,
+    live: true,
   },
   {
     href: '#',

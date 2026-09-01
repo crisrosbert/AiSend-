@@ -29,6 +29,12 @@ const TOOLS: Array<{ href: string; name: string; desc: string; live: boolean }> 
     desc: 'Download a scannable QR code for your WhatsApp number.',
     live: true,
   },
+  {
+    href: '/tools/whatsapp-text-formatter',
+    name: 'WhatsApp Text Formatter',
+    desc: 'Bold, italic, strikethrough, and bullets — with a live chat preview.',
+    live: true,
+  },
 ]
 
 export default function ToolsIndexPage() {

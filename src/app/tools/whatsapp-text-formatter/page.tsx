@@ -70,13 +70,14 @@ export default function WhatsAppTextFormatterPage() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1000, margin: '0 auto', padding: '48px 20px 90px' }}>
-        <div style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto 40px' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,40px)', fontWeight: 800, margin: '0 0 12px', letterSpacing: '-.02em' }}>
-            Format WhatsApp text with a live preview
+      <main style={{ maxWidth: 1000, margin: '0 auto', padding: '56px 20px 90px' }}>
+        <div style={{ textAlign: 'center', maxWidth: 700, margin: '0 auto 36px' }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(30px,4.6vw,44px)', fontWeight: 800, margin: '0 0 14px', letterSpacing: '-.025em', lineHeight: 1.15 }}>
+            WhatsApp Text Formatter ✨
           </h1>
-          <p style={{ fontSize: 15.5, color: '#5b6b63', margin: 0 }}>
-            Select a word, click bold, italic, or strikethrough, and see exactly how it&apos;ll look in the chat — then copy it straight into WhatsApp.
+          <p style={{ fontSize: 16, lineHeight: 1.6, color: '#5b6b63', margin: 0 }}>
+            Write bold, italic, strikethrough, lists, and quotes in a real editor — then copy the message
+            or send it straight to WhatsApp. Free, no signup.
           </p>
         </div>
 
@@ -96,10 +97,10 @@ export default function WhatsAppTextFormatterPage() {
             the person reading the message — only the styled result does.
           </p>
           <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: 0, maxWidth: 760 }}>
-            That&apos;s useful, but easy to get wrong by hand — a missing closing asterisk, or a symbol next to a
-            space, and WhatsApp just shows the raw symbols instead of formatting. This tool wraps the right
-            characters around your selection automatically and shows you a live preview styled like an actual chat
-            bubble, so what you copy is exactly what gets sent.
+            That&apos;s useful, but easy to get wrong by hand — a missing closing asterisk, or a symbol sitting next
+            to a space, and WhatsApp shows the raw symbols instead of formatting. The editor above skips the symbols
+            entirely: you format the text the way you would in any document, and the correct WhatsApp syntax is
+            generated only at the moment you copy or send.
           </p>
         </section>
 

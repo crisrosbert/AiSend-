@@ -49,7 +49,7 @@ export function PromoBanner({
         >
           AiSend
         </span>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, margin: '0 0 6px', lineHeight: 1.3 }}>
+        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, margin: '0 0 6px', lineHeight: 1.3, color: '#fff' }}>
           {headline}
         </h3>
         <p style={{ fontSize: 13.5, lineHeight: 1.55, color: 'rgba(255,255,255,.85)', margin: 0 }}>

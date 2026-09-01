@@ -5,233 +5,453 @@
 // Zero-dependency, same as every other /tools page: everything happens
 // in this component, nothing is saved or sent anywhere.
 //
-// The interaction that makes this feel like a real editor rather than
-// a "type then click a button that wraps the whole box" gadget: select
-// a WORD or PHRASE inside the textarea, then click a format button —
-// only the selection gets wrapped, the cursor lands back where it was,
-// and the live preview updates instantly.
+// This is a true WYSIWYG editor rather than a "type markup, read a
+// preview" split: bold looks bold while you type, inside the box. The
+// WhatsApp markup (*bold*, _italic_, ~strike~) is only generated at the
+// moment you copy or send, by walking the editor's DOM.
 
-import { useRef, useState } from 'react'
-import { Bold, Italic, Strikethrough, Code2, List, ListOrdered, Quote, Copy } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  Bold, Italic, Strikethrough, List, ListOrdered, Quote, Code2, RemoveFormatting, Copy, Check,
+} from 'lucide-react'
 
-type WrapFormat = 'bold' | 'italic' | 'strike' | 'mono'
-type LineFormat = 'bullet' | 'number' | 'quote'
+// Starts with unformatted text on purpose: if it opened with a bold word,
+// clearing the box and typing would inherit bold from the deleted caret.
+const SAMPLE_HTML =
+  '<div>Hi Priya, your order <b>#4521</b> is confirmed ✅</div>' +
+  '<div><i>Delivery window:</i> Today, 4–7 PM</div>' +
+  '<div><br></div>' +
+  '<ul><li>2x Cotton T-Shirt (M)</li><li>1x Canvas Tote Bag</li></ul>' +
+  '<blockquote>Reply here anytime — a real person reads it.</blockquote>'
 
-const WRAP_CHARS: Record<WrapFormat, string> = {
-  bold: '*',
-  italic: '_',
-  strike: '~',
-  mono: '```',
-}
-
-const SAMPLE = `Hey! Just confirming your *order #4521* is on the way 🚚
-
-_Delivery window:_ Today, 4–7 PM
-
-What's inside:
-- 2x Cotton T-Shirt (M)
-- 1x Canvas Tote Bag
-
-Track it here: ~old link removed~ tracking.example.com/4521
-
-> Reply to this message anytime — a real person reads it.`
+// Static config — the actual editing commands run in the click handler,
+// never during render.
+const TOOLBAR: Array<{ key: string; label: string; icon: React.ReactNode; divider?: boolean }> = [
+  { key: 'bold', label: 'Bold', icon: <Bold size={16} /> },
+  { key: 'italic', label: 'Italic', icon: <Italic size={16} /> },
+  { key: 'strikeThrough', label: 'Strikethrough', icon: <Strikethrough size={16} /> },
+  { key: 'insertOrderedList', label: 'Numbered list', icon: <ListOrdered size={16} />, divider: true },
+  { key: 'insertUnorderedList', label: 'Bulleted list', icon: <List size={16} /> },
+  { key: 'blockquote', label: 'Quote', icon: <Quote size={16} />, divider: true },
+  { key: 'code', label: 'Monospace', icon: <Code2 size={16} /> },
+  { key: 'removeFormat', label: 'Clear formatting', icon: <RemoveFormatting size={16} />, divider: true },
+]
 
 export function FormatterTool() {
-  const [text, setText] = useState(SAMPLE)
+  const editorRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [active, setActive] = useState<Record<string, boolean>>({})
+  const [isEmpty, setIsEmpty] = useState(false)
 
-  function applyWrap(format: WrapFormat) {
-    const el = textareaRef.current
+  // A "cleared" contenteditable still contains a <br>, so :empty never
+  // matches — emptiness has to be measured from the text itself.
+  const syncEmpty = useCallback(() => {
+    const el = editorRef.current
     if (!el) return
-    const marker = WRAP_CHARS[format]
-    const start = el.selectionStart
-    const end = el.selectionEnd
-    const selected = text.slice(start, end)
-    const placeholder = selected || 'text'
+    setIsEmpty(el.textContent?.trim() === '')
+  }, [])
 
-    const next = text.slice(0, start) + marker + placeholder + marker + text.slice(end)
-    setText(next)
+  const syncActive = useCallback(() => {
+    const el = editorRef.current
+    const sel = window.getSelection()
+    if (!el || !sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return
 
-    const cursorStart = start + marker.length
-    const cursorEnd = cursorStart + placeholder.length
-    requestAnimationFrame(() => {
-      el.focus()
-      el.setSelectionRange(cursorStart, cursorEnd)
+    const state = (cmd: string) => {
+      try {
+        return document.queryCommandState(cmd)
+      } catch {
+        return false
+      }
+    }
+    setActive({
+      bold: state('bold'),
+      italic: state('italic'),
+      strikeThrough: state('strikeThrough'),
+      insertUnorderedList: state('insertUnorderedList'),
+      insertOrderedList: state('insertOrderedList'),
+      code: !!closestTag(sel.anchorNode, 'CODE', el),
+      blockquote: !!closestTag(sel.anchorNode, 'BLOCKQUOTE', el),
     })
+  }, [])
+
+  useEffect(() => {
+    // The editor's content is owned by the DOM, never by React. If it were
+    // passed as dangerouslySetInnerHTML, every re-render (each keystroke
+    // updates the toolbar's active state) would reset the element's
+    // children and wipe what the person just typed.
+    // The sample always leaves the editor non-empty, so the placeholder
+    // state starts out correct and needs no sync here.
+    const el = editorRef.current
+    if (el && el.innerHTML.trim() === '') el.innerHTML = SAMPLE_HTML
+
+    // Emit <b>/<i>/<s> tags instead of styled spans, so the markup
+    // serializer below has simple, predictable elements to walk.
+    try {
+      document.execCommand('styleWithCSS', false, 'false')
+    } catch {
+      /* not supported — the serializer also reads inline styles as a fallback */
+    }
+    document.addEventListener('selectionchange', syncActive)
+    return () => document.removeEventListener('selectionchange', syncActive)
+  }, [syncActive])
+
+  function exec(command: string, value?: string) {
+    editorRef.current?.focus()
+    try {
+      document.execCommand(command, false, value)
+    } catch {
+      /* ignore — nothing to do if the browser refuses the command */
+    }
+    syncActive()
+    syncEmpty()
   }
 
-  function applyLinePrefix(format: LineFormat) {
-    const el = textareaRef.current
-    if (!el) return
-    const start = el.selectionStart
-    const end = el.selectionEnd
+  function toggleCode() {
+    const el = editorRef.current
+    const sel = window.getSelection()
+    if (!el || !sel || sel.rangeCount === 0) return
 
-    // Expand the selection to cover whole lines, so prefixing works
-    // correctly even when the cursor is mid-line.
-    const lineStart = text.lastIndexOf('\n', start - 1) + 1
-    let lineEnd = text.indexOf('\n', end)
-    if (lineEnd === -1) lineEnd = text.length
+    const existing = closestTag(sel.anchorNode, 'CODE', el)
+    if (existing) {
+      unwrap(existing)
+      syncActive()
+      return
+    }
 
-    const block = text.slice(lineStart, lineEnd)
-    const lines = block.split('\n')
-    let counter = 1
-    const prefixed = lines
-      .map((line) => {
-        if (!line.trim()) return line
-        if (format === 'bullet') return `- ${line.replace(/^-\s*/, '')}`
-        if (format === 'quote') return `> ${line.replace(/^>\s*/, '')}`
-        return `${counter++}. ${line.replace(/^\d+\.\s*/, '')}`
-      })
-      .join('\n')
+    const range = sel.getRangeAt(0)
+    if (range.collapsed) return
+    const code = document.createElement('code')
+    try {
+      range.surroundContents(code)
+    } catch {
+      // Range crosses element boundaries — extract and re-insert instead.
+      code.appendChild(range.extractContents())
+      range.insertNode(code)
+    }
+    sel.removeAllRanges()
+    syncActive()
+  }
 
-    const next = text.slice(0, lineStart) + prefixed + text.slice(lineEnd)
-    setText(next)
-    requestAnimationFrame(() => el.focus())
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    // Paste as plain text, so copied web content doesn't drag fonts,
+    // colours, and background styles into the message.
+    e.preventDefault()
+    const text = e.clipboardData.getData('text/plain')
+    try {
+      document.execCommand('insertText', false, text)
+    } catch {
+      /* ignore */
+    }
   }
 
   function handleCopy() {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    })
+    const el = editorRef.current
+    if (!el) return
+    navigator.clipboard
+      .writeText(toWhatsAppMarkup(el))
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      })
+      .catch(() => {
+        /* clipboard blocked — nothing useful to show */
+      })
+  }
+
+  function handleSend() {
+    const el = editorRef.current
+    if (!el) return
+    const markup = toWhatsAppMarkup(el)
+    window.open(`https://wa.me/?text=${encodeURIComponent(markup)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  // execCommand('removeFormat') only strips inline styling — it leaves
+  // lists, quotes, and monospace in place, which isn't what "clear
+  // formatting" means to the person clicking it.
+  function clearFormatting() {
+    const el = editorRef.current
+    if (!el) return
+    el.focus()
+
+    const run = (cmd: string, value?: string) => {
+      try {
+        document.execCommand(cmd, false, value)
+      } catch {
+        /* ignore */
+      }
+    }
+    const state = (cmd: string) => {
+      try {
+        return document.queryCommandState(cmd)
+      } catch {
+        return false
+      }
+    }
+
+    run('removeFormat')
+    if (state('insertUnorderedList')) run('insertUnorderedList')
+    if (state('insertOrderedList')) run('insertOrderedList')
+    run('formatBlock', '<div>')
+
+    const sel = window.getSelection()
+    if (sel) {
+      el.querySelectorAll('code').forEach((c) => {
+        if (sel.containsNode(c, true)) unwrap(c)
+      })
+    }
+
+    syncActive()
+    syncEmpty()
+  }
+
+  function runTool(key: string) {
+    switch (key) {
+      case 'code':
+        toggleCode()
+        break
+      case 'blockquote':
+        exec('formatBlock', '<blockquote>')
+        break
+      case 'removeFormat':
+        clearFormatting()
+        break
+      default:
+        exec(key)
+    }
   }
 
   return (
-    <div className="wtf-wrap">
+    <div className="wtf-shell">
       <style>{`
-        .wtf-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
-        @media (max-width: 860px) { .wtf-wrap { grid-template-columns: 1fr; } }
+        .wtf-shell { max-width: 720px; margin: 0 auto; }
 
-        .wtf-panel { min-width: 0; background: #fff; border: 1px solid #e6ece9; border-radius: 18px; overflow: hidden; box-shadow: 0 8px 24px -14px rgba(11,35,26,.12); }
-        .wtf-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #eef2f0; background: #fafcfb; }
-        .wtf-panel-title { font-size: 12.5px; font-weight: 700; color: #5b6b63; text-transform: uppercase; letter-spacing: .04em; }
-
-        .wtf-toolbar { display: flex; gap: 4px; padding: 10px 12px; border-bottom: 1px solid #eef2f0; flex-wrap: wrap; }
+        .wtf-card {
+          background: #fff; border: 1px solid #e3eae6; border-radius: 14px; overflow: hidden;
+          box-shadow: 0 10px 30px -20px rgba(11,35,26,.35);
+        }
+        .wtf-toolbar {
+          display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 2px;
+          padding: 9px 12px; border-bottom: 1px solid #eef2f0; background: #fcfdfd;
+        }
         .wtf-tbtn {
-          display: flex; align-items: center; gap: 5px; border: 1px solid #e2e8e4; background: #fbfdfc;
-          color: #46584f; font-size: 12px; font-weight: 600; padding: 7px 10px; border-radius: 8px;
-          cursor: pointer; font-family: inherit;
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 34px; height: 34px; border: none; border-radius: 8px; cursor: pointer;
+          background: transparent; color: #55665e; font-family: inherit; transition: background .12s, color .12s;
         }
-        .wtf-tbtn:hover { background: #eefaf3; border-color: #bfe8d5; color: #0f6e37; }
+        .wtf-tbtn:hover { background: #eef3f1; color: #0b231a; }
+        .wtf-tbtn[data-active="true"] { background: #e3f6ea; color: #0f6e37; }
+        .wtf-sep { width: 1px; height: 20px; background: #e6ece9; margin: 0 6px; }
 
-        .wtf-textarea {
-          width: 100%; min-height: 260px; border: none; outline: none; resize: vertical;
-          padding: 16px; font-size: 14px; line-height: 1.6; font-family: 'JetBrains Mono', monospace;
-          color: #0c1f17; background: #fff;
+        .wtf-editor {
+          min-height: 190px; padding: 18px 20px; outline: none; font-size: 15px; line-height: 1.7;
+          color: #12241c; overflow-wrap: break-word;
+        }
+        .wtf-editor[data-empty="true"]::before {
+          content: attr(data-placeholder); color: #a3b0a9; pointer-events: none;
+        }
+        /* the app's global reset strips list markers — put them back here */
+        .wtf-editor ul { margin: 6px 0; padding-left: 26px; list-style: disc outside; }
+        .wtf-editor ol { margin: 6px 0; padding-left: 26px; list-style: decimal outside; }
+        .wtf-editor li { margin: 2px 0; display: list-item; }
+        .wtf-editor blockquote {
+          margin: 8px 0; padding: 2px 0 2px 12px; border-left: 3px solid #cfe9dc; color: #4d5f57;
+        }
+        .wtf-editor code {
+          background: #f1f5f3; border-radius: 5px; padding: 1px 5px;
+          font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13.5px;
         }
 
-        .wtf-copybtn {
-          display: flex; align-items: center; gap: 6px; border: none; background: none; color: #0f6e37;
-          font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit;
+        .wtf-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 22px; }
+        .wtf-btn {
+          display: inline-flex; align-items: center; gap: 9px; border: none; cursor: pointer;
+          font-family: inherit; font-size: 14.5px; font-weight: 700; color: #fff;
+          padding: 13px 24px; border-radius: 11px; text-decoration: none; transition: filter .12s, transform .12s;
         }
+        .wtf-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+        .wtf-btn--copy { background: #075E54; }
+        .wtf-btn--send { background: #25D366; }
 
-        .wtf-preview-body {
-          min-height: 292px; padding: 16px;
-          background-color: #E9FBEF;
-          background-image: radial-gradient(rgba(37,211,102,.16) 1px, transparent 1.5px), radial-gradient(rgba(37,211,102,.10) 1px, transparent 1.5px);
-          background-size: 26px 26px, 26px 26px; background-position: 0 0, 13px 13px;
+        .wtf-steps {
+          display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px;
+          margin-top: 26px; font-size: 13px; color: #5b6b63;
         }
-        .wtf-bubble { max-width: 92%; background: #fff; border-radius: 4px 12px 12px 12px; padding: 10px 13px; font-size: 13.5px; color: #0c1f17; box-shadow: 0 1px 2px rgba(0,0,0,.08); white-space: pre-wrap; word-break: break-word; line-height: 1.55; }
-        .wtf-bubble :where(strong,em,s,code) { }
-        .wtf-bubble code { background: #f1f5f3; padding: 1px 5px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; }
-        .wtf-bubble .wtf-quote { display: block; border-left: 3px solid #cdeee5; padding-left: 10px; color: #5b6b63; margin: 2px 0; }
-        .wtf-bubble .wtf-bullet { display: block; padding-left: 4px; }
+        .wtf-step { display: inline-flex; align-items: center; gap: 7px; }
+        .wtf-stepnum {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 21px; height: 21px; border-radius: 50%; background: #1DA851; color: #fff;
+          font-size: 11.5px; font-weight: 800;
+        }
+        .wtf-arrow { color: #b9c6bf; }
+        @media (max-width: 430px) { .wtf-arrow { display: none; } }
       `}</style>
 
-      <div className="wtf-panel">
-        <div className="wtf-panel-head">
-          <span className="wtf-panel-title">Your message</span>
-          <button className="wtf-copybtn" onClick={handleCopy}>
-            <Copy size={13} /> {copied ? 'Copied ✓' : 'Copy formatted text'}
-          </button>
-        </div>
+      <div className="wtf-card">
         <div className="wtf-toolbar">
-          <button className="wtf-tbtn" onClick={() => applyWrap('bold')}><Bold size={13} /> Bold</button>
-          <button className="wtf-tbtn" onClick={() => applyWrap('italic')}><Italic size={13} /> Italic</button>
-          <button className="wtf-tbtn" onClick={() => applyWrap('strike')}><Strikethrough size={13} /> Strike</button>
-          <button className="wtf-tbtn" onClick={() => applyWrap('mono')}><Code2 size={13} /> Mono</button>
-          <button className="wtf-tbtn" onClick={() => applyLinePrefix('bullet')}><List size={13} /> Bullets</button>
-          <button className="wtf-tbtn" onClick={() => applyLinePrefix('number')}><ListOrdered size={13} /> Numbered</button>
-          <button className="wtf-tbtn" onClick={() => applyLinePrefix('quote')}><Quote size={13} /> Quote</button>
+          {TOOLBAR.map((t) => (
+            <span key={t.key} style={{ display: 'inline-flex', alignItems: 'center' }}>
+              {t.divider && <span className="wtf-sep" />}
+              <button
+                type="button"
+                className="wtf-tbtn"
+                data-active={active[t.key] ? 'true' : 'false'}
+                title={t.label}
+                aria-label={t.label}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => runTool(t.key)}
+              >
+                {t.icon}
+              </button>
+            </span>
+          ))}
         </div>
-        <textarea
-          ref={textareaRef}
-          className="wtf-textarea"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Type your message, then select a word and click a format button…"
+
+        <div
+          ref={editorRef}
+          className="wtf-editor"
+          contentEditable
+          suppressContentEditableWarning
+          role="textbox"
+          aria-multiline="true"
+          aria-label="Message editor"
+          data-placeholder="Type your message here, then use the toolbar to format it…"
+          data-empty={isEmpty ? 'true' : 'false'}
+          onPaste={handlePaste}
+          onInput={syncEmpty}
+          onKeyUp={syncActive}
+          onMouseUp={syncActive}
         />
       </div>
 
-      <div className="wtf-panel">
-        <div className="wtf-panel-head">
-          <span className="wtf-panel-title">Live preview</span>
-        </div>
-        <div className="wtf-preview-body">
-          <div className="wtf-bubble">{renderWhatsAppMarkup(text)}</div>
-        </div>
+      <div className="wtf-actions">
+        <button type="button" className="wtf-btn wtf-btn--copy" onClick={handleCopy}>
+          {copied ? <Check size={16} /> : <Copy size={16} />}
+          {copied ? 'Copied!' : 'Copy message'}
+        </button>
+        <button type="button" className="wtf-btn wtf-btn--send" onClick={handleSend}>
+          <WhatsAppGlyph />
+          Send on WhatsApp
+        </button>
+      </div>
+
+      <div className="wtf-steps">
+        <span className="wtf-step"><span className="wtf-stepnum">1</span> Type your message</span>
+        <span className="wtf-arrow">→</span>
+        <span className="wtf-step"><span className="wtf-stepnum">2</span> Copy or send</span>
+        <span className="wtf-arrow">→</span>
+        <span className="wtf-step"><span className="wtf-stepnum">3</span> Paste &amp; share</span>
       </div>
     </div>
   )
 }
 
-/**
- * Turns WhatsApp's own formatting syntax into React nodes for the
- * preview bubble — the same syntax WhatsApp itself renders, so what's
- * shown here is what the recipient actually sees, not an approximation.
- */
-function renderWhatsAppMarkup(input: string) {
-  const lines = input.split('\n')
-  return lines.map((line, i) => {
-    const key = `l${i}`
-    if (/^>\s?/.test(line)) {
-      return (
-        <span key={key} className="wtf-quote">
-          {inline(line.replace(/^>\s?/, ''))}
-          {'\n'}
-        </span>
-      )
-    }
-    if (/^-\s?/.test(line)) {
-      return (
-        <span key={key} className="wtf-bullet">
-          {'• '}{inline(line.replace(/^-\s?/, ''))}
-          {'\n'}
-        </span>
-      )
-    }
-    return (
-      <span key={key}>
-        {inline(line)}
-        {i < lines.length - 1 ? '\n' : ''}
-      </span>
-    )
-  })
+function WhatsAppGlyph() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.65.08-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.14-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.01-1.04 2.47s1.06 2.87 1.21 3.07c.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.7.63.71.23 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.41-.07-.13-.27-.2-.57-.35z" />
+      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2zm0 18.15h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.21 8.21 0 0 1-1.26-4.38c0-4.54 3.7-8.23 8.25-8.23a8.23 8.23 0 0 1 8.24 8.24c0 4.54-3.7 8.23-8.24 8.23z" />
+    </svg>
+  )
 }
 
-function inline(line: string) {
-  // Split on the four inline markers, alternating plain / matched text.
-  const tokens: Array<{ text: string; type: 'plain' | 'bold' | 'italic' | 'strike' | 'mono' }> = []
-  const re = /```(.+?)```|\*(.+?)\*|_(.+?)_|~(.+?)~/g
-  let last = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(line)) !== null) {
-    if (m.index > last) tokens.push({ text: line.slice(last, m.index), type: 'plain' })
-    if (m[1] !== undefined) tokens.push({ text: m[1], type: 'mono' })
-    else if (m[2] !== undefined) tokens.push({ text: m[2], type: 'bold' })
-    else if (m[3] !== undefined) tokens.push({ text: m[3], type: 'italic' })
-    else if (m[4] !== undefined) tokens.push({ text: m[4], type: 'strike' })
-    last = re.lastIndex
-  }
-  if (last < line.length) tokens.push({ text: line.slice(last), type: 'plain' })
+/* ---------- WhatsApp markup serialization ---------- */
 
-  return tokens.map((t, i) => {
-    const key = `t${i}`
-    if (t.type === 'bold') return <strong key={key}>{t.text}</strong>
-    if (t.type === 'italic') return <em key={key}>{t.text}</em>
-    if (t.type === 'strike') return <s key={key}>{t.text}</s>
-    if (t.type === 'mono') return <code key={key}>{t.text}</code>
-    return <span key={key}>{t.text}</span>
-  })
+/**
+ * Walks the editor DOM and produces WhatsApp's own formatting syntax —
+ * the text that actually gets pasted into a chat.
+ */
+export function toWhatsAppMarkup(root: HTMLElement): string {
+  return nodeToMarkup(root)
+    .replace(/ /g, ' ') // contenteditable inserts &nbsp; — WhatsApp wants real spaces
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function nodeToMarkup(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
+  if (node.nodeType !== Node.ELEMENT_NODE) return ''
+
+  const el = node as HTMLElement
+  const inner = () => Array.from(el.childNodes).map(nodeToMarkup).join('')
+  const tag = el.tagName.toLowerCase()
+
+  switch (tag) {
+    case 'br':
+      return '\n'
+    case 'b':
+    case 'strong':
+      return wrapInline(inner(), '*')
+    case 'i':
+    case 'em':
+      return wrapInline(inner(), '_')
+    case 's':
+    case 'strike':
+    case 'del':
+      return wrapInline(inner(), '~')
+    case 'code':
+    case 'tt':
+    case 'pre':
+      return wrapInline(inner(), '```')
+    case 'ul':
+    case 'ol': {
+      const items = Array.from(el.children).filter((c) => c.tagName === 'LI')
+      const lines = items.map((li, i) => {
+        const text = Array.from(li.childNodes).map(nodeToMarkup).join('').trim()
+        return `${tag === 'ol' ? `${i + 1}.` : '-'} ${text}`
+      })
+      return `${lines.join('\n')}\n`
+    }
+    case 'blockquote': {
+      const text = inner().trim()
+      if (!text) return ''
+      return `${text.split('\n').map((l) => `> ${l}`).join('\n')}\n`
+    }
+    case 'div':
+    case 'p':
+      return `${inner()}\n`
+    case 'span': {
+      // Fallback for browsers that emit styled spans despite styleWithCSS=false.
+      let text = inner()
+      const style = el.style
+      if (style.fontWeight === 'bold' || Number(style.fontWeight) >= 600) text = wrapInline(text, '*')
+      if (style.fontStyle === 'italic') text = wrapInline(text, '_')
+      if (style.textDecorationLine?.includes('line-through') || style.textDecoration?.includes('line-through')) {
+        text = wrapInline(text, '~')
+      }
+      return text
+    }
+    default:
+      return inner()
+  }
+}
+
+/**
+ * WhatsApp only renders a marker pair when it hugs the text — "* bold *"
+ * stays literal. So any leading/trailing whitespace is moved outside.
+ */
+function wrapInline(text: string, marker: string): string {
+  if (!text.trim()) return text
+  const lead = /^\s*/.exec(text)?.[0] ?? ''
+  const trail = /\s*$/.exec(text)?.[0] ?? ''
+  const core = text.slice(lead.length, text.length - trail.length)
+  return `${lead}${marker}${core}${marker}${trail}`
+}
+
+/** Replaces an element with its own children, keeping the text in place. */
+function unwrap(el: Element) {
+  const parent = el.parentNode
+  if (!parent) return
+  while (el.firstChild) parent.insertBefore(el.firstChild, el)
+  parent.removeChild(el)
+}
+
+function closestTag(node: Node | null, tagName: string, boundary: HTMLElement): HTMLElement | null {
+  let current: Node | null = node
+  while (current && current !== boundary) {
+    if (current.nodeType === Node.ELEMENT_NODE && (current as HTMLElement).tagName === tagName) {
+      return current as HTMLElement
+    }
+    current = current.parentNode
+  }
+  return null
 }

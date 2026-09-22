@@ -39,7 +39,7 @@ export function SiteHeader() {
       <div className="hidden sm:block w-full border-b border-gray-200 bg-[#f4f9fc] text-gray-700 text-sm font-medium">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-end h-10 gap-6">
           <a
-            className="inline-flex items-center gap-2 text-gray-800 hover:text-[#00C675] transition-colors"
+            className="inline-flex items-center gap-2 text-gray-800 hover:text-[#1B6B4A] transition-colors"
             href="https://wa.me/918796437535"
           >
             <svg className="w-4 h-4 text-gray-800" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -48,7 +48,7 @@ export function SiteHeader() {
             <span className="font-medium text-gray-800">+91 87964 37535</span>
           </a>
           <a
-            className="inline-flex items-center gap-2 text-gray-800 hover:text-[#00C675] transition-colors"
+            className="inline-flex items-center gap-2 text-gray-800 hover:text-[#1B6B4A] transition-colors"
             href="mailto:crisrosbert@gmail.com"
           >
             <svg className="w-4 h-4 text-gray-800" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -57,7 +57,7 @@ export function SiteHeader() {
             <span className="font-medium text-gray-800">crisrosbert@gmail.com</span>
           </a>
           <Link
-            className="inline-flex items-center gap-2 text-[#fff] px-5 h-full font-semibold transition-colors bg-[#00C675] hover:bg-[#00ad66]"
+            className="inline-flex items-center gap-2 text-[#fff] px-5 h-full font-semibold transition-colors bg-[#1B6B4A] hover:bg-[#14523A]"
             href="/contact"
           >
             <span className="font-bold tracking-tight">Request a Call</span>
@@ -71,15 +71,15 @@ export function SiteHeader() {
         <div className="flex items-center gap-8">
           <Link aria-label="AiSend Home" className="flex items-center focus:outline-none" href="/">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#00C675] to-emerald-400 flex items-center justify-center text-[#fff] shadow-md shadow-emerald-500/25">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#1B6B4A] to-[#6FD9A0] flex items-center justify-center text-[#fff] shadow-md shadow-[#1B6B4A]/25">
                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                   <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
                 </svg>
               </div>
               <div className="flex items-center text-2xl font-black tracking-tight select-none">
-                <span className="text-[#00C675]">AI</span>
+                <span className="text-[#1B6B4A]">AI</span>
                 <span className="text-emerald-950 ml-0.5">SEND</span>
-                <span className="w-2 h-2 rounded-full bg-[#00C675] ml-0.5 mt-1.5 inline-block" />
+                <span className="w-2 h-2 rounded-full bg-[#1B6B4A] ml-0.5 mt-1.5 inline-block" />
               </div>
             </div>
           </Link>
@@ -87,16 +87,16 @@ export function SiteHeader() {
           <nav className="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-700">
             {NAV_LABELS.map((label) => (
               <div key={label} className="relative group cursor-pointer py-2">
-                <span className="flex items-center gap-1 hover:text-[#00C675] transition-colors text-gray-800 font-medium text-base">
+                <span className="flex items-center gap-1 hover:text-[#1B6B4A] transition-colors text-gray-800 font-medium text-base">
                   {label}
-                  <svg className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#00C675] transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#1B6B4A] transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
                   </svg>
                 </span>
               </div>
             ))}
-            <a className="hover:text-[#00C675] text-gray-800 font-medium transition-colors py-2 text-base" href="#">Blog</a>
-            <Link className="hover:text-[#00C675] text-gray-800 font-medium transition-colors py-2 text-base" href="/contact">Contact</Link>
+            <a className="hover:text-[#1B6B4A] text-gray-800 font-medium transition-colors py-2 text-base" href="#">Blog</a>
+            <Link className="hover:text-[#1B6B4A] text-gray-800 font-medium transition-colors py-2 text-base" href="/contact">Contact</Link>
           </nav>
         </div>
 
@@ -111,7 +111,7 @@ export function SiteHeader() {
             Login
           </Link>
           <Link
-            className="hidden sm:inline-flex items-center justify-center bg-[#00C675] hover:bg-[#00ad66] text-[#fff] text-sm font-medium px-5 py-2.5 rounded-lg shadow-sm hover:shadow transition-all duration-150"
+            className="hidden sm:inline-flex items-center justify-center bg-[#1B6B4A] hover:bg-[#14523A] text-[#fff] text-sm font-medium px-5 py-2.5 rounded-lg shadow-sm hover:shadow transition-all duration-150"
             href="/signup"
           >
             Start for FREE
@@ -143,15 +143,15 @@ export function SiteHeader() {
               {label}
             </span>
           ))}
-          <a className="block px-2 py-2.5 text-gray-800 font-medium text-base hover:text-[#00C675]" href="#">Blog</a>
-          <Link className="block px-2 py-2.5 text-gray-800 font-medium text-base hover:text-[#00C675]" href="/contact" onClick={() => setMobileOpen(false)}>
+          <a className="block px-2 py-2.5 text-gray-800 font-medium text-base hover:text-[#1B6B4A]" href="#">Blog</a>
+          <Link className="block px-2 py-2.5 text-gray-800 font-medium text-base hover:text-[#1B6B4A]" href="/contact" onClick={() => setMobileOpen(false)}>
             Contact
           </Link>
           <div className="pt-3 mt-2 border-t border-gray-100 flex flex-col gap-2">
             <Link className="text-center text-sm font-semibold text-gray-700 px-3 py-2.5 rounded-lg border border-gray-200" href="/login" onClick={() => setMobileOpen(false)}>
               Login
             </Link>
-            <Link className="text-center bg-[#00C675] hover:bg-[#00ad66] text-[#fff] text-sm font-medium px-5 py-2.5 rounded-lg shadow-sm" href="/signup" onClick={() => setMobileOpen(false)}>
+            <Link className="text-center bg-[#1B6B4A] hover:bg-[#14523A] text-[#fff] text-sm font-medium px-5 py-2.5 rounded-lg shadow-sm" href="/signup" onClick={() => setMobileOpen(false)}>
               Start for FREE
             </Link>
           </div>

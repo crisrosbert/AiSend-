@@ -3,6 +3,7 @@ import './landing.css'
 import { ImageSlot } from './image-slot'
 import { AgentTabs } from './agent-tabs'
 import { CapabilityAccordion } from './capability-accordion'
+import { SiteFooter } from '@/components/layout/site-footer'
 
 /**
  * AiSend — public marketing landing page.
@@ -143,9 +144,8 @@ function RingBadge({ cx, cy, r, drift, children }: { cx: number; cy: number; r: 
 }
 
 export default function LandingPage() {
-  const year = new Date().getFullYear()
-
   return (
+    <>
     <div className="lp">
       <div className="promo">
         <span className="tag">New</span>
@@ -776,65 +776,8 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
-
-      <footer className="ftr">
-        <div className="wrap">
-          <div className="ftr__grid">
-            <div>
-              <Link className="logo" href="/">
-                <span className="logo__mark" aria-hidden="true">
-                  <Mark />
-                </span>
-                AiSend
-              </Link>
-              <p className="ftr__about">
-                WhatsApp marketing, support and payments for businesses that would rather have a
-                conversation than send another email.
-              </p>
-            </div>
-            <div>
-              <h4>Platform</h4>
-              <ul>
-                <li><a href="#features">Features</a></li>
-                <li><a href="#pricing">Pricing</a></li>
-                <li><a href="#capabilities">What you can send</a></li>
-                <li><a href="#agents">AI agents</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4>Free tools</h4>
-              <ul>
-                <li><Link href="/tools/whatsapp-link-generator">Link generator</Link></li>
-                <li><Link href="/tools/whatsapp-qr-code">QR code maker</Link></li>
-                <li><Link href="/tools/whatsapp-text-formatter">Text formatter</Link></li>
-                <li><Link href="/tools">All tools</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4>Company</h4>
-              <ul>
-                <li><Link href="/contact">Contact</Link></li>
-                <li><Link href="/login">Sign in</Link></li>
-                <li><Link href="/signup">Start free</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4>Legal</h4>
-              <ul>
-                <li><Link href="/privacy">Privacy</Link></li>
-                <li><Link href="/terms">Terms</Link></li>
-                <li><Link href="/data-deletion">Data deletion</Link></li>
-              </ul>
-            </div>
-          </div>
-          <div className="ftr__bot">
-            <span>© {year} AiSend — a WE3 Media product.</span>
-            <span>
-              WhatsApp is a trademark of Meta Platforms, Inc. AiSend is an independent product.
-            </span>
-          </div>
-        </div>
-      </footer>
     </div>
+    <SiteFooter />
+    </>
   )
 }

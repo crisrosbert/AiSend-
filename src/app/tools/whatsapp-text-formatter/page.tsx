@@ -3,6 +3,7 @@ import { FormatterTool } from './formatter-tool'
 import { PromoBanner } from '@/components/tools/promo-banner'
 import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
+import '../../(marketing)/landing.css'
 
 export const metadata: Metadata = {
   title: 'Free WhatsApp Text Formatter — Bold, Italic, Strikethrough',
@@ -19,6 +20,15 @@ const USE_CASES = [
   { t: 'Broadcast announcements', d: 'A bold headline and a bulleted list of what\'s new reads like an announcement, not a text dump.' },
   { t: 'Invoices and payment reminders', d: 'Strike through a paid amount, bold the outstanding balance — the eye goes straight to what\'s owed.' },
   { t: 'Scripts your team reuses', d: 'Format a reply once, save it as a canned response, and every agent sends the same clean formatting.' },
+]
+
+const CHEAT_SHEET = [
+  { sym: '*bold*', out: 'bold' },
+  { sym: '_italic_', out: 'italic' },
+  { sym: '~strikethrough~', out: 'strikethrough' },
+  { sym: '```monospace```', out: 'monospace' },
+  { sym: '- item', out: '• item (bulleted)' },
+  { sym: '> quoted', out: 'a quoted line' },
 ]
 
 const FAQS = [
@@ -58,93 +68,88 @@ const FAQS = [
 
 export default function WhatsAppTextFormatterPage() {
   return (
-    <div style={{ fontFamily: 'var(--font-sans)', color: '#0b231a', background: '#f4f8f6', minHeight: '100vh' }}>
-      <SiteHeader />
+    <>
+      <div className="lp" style={{ fontFamily: "'Inter', sans-serif" }}>
+        <SiteHeader />
 
-      <main style={{ maxWidth: 1000, margin: '0 auto', padding: '56px 20px 90px' }}>
-        <div style={{ textAlign: 'center', maxWidth: 700, margin: '0 auto 36px' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(30px,4.6vw,44px)', fontWeight: 800, margin: '0 0 14px', letterSpacing: '-.025em', lineHeight: 1.15 }}>
-            WhatsApp Text Formatter ✨
-          </h1>
-          <p style={{ fontSize: 16, lineHeight: 1.6, color: '#5b6b63', margin: 0 }}>
-            Write bold, italic, strikethrough, lists, and quotes in a real editor — then copy the message
-            or send it straight to WhatsApp. Free, no signup.
-          </p>
-        </div>
-
-        <FormatterTool />
-
-        <PromoBanner />
-
-        {/* What is it */}
-        <section style={{ marginTop: 30, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 12px' }}>
-            How WhatsApp text formatting actually works
-          </h2>
-          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: '0 0 12px', maxWidth: 760 }}>
-            WhatsApp doesn&apos;t have a formatting toolbar — it reads plain-text symbols typed around a word and
-            renders them as styling. Put a word between two asterisks (<code>*like this*</code>) and it shows up
-            bold; between underscores (<code>_like this_</code>) and it&apos;s italic. The symbols never appear to
-            the person reading the message — only the styled result does.
-          </p>
-          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: 0, maxWidth: 760 }}>
-            That&apos;s useful, but easy to get wrong by hand — a missing closing asterisk, or a symbol sitting next
-            to a space, and WhatsApp shows the raw symbols instead of formatting. The editor above skips the symbols
-            entirely: you format the text the way you would in any document, and the correct WhatsApp syntax is
-            generated only at the moment you copy or send.
-          </p>
-        </section>
-
-        {/* Use cases */}
-        <section style={{ marginTop: 40 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 20px', textAlign: 'center' }}>
-            Where formatted WhatsApp messages actually help
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 16 }}>
-            {USE_CASES.map((u) => (
-              <div key={u.t} style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
-                <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 6px' }}>{u.t}</h3>
-                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#5b6b63', margin: 0 }}>{u.d}</p>
-              </div>
-            ))}
+        <section className="relative pt-16 pb-8 overflow-hidden gradient-hero-bg">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+            <span className="inline-block px-3.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-[#14523A] mb-5">
+              Live editor
+            </span>
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">WhatsApp Text Formatter ✨</h1>
+            <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
+              Write bold, italic, strikethrough, lists, and quotes in a real editor — then copy the message
+              or send it straight to WhatsApp. Free, no signup.
+            </p>
           </div>
         </section>
 
-        {/* Cheat sheet */}
-        <section style={{ marginTop: 40, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 16px' }}>
-            The syntax, if you&apos;d rather type it yourself
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-            {[
-              { sym: '*bold*', out: 'bold' },
-              { sym: '_italic_', out: 'italic' },
-              { sym: '~strikethrough~', out: 'strikethrough' },
-              { sym: '```monospace```', out: 'monospace' },
-              { sym: '- item', out: '• item (bulleted)' },
-              { sym: '> quoted', out: 'a quoted line' },
-            ].map((c) => (
-              <div key={c.sym} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid #eef2f0', borderRadius: 10, padding: '10px 14px' }}>
-                <code style={{ fontSize: 13, background: '#f1f5f3', padding: '3px 8px', borderRadius: 6 }}>{c.sym}</code>
-                <span style={{ fontSize: 12.5, color: '#5b6b63' }}>→ {c.out}</span>
-              </div>
-            ))}
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+          <div className="-mt-4 relative z-10">
+            <FormatterTool />
           </div>
-        </section>
 
-        <section style={{ marginTop: 50, maxWidth: 720, marginLeft: 'auto', marginRight: 'auto' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 22px' }}>
-            Common questions
-          </h2>
-          {FAQS.map((f) => (
-            <div key={f.q} style={{ borderTop: '1px solid #e6ece9', padding: '18px 0' }}>
-              <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: '0 0 6px' }}>{f.q}</h3>
-              <p style={{ fontSize: 14, lineHeight: 1.6, color: '#5b6b63', margin: 0 }}>{f.a}</p>
+          <PromoBanner />
+
+          <section className="mt-6 bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10">
+            <h2 className="text-2xl font-bold">How WhatsApp text formatting actually works</h2>
+            <p className="mt-4 text-base text-gray-600 leading-relaxed max-w-3xl">
+              WhatsApp doesn&apos;t have a formatting toolbar — it reads plain-text symbols typed around a word and
+              renders them as styling. Put a word between two asterisks (<code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">*like this*</code>) and it shows up
+              bold; between underscores (<code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">_like this_</code>) and it&apos;s italic. The symbols never appear to
+              the person reading the message — only the styled result does.
+            </p>
+            <p className="mt-4 text-base text-gray-600 leading-relaxed max-w-3xl">
+              That&apos;s useful, but easy to get wrong by hand — a missing closing asterisk, or a symbol sitting next
+              to a space, and WhatsApp shows the raw symbols instead of formatting. The editor above skips the symbols
+              entirely: you format the text the way you would in any document, and the correct WhatsApp syntax is
+              generated only at the moment you copy or send.
+            </p>
+          </section>
+
+          <section className="mt-16">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Where formatted WhatsApp messages actually help</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {USE_CASES.map((u) => (
+                <div key={u.t} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <h3 className="text-base font-bold">{u.t}</h3>
+                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">{u.d}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </section>
-      </main>
+          </section>
 
+          <section className="mt-16 bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10">
+            <h2 className="text-2xl font-bold mb-6">The syntax, if you&apos;d rather type it yourself</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {CHEAT_SHEET.map((c) => (
+                <div key={c.sym} className="flex items-center justify-between gap-3 border border-gray-100 rounded-lg px-4 py-3">
+                  <code className="text-sm bg-gray-100 px-2 py-1 rounded">{c.sym}</code>
+                  <span className="text-sm text-gray-600">→ {c.out}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-16 max-w-3xl mx-auto">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Common questions</h2>
+            <div className="divide-y divide-gray-200 border-y border-gray-200">
+              {FAQS.map((f) => (
+                <details key={f.q} className="group py-5">
+                  <summary className="flex justify-between items-center font-semibold text-base sm:text-lg list-none cursor-pointer focus:outline-none">
+                    <span>{f.q}</span>
+                    <span className="transition group-open:rotate-180 text-gray-500">
+                      <svg fill="none" height="20" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6" /></svg>
+                    </span>
+                  </summary>
+                  <p className="text-gray-600 mt-3 text-sm sm:text-base leading-relaxed">{f.a}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+        </main>
+      </div>
       <SiteFooter />
 
       <script
@@ -161,6 +166,6 @@ export default function WhatsAppTextFormatterPage() {
           }),
         }}
       />
-    </div>
+    </>
   )
 }

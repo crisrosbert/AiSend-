@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { LinkGeneratorTool } from './link-generator-tool'
 import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
+import '../../(marketing)/landing.css'
 
 export const metadata: Metadata = {
   title: 'Free WhatsApp Link Generator (Click to Chat)',
@@ -58,84 +59,89 @@ const FAQS = [
 
 export default function WhatsAppLinkGeneratorPage() {
   return (
-    <div style={{ fontFamily: 'var(--font-sans)', color: '#0b231a', background: '#f4f8f6', minHeight: '100vh' }}>
-      <SiteHeader />
+    <>
+      <div className="lp" style={{ fontFamily: "'Inter', sans-serif" }}>
+        <SiteHeader />
 
-      <main style={{ maxWidth: 1000, margin: '0 auto', padding: '48px 20px 90px' }}>
-        <div style={{ textAlign: 'center', maxWidth: 620, margin: '0 auto 40px' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,40px)', fontWeight: 800, margin: '0 0 12px', letterSpacing: '-.02em' }}>
-            Create your free WhatsApp link
-          </h1>
-          <p style={{ fontSize: 15.5, color: '#5b6b63', margin: 0 }}>
-            No signup. No app. Just your number, a message, and a link people can click to chat with you instantly.
-          </p>
-        </div>
-
-        <LinkGeneratorTool />
-
-        {/* What is it */}
-        <section style={{ marginTop: 70, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 12px' }}>
-            How a WhatsApp link actually works
-          </h2>
-          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: '0 0 12px', maxWidth: 760 }}>
-            A normal phone number, on its own, isn&apos;t clickable into a chat — someone has to save it as a
-            contact first, then find it, then open WhatsApp, then start typing. A wa.me link skips every one of
-            those steps: it&apos;s a single URL (<code>https://wa.me/&lt;countrycode&gt;&lt;number&gt;</code>) that,
-            when tapped, opens a chat with that exact number directly, with an optional message already sitting in
-            the box.
-          </p>
-          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: 0, maxWidth: 760 }}>
-            It&apos;s an official WhatsApp feature (the <code>wa.me</code> domain belongs to Meta), not a
-            third-party workaround — which is why it works the same way everywhere it&apos;s placed: a bio, a
-            button, a QR code, a text message.
-          </p>
-        </section>
-
-        {/* Where to use it */}
-        <section style={{ marginTop: 40 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 20px', textAlign: 'center' }}>
-            Where this link actually gets used
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 16 }}>
-            {PLACES.map((p) => (
-              <div key={p.t} style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
-                <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 6px' }}>{p.t}</h3>
-                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#5b6b63', margin: 0 }}>{p.d}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Need a physical version */}
-        <section style={{ marginTop: 40, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30, display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ maxWidth: 560 }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, margin: '0 0 6px' }}>
-              Putting this somewhere printed instead?
-            </h2>
-            <p style={{ fontSize: 13.5, lineHeight: 1.6, color: '#5b6b63', margin: 0 }}>
-              A link needs something to tap. For posters, packaging, or a storefront, generate the same link as a
-              scannable QR code instead.
+        <section className="relative pt-16 pb-8 overflow-hidden gradient-hero-bg">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+            <span className="inline-block px-3.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-[#14523A] mb-5">
+              Click-to-chat link
+            </span>
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">Create your free WhatsApp link</h1>
+            <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
+              No signup. No app. Just your number, a message, and a link people can click to chat with you instantly.
             </p>
           </div>
-          <Link href="/tools/whatsapp-qr-code" style={{ background: '#075E54', color: '#fff', textDecoration: 'none', fontSize: 14, fontWeight: 700, padding: '11px 20px', borderRadius: 10, whiteSpace: 'nowrap' }}>
-            Get a QR code →
-          </Link>
         </section>
 
-        <section style={{ marginTop: 50, maxWidth: 720, marginLeft: 'auto', marginRight: 'auto' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 22px' }}>
-            Common questions
-          </h2>
-          {FAQS.map((f) => (
-            <div key={f.q} style={{ borderTop: '1px solid #e6ece9', padding: '18px 0' }}>
-              <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: '0 0 6px' }}>{f.q}</h3>
-              <p style={{ fontSize: 14, lineHeight: 1.6, color: '#5b6b63', margin: 0 }}>{f.a}</p>
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+          <div className="-mt-4 relative z-10">
+            <LinkGeneratorTool />
+          </div>
+
+          <section className="mt-16 bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10">
+            <h2 className="text-2xl font-bold">How a WhatsApp link actually works</h2>
+            <p className="mt-4 text-base text-gray-600 leading-relaxed max-w-3xl">
+              A normal phone number, on its own, isn&apos;t clickable into a chat — someone has to save it as a
+              contact first, then find it, then open WhatsApp, then start typing. A wa.me link skips every one of
+              those steps: it&apos;s a single URL (<code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">https://wa.me/&lt;countrycode&gt;&lt;number&gt;</code>) that,
+              when tapped, opens a chat with that exact number directly, with an optional message already sitting in
+              the box.
+            </p>
+            <p className="mt-4 text-base text-gray-600 leading-relaxed max-w-3xl">
+              It&apos;s an official WhatsApp feature (the <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">wa.me</code> domain belongs to Meta), not a
+              third-party workaround — which is why it works the same way everywhere it&apos;s placed: a bio, a
+              button, a QR code, a text message.
+            </p>
+          </section>
+
+          <section className="mt-16">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Where this link actually gets used</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {PLACES.map((p) => (
+                <div key={p.t} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <h3 className="text-base font-bold">{p.t}</h3>
+                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">{p.d}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </section>
-      </main>
+          </section>
 
+          <section className="mt-16 bg-emerald-50/70 border border-emerald-100 rounded-2xl p-8 sm:p-10 flex flex-wrap gap-6 items-center justify-between">
+            <div className="max-w-lg">
+              <h2 className="text-xl font-bold">Putting this somewhere printed instead?</h2>
+              <p className="mt-2 text-sm sm:text-base text-gray-600 leading-relaxed">
+                A link needs something to tap. For posters, packaging, or a storefront, generate the same link as a
+                scannable QR code instead.
+              </p>
+            </div>
+            <Link
+              href="/tools/whatsapp-qr-code"
+              className="inline-flex items-center justify-center bg-[#1B6B4A] hover:bg-[#14523A] text-[#fff] font-semibold text-sm px-6 py-3 rounded-lg shadow-sm transition-colors whitespace-nowrap"
+            >
+              Get a QR code <span className="ml-2">→</span>
+            </Link>
+          </section>
+
+          <section className="mt-16 max-w-3xl mx-auto">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Common questions</h2>
+            <div className="divide-y divide-gray-200 border-y border-gray-200">
+              {FAQS.map((f) => (
+                <details key={f.q} className="group py-5">
+                  <summary className="flex justify-between items-center font-semibold text-base sm:text-lg list-none cursor-pointer focus:outline-none">
+                    <span>{f.q}</span>
+                    <span className="transition group-open:rotate-180 text-gray-500">
+                      <svg fill="none" height="20" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6" /></svg>
+                    </span>
+                  </summary>
+                  <p className="text-gray-600 mt-3 text-sm sm:text-base leading-relaxed">{f.a}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+        </main>
+      </div>
       <SiteFooter />
 
       <script
@@ -152,6 +158,6 @@ export default function WhatsAppLinkGeneratorPage() {
           }),
         }}
       />
-    </div>
+    </>
   )
 }

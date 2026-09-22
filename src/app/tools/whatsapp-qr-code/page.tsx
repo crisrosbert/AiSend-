@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { QrCodeTool } from './qr-code-tool'
 import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
+import '../../(marketing)/landing.css'
 
 export const metadata: Metadata = {
   title: 'Free WhatsApp QR Code Generator',
@@ -60,135 +61,130 @@ const FAQS = [
 
 export default function WhatsAppQrCodePage() {
   return (
-    <div style={{ fontFamily: 'var(--font-sans)', color: '#0b231a', background: '#f4f8f6', minHeight: '100vh' }}>
-      <SiteHeader />
+    <>
+      <div className="lp" style={{ fontFamily: "'Inter', sans-serif" }}>
+        <SiteHeader />
 
-      <main style={{ maxWidth: 1000, margin: '0 auto', padding: '48px 20px 90px' }}>
-        <div style={{ textAlign: 'center', maxWidth: 660, margin: '0 auto 40px' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,40px)', fontWeight: 800, margin: '0 0 12px', letterSpacing: '-.02em' }}>
-            Free WhatsApp QR code generator
-          </h1>
-          <p style={{ fontSize: 15.5, color: '#5b6b63', margin: 0 }}>
-            Print it, post it, package it — anyone who scans it lands straight in a chat with you on WhatsApp.
-            No app, no signup, nothing saved.
-          </p>
-        </div>
-
-        <QrCodeTool />
-
-        {/* What is it */}
-        <section style={{ marginTop: 70, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 12px' }}>
-            What is a WhatsApp QR code?
-          </h2>
-          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: '0 0 12px', maxWidth: 760 }}>
-            It’s an ordinary QR code — the same square, black-and-white pattern used for menus and payments —
-            except the link it encodes is a WhatsApp &ldquo;click-to-chat&rdquo; address (<code>wa.me/&lt;number&gt;</code>).
-            Point any phone camera at it, and instead of opening a website, it opens a WhatsApp conversation with
-            that number, with a message already typed in if you’ve set one.
-          </p>
-          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: 0, maxWidth: 760 }}>
-            The advantage over just printing your number is obvious the moment someone tries it: nobody has to
-            manually save a contact, switch apps, and remember to type in the right country code. It’s the
-            difference between a customer thinking about messaging you and actually doing it.
-          </p>
+        <section className="relative pt-16 pb-8 overflow-hidden gradient-hero-bg">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+            <span className="inline-block px-3.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-[#14523A] mb-5">
+              Print-ready QR code
+            </span>
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">Free WhatsApp QR code generator</h1>
+            <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
+              Print it, post it, package it — anyone who scans it lands straight in a chat with you on WhatsApp.
+              No app, no signup, nothing saved.
+            </p>
+          </div>
         </section>
 
-        {/* Use cases */}
-        <section style={{ marginTop: 40 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 20px', textAlign: 'center' }}>
-            Where businesses actually put this
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 16 }}>
-            {USE_CASES.map((u) => (
-              <div key={u.t} style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
-                <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 6px' }}>{u.t}</h3>
-                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#5b6b63', margin: 0 }}>{u.d}</p>
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+          <div className="-mt-4 relative z-10">
+            <QrCodeTool />
+          </div>
+
+          <section className="mt-16 bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10">
+            <h2 className="text-2xl font-bold">What is a WhatsApp QR code?</h2>
+            <p className="mt-4 text-base text-gray-600 leading-relaxed max-w-3xl">
+              It&apos;s an ordinary QR code — the same square, black-and-white pattern used for menus and payments —
+              except the link it encodes is a WhatsApp &ldquo;click-to-chat&rdquo; address (<code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">wa.me/&lt;number&gt;</code>).
+              Point any phone camera at it, and instead of opening a website, it opens a WhatsApp conversation with
+              that number, with a message already typed in if you&apos;ve set one.
+            </p>
+            <p className="mt-4 text-base text-gray-600 leading-relaxed max-w-3xl">
+              The advantage over just printing your number is obvious the moment someone tries it: nobody has to
+              manually save a contact, switch apps, and remember to type in the right country code. It&apos;s the
+              difference between a customer thinking about messaging you and actually doing it.
+            </p>
+          </section>
+
+          <section className="mt-16">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Where businesses actually put this</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {USE_CASES.map((u) => (
+                <div key={u.t} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <h3 className="text-base font-bold">{u.t}</h3>
+                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">{u.d}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-16 bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10">
+            <h2 className="text-2xl font-bold mb-6">How to scan a WhatsApp QR code</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+              <div>
+                <h3 className="text-base font-bold">On an iPhone</h3>
+                <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                  Open the built-in Camera app (no third-party scanner needed) and point it at the code. A
+                  notification banner appears at the top — tap it to open WhatsApp.
+                </p>
               </div>
-            ))}
-          </div>
-        </section>
-
-        {/* How to scan */}
-        <section style={{ marginTop: 40, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 16px' }}>
-            How to scan a WhatsApp QR code
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
-            <div>
-              <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 8px' }}>On an iPhone</h3>
-              <p style={{ fontSize: 13.5, lineHeight: 1.65, color: '#5b6b63', margin: 0 }}>
-                Open the built-in Camera app (no third-party scanner needed) and point it at the code. A
-                notification banner appears at the top — tap it to open WhatsApp.
-              </p>
+              <div>
+                <h3 className="text-base font-bold">On Android</h3>
+                <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                  Most Android phones scan QR codes directly from the Camera app the same way as iPhone. If yours
+                  doesn&apos;t, open WhatsApp itself → Settings → the camera icon next to your name → Scan Code.
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 8px' }}>On Android</h3>
-              <p style={{ fontSize: 13.5, lineHeight: 1.65, color: '#5b6b63', margin: 0 }}>
-                Most Android phones scan QR codes directly from the Camera app the same way as iPhone. If yours
-                doesn’t, open WhatsApp itself → Settings → the camera icon next to your name → Scan Code.
-              </p>
+          </section>
+
+          <section className="mt-16">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">QR code or plain link — which one do you need?</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-7">
+                <h3 className="text-base font-bold text-[#14523A]">Use a QR code when…</h3>
+                <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                  Someone will encounter your number somewhere physical — a shop, a printed page, packaging, a
+                  signboard — where there&apos;s nothing to tap, only something to point a camera at.
+                </p>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-7">
+                <h3 className="text-base font-bold text-[#14523A]">Use a plain link when…</h3>
+                <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                  Someone is already looking at a screen — your Instagram bio, a website button, an email signature.
+                  A tap is faster there than opening a camera. Our{' '}
+                  <Link href="/tools/whatsapp-link-generator" className="text-[#1B6B4A] font-bold">link generator</Link>{' '}
+                  covers that case.
+                </p>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* QR vs link */}
-        <section style={{ marginTop: 40 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 16px', textAlign: 'center' }}>
-            QR code or plain link — which one do you need?
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
-            <div style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
-              <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 8px', color: '#0f6e37' }}>Use a QR code when…</h3>
-              <p style={{ fontSize: 13.5, lineHeight: 1.65, color: '#5b6b63', margin: 0 }}>
-                Someone will encounter your number somewhere physical — a shop, a printed page, packaging, a
-                signboard — where there’s nothing to tap, only something to point a camera at.
-              </p>
+          <section className="mt-16 bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10">
+            <h2 className="text-2xl font-bold mb-4">Before you print — 4 things that make a QR code fail</h2>
+            <ul className="space-y-3 text-base text-gray-600 leading-relaxed list-disc pl-5">
+              <li><strong className="text-gray-900 font-semibold">Too small.</strong> Under roughly 2 cm (0.8&Prime;) square, most phone cameras struggle at normal reading distance.</li>
+              <li><strong className="text-gray-900 font-semibold">Low contrast.</strong> Placing it on a busy photo, a gradient, or a colour close to the code&apos;s own black/white breaks most scanners.</li>
+              <li><strong className="text-gray-900 font-semibold">No quiet margin.</strong> The blank border around the code needs to stay blank — text or graphics crowding right up to the edge confuses the scanner.</li>
+              <li><strong className="text-gray-900 font-semibold">Stretched from a small file.</strong> Enlarging a small saved image blurs the fine squares. Regenerate at the size you actually need instead.</li>
+            </ul>
+          </section>
+
+          <section className="mt-16 max-w-3xl mx-auto">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Common questions</h2>
+            <div className="divide-y divide-gray-200 border-y border-gray-200">
+              {FAQS.map((f) => (
+                <details key={f.q} className="group py-5">
+                  <summary className="flex justify-between items-center font-semibold text-base sm:text-lg list-none cursor-pointer focus:outline-none">
+                    <span>{f.q}</span>
+                    <span className="transition group-open:rotate-180 text-gray-500">
+                      <svg fill="none" height="20" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6" /></svg>
+                    </span>
+                  </summary>
+                  <p className="text-gray-600 mt-3 text-sm sm:text-base leading-relaxed">{f.a}</p>
+                </details>
+              ))}
             </div>
-            <div style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
-              <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 8px', color: '#0f6e37' }}>Use a plain link when…</h3>
-              <p style={{ fontSize: 13.5, lineHeight: 1.65, color: '#5b6b63', margin: 0 }}>
-                Someone is already looking at a screen — your Instagram bio, a website button, an email signature.
-                A tap is faster there than opening a camera. Our{' '}
-                <Link href="/tools/whatsapp-link-generator" style={{ color: '#0f6e37', fontWeight: 700 }}>link generator</Link>{' '}
-                covers that case.
-              </p>
-            </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Printing tips */}
-        <section style={{ marginTop: 40, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 14px' }}>
-            Before you print — 4 things that make a QR code fail
-          </h2>
-          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.85, color: '#46584f' }}>
-            <li><strong>Too small.</strong> Under roughly 2 cm (0.8&Prime;) square, most phone cameras struggle at normal reading distance.</li>
-            <li><strong>Low contrast.</strong> Placing it on a busy photo, a gradient, or a colour close to the code’s own black/white breaks most scanners.</li>
-            <li><strong>No quiet margin.</strong> The blank border around the code needs to stay blank — text or graphics crowding right up to the edge confuses the scanner.</li>
-            <li><strong>Stretched from a small file.</strong> Enlarging a small saved image blurs the fine squares. Regenerate at the size you actually need instead.</li>
-          </ul>
-        </section>
-
-        {/* FAQ */}
-        <section style={{ marginTop: 50, maxWidth: 720, marginLeft: 'auto', marginRight: 'auto' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 22px' }}>
-            Common questions
-          </h2>
-          {FAQS.map((f) => (
-            <div key={f.q} style={{ borderTop: '1px solid #e6ece9', padding: '18px 0' }}>
-              <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: '0 0 6px' }}>{f.q}</h3>
-              <p style={{ fontSize: 14, lineHeight: 1.6, color: '#5b6b63', margin: 0 }}>{f.a}</p>
-            </div>
-          ))}
-        </section>
-
-        <p style={{ marginTop: 40, textAlign: 'center', fontSize: 13, color: '#6b7c73' }}>
-          Want to know how many people actually scanned it, and reply to them automatically?{' '}
-          <Link href="/signup" style={{ color: '#0f6e37', fontWeight: 700 }}>Try AiSend free →</Link>
-        </p>
-      </main>
-
+          <p className="mt-12 text-center text-sm text-gray-500">
+            Want to know how many people actually scanned it, and reply to them automatically?{' '}
+            <Link href="/signup" className="text-[#1B6B4A] font-bold">Try AiSend free →</Link>
+          </p>
+        </main>
+      </div>
       <SiteFooter />
 
       <script
@@ -205,6 +201,6 @@ export default function WhatsAppQrCodePage() {
           }),
         }}
       />
-    </div>
+    </>
   )
 }

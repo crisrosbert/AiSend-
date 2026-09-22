@@ -1,8 +1,8 @@
-import type { CSSProperties } from 'react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
+import '../(marketing)/landing.css'
 
 export const metadata: Metadata = {
   title: 'Free WhatsApp Tools',
@@ -12,77 +12,92 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://app.performancemktg.net/tools' },
 }
 
-const TOOLS: Array<{ href: string; name: string; desc: string; live: boolean }> = [
+const TOOLS = [
   {
     href: '/tools/whatsapp-link-generator',
     name: 'WhatsApp Link Generator',
     desc: 'Create a free click-to-chat wa.me link with a QR code, in your browser.',
-    live: true,
+    tag: 'Click-to-chat',
   },
   {
     href: '/tools/whatsapp-bulk-sender',
     name: 'WhatsApp Bulk Sender',
     desc: 'Send templated WhatsApp messages to thousands of contacts, officially.',
-    live: true,
+    tag: 'Official API',
   },
   {
     href: '/tools/whatsapp-qr-code',
     name: 'WhatsApp QR Code',
     desc: 'Download a scannable QR code for your WhatsApp number.',
-    live: true,
+    tag: 'Print-ready',
   },
   {
     href: '/tools/whatsapp-text-formatter',
     name: 'WhatsApp Text Formatter',
     desc: 'Bold, italic, strikethrough, and bullets — with a live chat preview.',
-    live: true,
+    tag: 'Editor',
   },
 ]
 
 export default function ToolsIndexPage() {
   return (
-    <div style={{ fontFamily: 'var(--font-sans)', color: '#0b231a', background: '#f4f8f6', minHeight: '100vh' }}>
-      <SiteHeader />
+    <>
+      <div className="lp" style={{ fontFamily: "'Inter', sans-serif" }}>
+        <SiteHeader />
 
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '56px 20px 90px' }}>
-        <div style={{ textAlign: 'center', maxWidth: 560, margin: '0 auto 44px' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,38px)', fontWeight: 800, margin: '0 0 12px', letterSpacing: '-.02em' }}>
-            Free WhatsApp tools
-          </h1>
-          <p style={{ fontSize: 15.5, color: '#5b6b63', margin: 0 }}>
-            No signup, no app install — just useful things for a business running on WhatsApp.
-          </p>
-        </div>
+        <section className="relative pt-16 pb-16 md:pt-20 md:pb-20 overflow-hidden gradient-hero-bg">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+            <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-200 shadow-sm text-xs sm:text-sm font-semibold text-emerald-950 mb-6">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1B6B4A]" />
+              </span>
+              <span>Free forever — no signup required</span>
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">Free WhatsApp tools</h1>
+            <p className="mt-4 text-base sm:text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
+              No signup, no app install — just useful things for a business running on WhatsApp.
+            </p>
+          </div>
+        </section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
-          {TOOLS.map((t) => {
-            const cardStyle: CSSProperties = {
-              display: 'block', background: '#fff', border: '1px solid #e6ece9', borderRadius: 16,
-              padding: 22, textDecoration: 'none', color: '#0b231a',
-              opacity: t.live ? 1 : 0.55, cursor: t.live ? 'pointer' : 'default',
-              boxShadow: '0 8px 20px -14px rgba(11,35,26,.14)',
-            }
-            const card = (
-              <>
-                <h2 style={{ fontSize: 16.5, fontWeight: 700, margin: '0 0 6px' }}>{t.name}</h2>
-                <p style={{ fontSize: 13.5, lineHeight: 1.55, color: '#5b6b63', margin: 0 }}>{t.desc}</p>
-                {!t.live && (
-                  <span style={{ display: 'inline-block', marginTop: 12, fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: '#a7b3ac' }}>
-                    Coming soon
-                  </span>
-                )}
-              </>
-            )
-            return t.live ? (
-              <Link key={t.name} href={t.href} style={cardStyle}>{card}</Link>
-            ) : (
-              <div key={t.name} aria-disabled style={cardStyle}>{card}</div>
-            )
-          })}
-        </div>
-      </main>
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 -mt-6 relative z-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {TOOLS.map((t) => (
+              <Link
+                key={t.name}
+                href={t.href}
+                className="block bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all duration-200 p-7"
+              >
+                <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-[#14523A] mb-4">
+                  {t.tag}
+                </span>
+                <h2 className="text-xl font-bold">{t.name}</h2>
+                <p className="mt-2 text-sm sm:text-base text-gray-600 leading-relaxed">{t.desc}</p>
+                <span className="mt-5 inline-flex items-center text-sm font-bold text-[#1B6B4A]">
+                  Try it free <span className="ml-1.5">→</span>
+                </span>
+              </Link>
+            ))}
+          </div>
 
+          <div className="mt-16 bg-[#1B6B4A] rounded-3xl px-8 py-12 sm:px-14 sm:py-14 text-center">
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#fff]">
+              Like these? The full platform does a lot more.
+            </h2>
+            <p className="mt-3 text-sm sm:text-base text-emerald-100 max-w-xl mx-auto">
+              Broadcasts, automations, a shared team inbox, and payments in chat — all on the official WhatsApp API.
+            </p>
+            <Link
+              href="/signup"
+              className="mt-7 inline-flex items-center justify-center bg-[#fff] hover:bg-emerald-50 text-[#1B6B4A] font-bold text-base px-8 py-3.5 rounded-xl shadow-lg transition-colors"
+            >
+              Start free — no card <span className="ml-2">→</span>
+            </Link>
+          </div>
+        </main>
+      </div>
       <SiteFooter />
-    </div>
+    </>
   )
 }

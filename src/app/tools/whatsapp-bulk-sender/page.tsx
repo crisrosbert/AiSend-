@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
+import '../../(marketing)/landing.css'
 
 export const metadata: Metadata = {
   title: 'WhatsApp Bulk Message Sender — Official API, Zero Ban Risk',
@@ -19,6 +20,21 @@ const COMPARE: Array<{ label: string; official: string | boolean; unofficial: st
   { label: 'Automatic opt-out handling (STOP/START)', official: true, unofficial: false },
   { label: 'Per-message pricing is Meta’s own, no markup', official: true, unofficial: 'Varies / hidden' },
   { label: 'Keeps working if WhatsApp changes their app', official: true, unofficial: false },
+]
+
+const STEPS = [
+  { n: '1', t: 'Connect your number', d: 'A guided flow links your WhatsApp number to Meta’s official API — no code, no developer.' },
+  { n: '2', t: 'Pick a template & audience', d: 'Write or choose an approved message template, then pick contacts by tag, list, or upload.' },
+  { n: '3', t: 'Send & track', d: 'Watch sent, delivered, and read counts update live. Opt-outs are handled automatically.' },
+]
+
+const WHO_FOR = [
+  { t: 'E-commerce & D2C', d: 'Order confirmations, shipping updates, abandoned-cart nudges, and flash-sale drops to your whole list at once.' },
+  { t: 'Real estate & property', d: 'New-listing alerts and price-drop notices to every buyer who’s enquired, segmented by budget or locality.' },
+  { t: 'Coaching, courses & education', d: 'Batch reminders, assignment nudges, and enrolment offers to students and leads without a group-chat mess.' },
+  { t: 'Clinics & healthcare', d: 'Appointment reminders and health-camp announcements — utility templates, not marketing, so open rates stay high.' },
+  { t: 'Agencies managing multiple clients', d: 'Run separate broadcasts per client number from one dashboard instead of juggling logins.' },
+  { t: 'Events & webinars', d: 'Registration confirmations, day-before reminders, and post-event follow-ups to everyone who signed up.' },
 ]
 
 const FAQS = [
@@ -58,149 +74,133 @@ const FAQS = [
 
 export default function WhatsAppBulkSenderPage() {
   return (
-    <div style={{ fontFamily: 'var(--font-sans)', color: '#0b231a', background: '#f4f8f6', minHeight: '100vh' }}>
-      <SiteHeader />
+    <>
+      <div className="lp" style={{ fontFamily: "'Inter', sans-serif" }}>
+        <SiteHeader />
 
-      <main style={{ maxWidth: 1000, margin: '0 auto', padding: '54px 20px 90px' }}>
-        {/* Hero */}
-        <div style={{ textAlign: 'center', maxWidth: 700, margin: '0 auto 46px' }}>
-          <span style={{ display: 'inline-block', fontSize: 12, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: '#0f6e37', background: '#e2f5ea', padding: '5px 12px', borderRadius: 99, marginBottom: 16 }}>
-            Official Meta Cloud API
-          </span>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4.5vw,42px)', fontWeight: 800, margin: '0 0 14px', letterSpacing: '-.02em', lineHeight: 1.15 }}>
-            Send WhatsApp messages in bulk<br />without risking your number
-          </h1>
-          <p style={{ fontSize: 16, color: '#5b6b63', margin: '0 0 26px' }}>
-            Most &ldquo;bulk WhatsApp sender&rdquo; tools automate a browser session behind your back — and WhatsApp bans
-            numbers that do that. AiSend runs on Meta&apos;s own official API, the same one real businesses use.
-          </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link href="/signup" style={{ background: 'linear-gradient(180deg,#25D366,#1DA851)', color: '#04150f', textDecoration: 'none', fontWeight: 800, fontSize: 15, padding: '13px 26px', borderRadius: 11, boxShadow: '0 10px 24px -10px rgba(29,168,81,.55)' }}>
-              Start sending free
-            </Link>
-            <a href="#compare" style={{ color: '#0f6e37', textDecoration: 'none', fontWeight: 700, fontSize: 15, padding: '13px 10px' }}>
-              See why it&apos;s safer ↓
-            </a>
-          </div>
-        </div>
-
-        {/* Why bans happen */}
-        <section style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30, marginBottom: 20 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 12px' }}>
-            Why most bulk senders get numbers banned
-          </h2>
-          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: 0, maxWidth: 760 }}>
-            A lot of cheap &ldquo;WhatsApp sender&rdquo; tools work by remote-controlling a browser logged into WhatsApp
-            Web — clicking send over and over, faster than a human ever could. WhatsApp&apos;s systems are built to
-            spot exactly that pattern, and the number attached to it gets banned, sometimes permanently, with no
-            appeal. AiSend never touches WhatsApp Web. Every message goes through Meta&apos;s official Cloud API —
-            the same sanctioned channel Meta itself rate-limits and expects businesses to use.
-          </p>
-        </section>
-
-        {/* Comparison table */}
-        <section id="compare" style={{ marginBottom: 20, scrollMarginTop: 90 }}>
-          <style>{`
-            .cmp-row { display: grid; grid-template-columns: 1fr 130px 150px; padding: 13px 18px; align-items: center; }
-            @media (max-width: 520px) {
-              .cmp-row { grid-template-columns: 1fr 76px 88px; padding: 12px 10px; gap: 6px; }
-              .cmp-label { font-size: 12.5px !important; }
-            }
-          `}</style>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 16px', textAlign: 'center' }}>
-            Official API vs. a typical &ldquo;bulk sender&rdquo; tool
-          </h2>
-          <div style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 16, overflow: 'hidden' }}>
-            <div className="cmp-row" style={{ background: '#f8faf9', borderBottom: '1px solid #e6ece9', fontSize: 12.5, fontWeight: 700, color: '#5b6b63', textTransform: 'uppercase', letterSpacing: '.02em' }}>
-              <span></span>
-              <span style={{ textAlign: 'center', color: '#0f6e37' }}>AiSend</span>
-              <span style={{ textAlign: 'center' }}>Typical tool</span>
+        <section className="relative pt-16 pb-16 overflow-hidden gradient-hero-bg">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+            <span className="inline-block px-3.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-[#14523A] mb-5">
+              Official Meta Cloud API
+            </span>
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.12]">
+              Send WhatsApp messages in bulk without risking your number
+            </h1>
+            <p className="mt-5 text-base sm:text-lg text-gray-600 leading-relaxed">
+              Most &ldquo;bulk WhatsApp sender&rdquo; tools automate a browser session behind your back — and WhatsApp bans
+              numbers that do that. AiSend runs on Meta&apos;s own official API, the same one real businesses use.
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Link
+                href="/signup"
+                className="inline-flex items-center justify-center bg-[#1B6B4A] hover:bg-[#14523A] text-[#fff] font-bold text-base px-8 py-4 rounded-xl shadow-lg transition-all duration-200 transform hover:-translate-y-0.5"
+              >
+                Start sending free <span className="ml-2">→</span>
+              </Link>
+              <a href="#compare" className="inline-flex items-center text-[#14523A] font-semibold text-base">
+                See why it&apos;s safer ↓
+              </a>
             </div>
-            {COMPARE.map((row, i) => (
-              <div key={row.label} className="cmp-row" style={{ fontSize: 13.5, borderTop: i === 0 ? 'none' : '1px solid #f0f3f1' }}>
-                <span className="cmp-label" style={{ color: '#0c1f17' }}>{row.label}</span>
-                <span style={{ textAlign: 'center', fontWeight: 700, color: row.official === true ? '#0f6e37' : '#0c1f17' }}>
-                  {row.official === true ? '✓' : row.official === false ? '—' : row.official}
-                </span>
-                <span style={{ textAlign: 'center', color: row.unofficial === false ? '#c2cac5' : '#b4483c' }}>
-                  {row.unofficial === true ? '✓' : row.unofficial === false ? '—' : row.unofficial}
-                </span>
-              </div>
-            ))}
           </div>
         </section>
 
-        {/* How it works */}
-        <section style={{ marginBottom: 20 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 20px', textAlign: 'center' }}>
-            Live in three steps
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-            {[
-              { n: '1', t: 'Connect your number', d: 'A guided flow links your WhatsApp number to Meta’s official API — no code, no developer.' },
-              { n: '2', t: 'Pick a template & audience', d: 'Write or choose an approved message template, then pick contacts by tag, list, or upload.' },
-              { n: '3', t: 'Send & track', d: 'Watch sent, delivered, and read counts update live. Opt-outs are handled automatically.' },
-            ].map((s) => (
-              <div key={s.n} style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 16, padding: 22 }}>
-                <div style={{ width: 30, height: 30, borderRadius: 9, background: '#e2f5ea', color: '#0f6e37', fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                  {s.n}
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10">
+            <h2 className="text-2xl font-bold">Why most bulk senders get numbers banned</h2>
+            <p className="mt-4 text-base text-gray-600 leading-relaxed max-w-3xl">
+              A lot of cheap &ldquo;WhatsApp sender&rdquo; tools work by remote-controlling a browser logged into WhatsApp
+              Web — clicking send over and over, faster than a human ever could. WhatsApp&apos;s systems are built to
+              spot exactly that pattern, and the number attached to it gets banned, sometimes permanently, with no
+              appeal. AiSend never touches WhatsApp Web. Every message goes through Meta&apos;s official Cloud API —
+              the same sanctioned channel Meta itself rate-limits and expects businesses to use.
+            </p>
+          </section>
+
+          <section id="compare" className="mt-16 scroll-mt-24">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">
+              Official API vs. a typical &ldquo;bulk sender&rdquo; tool
+            </h2>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="grid grid-cols-[1fr_110px_130px] sm:grid-cols-[1fr_140px_160px] bg-gray-50 border-b border-gray-100 px-4 sm:px-6 py-3 text-[11px] sm:text-xs font-bold uppercase tracking-wide text-gray-500">
+                <span />
+                <span className="text-center text-[#14523A]">AiSend</span>
+                <span className="text-center">Typical tool</span>
+              </div>
+              {COMPARE.map((row, i) => (
+                <div
+                  key={row.label}
+                  className={`grid grid-cols-[1fr_110px_130px] sm:grid-cols-[1fr_140px_160px] items-center px-4 sm:px-6 py-3.5 text-xs sm:text-sm ${i === 0 ? '' : 'border-t border-gray-100'}`}
+                >
+                  <span className="text-gray-800">{row.label}</span>
+                  <span className={`text-center font-bold ${row.official === true ? 'text-[#14523A]' : 'text-gray-800'}`}>
+                    {row.official === true ? '✓' : row.official === false ? '—' : row.official}
+                  </span>
+                  <span className={`text-center ${row.unofficial === false ? 'text-gray-300' : 'text-red-600'}`}>
+                    {row.unofficial === true ? '✓' : row.unofficial === false ? '—' : row.unofficial}
+                  </span>
                 </div>
-                <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: '0 0 6px' }}>{s.t}</h3>
-                <p style={{ fontSize: 13.5, lineHeight: 1.55, color: '#5b6b63', margin: 0 }}>{s.d}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Who this is for */}
-        <section style={{ marginBottom: 20 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 16px', textAlign: 'center' }}>
-            Built for the businesses actually sending in bulk
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-            {[
-              { t: 'E-commerce & D2C', d: 'Order confirmations, shipping updates, abandoned-cart nudges, and flash-sale drops to your whole list at once.' },
-              { t: 'Real estate & property', d: 'New-listing alerts and price-drop notices to every buyer who’s enquired, segmented by budget or locality.' },
-              { t: 'Coaching, courses & education', d: 'Batch reminders, assignment nudges, and enrolment offers to students and leads without a group-chat mess.' },
-              { t: 'Clinics & healthcare', d: 'Appointment reminders and health-camp announcements — utility templates, not marketing, so open rates stay high.' },
-              { t: 'Agencies managing multiple clients', d: 'Run separate broadcasts per client number from one dashboard instead of juggling logins.' },
-              { t: 'Events & webinars', d: 'Registration confirmations, day-before reminders, and post-event follow-ups to everyone who signed up.' },
-            ].map((v) => (
-              <div key={v.t} style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
-                <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 6px' }}>{v.t}</h3>
-                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#5b6b63', margin: 0 }}>{v.d}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Final CTA */}
-        <section style={{ background: 'linear-gradient(135deg, #075E54, #1DA851)', borderRadius: 20, padding: '40px 30px', textAlign: 'center', color: '#fff', marginBottom: 60 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 10px' }}>
-            Your customers are already on WhatsApp
-          </h2>
-          <p style={{ fontSize: 14.5, color: 'rgba(255,255,255,.85)', margin: '0 0 20px' }}>
-            Start free — 100 contacts, 2 broadcasts a month, no card required.
-          </p>
-          <Link href="/signup" style={{ display: 'inline-block', background: '#fff', color: '#075E54', textDecoration: 'none', fontWeight: 800, fontSize: 15, padding: '13px 28px', borderRadius: 11 }}>
-            Start free trial →
-          </Link>
-        </section>
-
-        {/* FAQ */}
-        <section style={{ maxWidth: 720, margin: '0 auto' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 22px' }}>
-            Common questions
-          </h2>
-          {FAQS.map((f) => (
-            <div key={f.q} style={{ borderTop: '1px solid #e6ece9', padding: '18px 0' }}>
-              <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: '0 0 6px' }}>{f.q}</h3>
-              <p style={{ fontSize: 14, lineHeight: 1.6, color: '#5b6b63', margin: 0 }}>{f.a}</p>
+              ))}
             </div>
-          ))}
-        </section>
-      </main>
+          </section>
 
+          <section className="mt-16">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Live in three steps</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {STEPS.map((s) => (
+                <div key={s.n} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-7">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-50 text-[#14523A] font-extrabold text-sm flex items-center justify-center mb-4">
+                    {s.n}
+                  </div>
+                  <h3 className="text-base font-bold">{s.t}</h3>
+                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">{s.d}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-16">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Built for the businesses actually sending in bulk</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {WHO_FOR.map((v) => (
+                <div key={v.t} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <h3 className="text-base font-bold">{v.t}</h3>
+                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">{v.d}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-16 bg-[#1B6B4A] rounded-3xl px-8 py-12 sm:px-14 sm:py-14 text-center">
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#fff]">Your customers are already on WhatsApp</h2>
+            <p className="mt-3 text-sm sm:text-base text-emerald-100">
+              Start free — 100 contacts, 2 broadcasts a month, no card required.
+            </p>
+            <Link
+              href="/signup"
+              className="mt-7 inline-flex items-center justify-center bg-[#fff] hover:bg-emerald-50 text-[#1B6B4A] font-bold text-base px-8 py-3.5 rounded-xl shadow-lg transition-colors"
+            >
+              Start free trial <span className="ml-2">→</span>
+            </Link>
+          </section>
+
+          <section className="mt-16 max-w-3xl mx-auto">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Common questions</h2>
+            <div className="divide-y divide-gray-200 border-y border-gray-200">
+              {FAQS.map((f) => (
+                <details key={f.q} className="group py-5">
+                  <summary className="flex justify-between items-center font-semibold text-base sm:text-lg list-none cursor-pointer focus:outline-none">
+                    <span>{f.q}</span>
+                    <span className="transition group-open:rotate-180 text-gray-500">
+                      <svg fill="none" height="20" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6" /></svg>
+                    </span>
+                  </summary>
+                  <p className="text-gray-600 mt-3 text-sm sm:text-base leading-relaxed">{f.a}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+        </main>
+      </div>
       <SiteFooter />
 
       <script
@@ -217,6 +217,6 @@ export default function WhatsAppBulkSenderPage() {
           }),
         }}
       />
-    </div>
+    </>
   )
 }

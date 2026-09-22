@@ -30,12 +30,12 @@ export function PromoBanner({
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 20,
-        background: 'linear-gradient(135deg, #075E54, #1DA851)',
+        background: 'linear-gradient(135deg, #1B6B4A, #14523A)',
         borderRadius: 18,
         padding: '26px 30px',
         margin: '40px 0',
         color: '#fff',
-        boxShadow: '0 14px 30px -16px rgba(7,94,84,.45)',
+        boxShadow: '0 14px 30px -16px rgba(27,107,74,.45)',
       }}
     >
       <div style={{ maxWidth: 560 }}>
@@ -49,7 +49,7 @@ export function PromoBanner({
         >
           AiSend
         </span>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, margin: '0 0 6px', lineHeight: 1.3, color: '#fff' }}>
+        <h3 style={{ fontFamily: "'Inter', sans-serif", fontSize: 19, fontWeight: 800, margin: '0 0 6px', lineHeight: 1.3, color: '#fff' }}>
           {headline}
         </h3>
         <p style={{ fontSize: 13.5, lineHeight: 1.55, color: 'rgba(255,255,255,.85)', margin: 0 }}>
@@ -59,7 +59,7 @@ export function PromoBanner({
       <Link
         href={ctaHref}
         style={{
-          flexShrink: 0, background: '#fff', color: '#075E54', textDecoration: 'none',
+          flexShrink: 0, background: '#fff', color: '#1B6B4A', textDecoration: 'none',
           fontWeight: 800, fontSize: 14.5, padding: '12px 22px', borderRadius: 11, whiteSpace: 'nowrap',
         }}
       >

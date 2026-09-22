@@ -66,7 +66,10 @@
 .lp .imgslot--flush { border-radius: 12px; }
 
 .lp .gradient-hero-bg {
-  background: radial-gradient(circle at 50% 20%, rgba(111, 217, 160, 0.35) 0%, rgba(255, 255, 255, 0) 70%);
+  background:
+    radial-gradient(55% 75% at 12% 8%, rgba(111, 217, 160, 0.38) 0%, rgba(111, 217, 160, 0) 62%),
+    radial-gradient(50% 65% at 88% 12%, rgba(215, 227, 138, 0.3) 0%, rgba(215, 227, 138, 0) 65%),
+    linear-gradient(135deg, var(--brand-50) 0%, #ffffff 55%, var(--brand-50) 100%);
 }
 
 .lp .badge-shimmer {

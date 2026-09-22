@@ -30,10 +30,10 @@ import { SiteFooter } from '@/components/layout/site-footer'
  */
 
 const LOGOS = [
-  { text: 'BIKANO', className: 'font-extrabold text-xl tracking-wider text-amber-700' },
-  { text: 'wipro)', className: 'font-bold text-2xl tracking-tighter text-indigo-900' },
-  { text: 'Fortune', className: 'font-black text-xl italic text-red-600' },
-  { text: 'clove:', className: 'font-serif font-bold text-xl tracking-widest text-emerald-950' },
+  { text: 'KALOSA', className: 'font-extrabold text-xl tracking-wider text-amber-700' },
+  { text: 'NASIR)', className: 'font-bold text-2xl tracking-tighter text-indigo-900' },
+  { text: 'ASORT', className: 'font-black text-xl italic text-red-600' },
+  { text: 'NIMBLE:', className: 'font-serif font-bold text-xl tracking-widest text-emerald-950' },
   { text: 'digio', className: 'font-bold text-2xl text-blue-600' },
   { text: 'turtlemint', className: 'font-semibold text-xl tracking-wide text-teal-700' },
   { text: 'WALKER', className: 'font-bold text-lg text-cyan-800' },

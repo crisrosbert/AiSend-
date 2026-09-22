@@ -13,9 +13,10 @@
    active-item highlight, etc.) is built from these variables — nothing
    else in this file needs to change.
 
-   Right now the palette below IS WhatsApp's own brand green. To use a
-   different color, replace the six --brand-* values with your new color
-   and its darker/lighter shades — everything else updates automatically.
+   The palette below is AiSend's own deep-forest-green + mint brand
+   (moved off WhatsApp's stock green). To use a different color, replace
+   the --brand-* values with your new color and its darker/lighter
+   shades — everything else updates automatically.
 
    ONE THING THIS FILE CANNOT REACH: a few components set a gradient
    directly in their own .tsx file with a hardcoded hex value (mostly the
@@ -26,41 +27,48 @@
    ============================================================================ */
 
 :root {
-  /* ---- Brand green (WhatsApp's palette) ----
+  /* ---- Brand green (AiSend's own palette — deep forest + mint) ----
      --brand        = primary buttons, links, the active nav rail
      --brand-deep   = hover state
      --brand-press  = active/pressed state (mouse held down)
      --brand-50/100/200 = light tints, used for badges and soft backgrounds */
-  --brand:       #25D366;   /* WhatsApp green */
-  --brand-deep:  #1DA851;   /* hover — same hue, darker */
-  --brand-press: #178F48;   /* pressed — darker still */
-  --brand-50:    #E9FBEF;
-  --brand-100:   #C8F5D6;
-  --brand-200:   #98E9B4;
+  --brand:       #1B6B4A;   /* deep emerald */
+  --brand-deep:  #14523A;   /* hover — same hue, darker */
+  --brand-press: #0F3F2C;   /* pressed — darker still */
+  --brand-50:    #EAF6EF;
+  --brand-100:   #CFEBDC;
+  --brand-200:   #9DD8B7;
 
-  /* ---- WhatsApp's secondary teal ----
-     Not wired into any component yet — kept here so the dark
+  /* ---- Accent tints ----
+     Fresh highlights used sparingly — active-state dots, stat
+     numbers on dark surfaces, secondary badges. */
+  --mint: #6FD9A0;
+  --lime: #D7E38A;
+
+  /* ---- Dark surface (sidebar / header-on-dark) ----
+     Not wired into every component yet — kept here so any dark
      header/sidebar look can be switched to it later without hunting
      for the hex value again. */
-  --brand-teal:      #128C7E;
-  --brand-teal-dark: #075E54;
+  --brand-teal:      #1E4F3B;
+  --brand-teal-dark: #0E2B20;
 
   /* ---- Text ---- */
-  --ink:       #0b231a;   /* primary text */
+  --ink:       #10261D;   /* primary text */
   --ink-soft:  #46584f;   /* secondary text */
   --ink-muted: #7c8a83;   /* placeholder / tertiary text */
 
   /* ---- Surfaces ---- */
-  --line:    #e6ece9;   /* hairline borders */
+  --line:    #E6E4D9;   /* hairline borders (warm) */
   --surface: #ffffff;   /* cards, panels, the sidebar */
-  --canvas:  #f5f8f6;   /* page background behind cards */
+  --canvas:  #F8F6F0;   /* page background behind cards (warm cream) */
+  --soft:    #F6F4EC;   /* soft muted panels — hover rows, input trays */
 
   /* ---- Elevation (box-shadow) ---- */
-  --shadow-xs:    0 1px 2px rgba(11,35,26,.05);
-  --shadow-sm:    0 1px 3px rgba(11,35,26,.06), 0 1px 2px rgba(11,35,26,.04);
-  --shadow-md:    0 4px 12px rgba(11,35,26,.07), 0 2px 4px rgba(11,35,26,.04);
-  --shadow-lg:    0 12px 32px rgba(11,35,26,.10), 0 4px 8px rgba(11,35,26,.05);
-  --shadow-brand: 0 8px 20px rgba(37,211,102,.28);
+  --shadow-xs:    0 1px 2px rgba(16,38,29,.05);
+  --shadow-sm:    0 1px 3px rgba(16,38,29,.06), 0 1px 2px rgba(16,38,29,.04);
+  --shadow-md:    0 4px 12px rgba(16,38,29,.07), 0 2px 4px rgba(16,38,29,.04);
+  --shadow-lg:    0 12px 32px rgba(16,38,29,.10), 0 4px 8px rgba(16,38,29,.05);
+  --shadow-brand: 0 8px 20px rgba(27,107,74,.28);
 
   /* ---- Layout ---- */
   --radius: 0.75rem;
@@ -130,15 +138,15 @@ h2 { font-weight: 700; }
 .bg-slate-600 { background-color: var(--line) !important; }
 .bg-slate-500 { background-color: #d8e0dc !important; }
 
-.bg-slate-950\/50, .bg-slate-950\/70 { background-color: rgba(11,35,26,.45) !important; }
+.bg-slate-950\/50, .bg-slate-950\/70 { background-color: rgba(16,38,29,.45) !important; }
 .bg-slate-900\/40, .bg-slate-900\/50, .bg-slate-900\/60, .bg-slate-900\/80, .bg-slate-900\/95 { background-color: var(--surface) !important; }
-.bg-slate-800\/30, .bg-slate-800\/40, .bg-slate-800\/50, .bg-slate-800\/60, .bg-slate-800\/70, .bg-slate-800\/80 { background-color: #f8faf9 !important; }
+.bg-slate-800\/30, .bg-slate-800\/40, .bg-slate-800\/50, .bg-slate-800\/60, .bg-slate-800\/70, .bg-slate-800\/80 { background-color: var(--soft) !important; }
 .bg-slate-700\/40, .bg-slate-700\/50 { background-color: #f1f5f4 !important; }
 .bg-slate-600\/20 { background-color: #eef2f0 !important; }
 .bg-slate-500\/10 { background-color: var(--canvas) !important; }
 
 .hover\:bg-slate-800:hover, .hover\:bg-slate-800\/60:hover { background-color: #f1f5f4 !important; }
-.hover\:bg-slate-800\/30:hover { background-color: #f8faf9 !important; }
+.hover\:bg-slate-800\/30:hover { background-color: var(--soft) !important; }
 .hover\:bg-slate-700:hover { background-color: var(--line) !important; }
 .focus\:bg-slate-800:focus, .focus\:bg-slate-800\/60:focus { background-color: #f1f5f4 !important; }
 
@@ -163,7 +171,7 @@ h2 { font-weight: 700; }
 .divide-slate-800 > * + * { border-color: #eef2f0 !important; }
 .ring-slate-700 { --tw-ring-color: var(--line) !important; }
 .ring-slate-800 { --tw-ring-color: #eef2f0 !important; }
-.ring-white\/10 { --tw-ring-color: rgba(11,35,26,.08) !important; }
+.ring-white\/10 { --tw-ring-color: rgba(16,38,29,.08) !important; }
 
 /* ---- Violet AND emerald (both legacy brand colors) → the one --brand ---- */
 .bg-violet-500, .bg-emerald-500 { background-color: var(--brand) !important; }
@@ -195,8 +203,8 @@ h2 { font-weight: 700; }
 .outline-violet-400 { outline-color: var(--brand-200) !important; }
 
 .ring-emerald-500, .ring-violet-500 { --tw-ring-color: var(--brand) !important; }
-.ring-violet-500\/20 { --tw-ring-color: rgba(37,211,102,.2) !important; }
-.focus-visible\:ring-violet-500\/20:focus-visible { --tw-ring-color: rgba(37,211,102,.2) !important; }
+.ring-violet-500\/20 { --tw-ring-color: rgba(27,107,74,.2) !important; }
+.focus-visible\:ring-violet-500\/20:focus-visible { --tw-ring-color: rgba(27,107,74,.2) !important; }
 
 /* Spinners use the same border trick, so the "loading" color follows too. */
 .border-violet-500 { border-color: var(--brand) !important; }
@@ -229,7 +237,7 @@ button.bg-emerald-600, button.bg-emerald-500,
 button.bg-violet-600:hover, button.bg-violet-500:hover,
 button.bg-emerald-600:hover, button.bg-emerald-500:hover {
   filter: brightness(1.03);
-  box-shadow: 0 10px 26px rgba(37,211,102,.32) !important;
+  box-shadow: 0 10px 26px rgba(27,107,74,.32) !important;
 }
 button.bg-violet-600:active, button.bg-violet-500:active,
 button.bg-emerald-600:active, button.bg-emerald-500:active {
@@ -260,7 +268,7 @@ input, textarea, select {
 }
 input:focus-visible, textarea:focus-visible, select:focus-visible {
   border-color: var(--brand) !important;
-  box-shadow: 0 0 0 3px rgba(37,211,102,.18) !important;
+  box-shadow: 0 0 0 3px rgba(27,107,74,.18) !important;
   outline: none !important;
 }
 
@@ -287,7 +295,7 @@ aside[aria-label="Primary navigation"] {
 ::-webkit-scrollbar-thumb { background: #d3ddd7; border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: #b9c7c0; }
 
-::selection { background: rgba(37,211,102,.22); color: var(--brand-press); }
+::selection { background: rgba(27,107,74,.22); color: var(--brand-press); }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 @keyframes fade-in { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:none; } }

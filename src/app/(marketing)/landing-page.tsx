@@ -133,7 +133,7 @@ const FAQS = [
 
 function CheckCircleIcon({ d }: { d: string }) {
   return (
-    <svg className="w-6 h-6 text-[#00C675] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-6 h-6 text-[#1B6B4A] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path d={d} strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
     </svg>
   )
@@ -153,19 +153,19 @@ export default function LandingPage() {
                   <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-200 shadow-sm text-xs sm:text-sm font-semibold text-emerald-950 mb-6">
                     <span className="relative flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00C675]" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1B6B4A]" />
                     </span>
                     <span>✨ Meta Official Business Solution Partner</span>
                   </div>
                   <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.12]">
                     5X Your Revenue with{' '}
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00C675] via-emerald-600 to-teal-600">Next-Gen WhatsApp</span> Marketing
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#1B6B4A] to-[#6FD9A0]">Next-Gen WhatsApp</span> Marketing
                   </h1>
                   <p className="mt-6 text-base sm:text-lg text-gray-600 max-w-2xl leading-relaxed">
                     Broadcast campaigns to millions, automate conversations with intelligent AI agents, collect seamless in-chat payments, and 5X conversions with official Meta WhatsApp APIs.
                   </p>
                   <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
-                    <Link className="inline-flex items-center justify-center bg-[#00C675] hover:bg-[#00ad66] text-[#fff] font-bold text-base px-8 py-4 rounded-xl shadow-lg hover:shadow-emerald-500/25 transition-all duration-200 transform hover:-translate-y-0.5" href="/signup">
+                    <Link className="inline-flex items-center justify-center bg-[#1B6B4A] hover:bg-[#14523A] text-[#fff] font-bold text-base px-8 py-4 rounded-xl shadow-lg hover:shadow-[#1B6B4A]/25 transition-all duration-200 transform hover:-translate-y-0.5" href="/signup">
                       Start 14-Day Free Trial <span className="ml-2">→</span>
                     </Link>
                     <a className="inline-flex items-center justify-center bg-white/90 hover:bg-white text-gray-800 font-semibold text-base px-7 py-4 rounded-xl border border-gray-200 shadow-sm hover:border-emerald-300 transition-all duration-200" href="#">
@@ -191,8 +191,8 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div className="lg:col-span-5 relative">
-                  <div className="absolute -top-12 -left-12 w-72 h-72 bg-emerald-200/40 rounded-full blur-3xl pointer-events-none" />
-                  <div className="absolute -bottom-10 -right-10 w-72 h-72 bg-teal-200/30 rounded-full blur-3xl pointer-events-none" />
+                  <div className="absolute -top-12 -left-12 w-72 h-72 bg-[#1B6B4A]/20 rounded-full blur-3xl pointer-events-none" />
+                  <div className="absolute -bottom-10 -right-10 w-72 h-72 bg-[#6FD9A0]/25 rounded-full blur-3xl pointer-events-none" />
                   <div className="relative mx-auto max-w-lg lg:max-w-none">
                     <div className="relative rounded-3xl p-2 bg-gradient-to-b from-white/90 to-white/40 backdrop-blur-xl border border-white/60 shadow-2xl">
                       <ImageSlot alt="WhatsApp AI Marketing & Sales in Action" label="Hero product shot" dimensions="1200 × 900 · PNG, JPG or WebP" variant="flush" />
@@ -204,7 +204,7 @@ export default function LandingPage() {
                         </div>
                       </div>
                       <div className="absolute -bottom-5 -left-3 sm:-left-4 bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-gray-100 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#00C675] flex items-center justify-center font-bold text-base border border-emerald-200">✓</div>
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#1B6B4A] flex items-center justify-center font-bold text-base border border-emerald-200">✓</div>
                         <div>
                           <div className="text-xs text-gray-400 font-medium">Direct WhatsApp Checkout</div>
                           <div className="text-sm font-extrabold text-gray-900">Order Confirmed • ₹1,299</div>
@@ -245,7 +245,7 @@ export default function LandingPage() {
                     {BROADCAST_BULLETS.map((b) => (
                       <div key={b.title} className="flex items-start">
                         <div className="flex-shrink-0 mt-1">
-                          <div className="w-8 h-8 rounded-full bg-emerald-50 text-[#00C675] flex items-center justify-center font-bold text-sm">✦</div>
+                          <div className="w-8 h-8 rounded-full bg-emerald-50 text-[#1B6B4A] flex items-center justify-center font-bold text-sm">✦</div>
                         </div>
                         <div className="ml-4">
                           <h3 className="text-lg font-bold">{b.title}</h3>
@@ -255,7 +255,7 @@ export default function LandingPage() {
                     ))}
                   </div>
                   <div className="mt-10">
-                    <Link className="inline-flex items-center justify-center bg-[#00C675] hover:bg-[#00ad66] text-[#fff] font-semibold text-base px-7 py-3 rounded-lg shadow-sm hover:shadow transition-colors" href="/signup">
+                    <Link className="inline-flex items-center justify-center bg-[#1B6B4A] hover:bg-[#14523A] text-[#fff] font-semibold text-base px-7 py-3 rounded-lg shadow-sm hover:shadow transition-colors" href="/signup">
                       Start for FREE <span className="ml-2">→</span>
                     </Link>
                   </div>
@@ -283,7 +283,7 @@ export default function LandingPage() {
                     <p className="mt-4 text-base text-gray-600 leading-relaxed">Run Ads on Facebook &amp; Instagram that land on WhatsApp. 5X Your lead generations &amp; 2-3X Conversions Instantly!</p>
                     <p className="mt-3 text-base text-gray-600 leading-relaxed">Run Ads from AISEND., get quality leads with AI &amp; conversions API, smartly segregate your leads and build Chatbot Flows to automate everything!</p>
                     <div className="mt-6">
-                      <a className="inline-flex items-center text-[#00C675] hover:text-emerald-700 font-semibold text-base group" href="#">Explore <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span></a>
+                      <a className="inline-flex items-center text-[#1B6B4A] hover:text-emerald-700 font-semibold text-base group" href="#">Explore <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span></a>
                     </div>
                   </div>
                   <div className="order-1 lg:order-2 flex justify-center">
@@ -299,7 +299,7 @@ export default function LandingPage() {
                     <p className="mt-4 text-base text-gray-600 leading-relaxed">Capture Leads &amp; collect useful information <strong className="font-semibold">Directly in WhatsApp Chats</strong> with WhatsApp Forms.</p>
                     <p className="mt-3 text-base text-gray-600 leading-relaxed">From feedback to gathering user insights, collect it all on WhatsApp.</p>
                     <div className="mt-6">
-                      <a className="inline-flex items-center text-[#00C675] hover:text-emerald-700 font-semibold text-base group" href="#">Explore <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span></a>
+                      <a className="inline-flex items-center text-[#1B6B4A] hover:text-emerald-700 font-semibold text-base group" href="#">Explore <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span></a>
                     </div>
                   </div>
                 </div>
@@ -308,7 +308,7 @@ export default function LandingPage() {
                     <h3 className="text-2xl sm:text-3xl font-bold">Collect Payments on WhatsApp</h3>
                     <p className="mt-4 text-base text-gray-600 leading-relaxed">Collect Payments now on WhatsApp seamlessly with WhatsApp Pay and other modes of payment (Razorpay, Payu etc) and grow your revenue.</p>
                     <div className="mt-6">
-                      <a className="inline-flex items-center text-[#00C675] hover:text-emerald-700 font-semibold text-base group" href="#">Explore <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span></a>
+                      <a className="inline-flex items-center text-[#1B6B4A] hover:text-emerald-700 font-semibold text-base group" href="#">Explore <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span></a>
                     </div>
                   </div>
                   <div className="order-1 lg:order-2 flex justify-center">
@@ -419,7 +419,7 @@ export default function LandingPage() {
                     ))}
                   </div>
                   <div className="mt-8">
-                    <Link className="inline-flex items-center justify-center bg-[#00C675] hover:bg-[#00ad66] text-[#fff] font-semibold text-base px-8 py-3.5 rounded-lg shadow transition-colors" href="/signup">
+                    <Link className="inline-flex items-center justify-center bg-[#1B6B4A] hover:bg-[#14523A] text-[#fff] font-semibold text-base px-8 py-3.5 rounded-lg shadow transition-colors" href="/signup">
                       Start Now for FREE <span className="ml-2">→</span>
                     </Link>
                   </div>
@@ -437,15 +437,15 @@ export default function LandingPage() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
                 <div className="lg:col-span-6 flex flex-col items-start">
                   <div className="inline-flex items-center gap-2 mb-4">
-                    <span className="h-1 w-5 rounded-full bg-[#00C675]" />
-                    <span className="text-xs font-bold uppercase tracking-widest text-[#00C675]">ONE INBOX</span>
+                    <span className="h-1 w-5 rounded-full bg-[#1B6B4A]" />
+                    <span className="text-xs font-bold uppercase tracking-widest text-[#1B6B4A]">ONE INBOX</span>
                   </div>
                   <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.18]">WhatsApp first — and everywhere else your customers turn up</h2>
                   <p className="mt-5 text-base sm:text-lg text-gray-600 leading-relaxed">Start where the conversations already happen, then add the other channels when you&apos;re ready. They all land in the same inbox, with the same history and the same team.</p>
                   <div className="mt-8 space-y-4 w-full">
                     {HUB_CHECKS.map((c) => (
                       <div key={c.strong} className="flex items-start gap-3.5">
-                        <div className="w-6 h-6 rounded-full bg-emerald-50 text-[#00C675] flex items-center justify-center font-bold text-sm flex-shrink-0 mt-0.5 border border-emerald-200">✓</div>
+                        <div className="w-6 h-6 rounded-full bg-emerald-50 text-[#1B6B4A] flex items-center justify-center font-bold text-sm flex-shrink-0 mt-0.5 border border-emerald-200">✓</div>
                         <p className="text-gray-700 text-sm sm:text-base leading-relaxed"><strong className="text-gray-900 font-semibold">{c.strong}</strong>{c.rest}</p>
                       </div>
                     ))}
@@ -461,7 +461,7 @@ export default function LandingPage() {
                     <div className="absolute inset-0 rounded-full border border-emerald-100 bg-emerald-50/30" />
                     <div className="absolute inset-10 rounded-full border border-emerald-200/60 bg-emerald-50/50" />
                     <div className="absolute inset-20 rounded-full border border-emerald-200 bg-white/60 shadow-inner" />
-                    <div className="relative z-10 w-24 h-24 rounded-full bg-gradient-to-tr from-[#00C675] to-[#25D366] text-[#fff] flex items-center justify-center shadow-xl shadow-emerald-500/25 border-4 border-white transform hover:scale-105 transition-transform">
+                    <div className="relative z-10 w-24 h-24 rounded-full bg-gradient-to-tr from-[#1B6B4A] to-[#25D366] text-[#fff] flex items-center justify-center shadow-xl shadow-[#1B6B4A]/25 border-4 border-white transform hover:scale-105 transition-transform">
                       <svg className="w-12 h-12 fill-current" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" /></svg>
                     </div>
                     {CHANNEL_NODES.map((n) => (
@@ -483,15 +483,15 @@ export default function LandingPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="max-w-3xl mb-12">
                 <div className="inline-flex items-center gap-2 mb-4">
-                  <span className="h-1 w-5 rounded-full bg-[#00C675]" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-[#00C675]">CAMPAIGNS</span>
+                  <span className="h-1 w-5 rounded-full bg-[#1B6B4A]" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-[#1B6B4A]">CAMPAIGNS</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight">
-                  Personal campaigns on <span className="text-[#00C675]">WhatsApp</span>, sent to thousands at once
+                  Personal campaigns on <span className="text-[#1B6B4A]">WhatsApp</span>, sent to thousands at once
                 </h2>
                 <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">Write it once with the customer&apos;s name, order and city filled in automatically. Meta reviews the template, we handle the sending, and every reply lands back in your shared inbox.</p>
                 <div className="mt-8 flex flex-wrap items-center gap-4">
-                  <Link className="inline-flex items-center justify-center bg-[#00C675] hover:bg-[#00ad66] text-[#fff] font-semibold text-sm sm:text-base px-6 py-3.5 rounded-xl shadow-md transition-colors" href="/signup">Start free — no card</Link>
+                  <Link className="inline-flex items-center justify-center bg-[#1B6B4A] hover:bg-[#14523A] text-[#fff] font-semibold text-sm sm:text-base px-6 py-3.5 rounded-xl shadow-md transition-colors" href="/signup">Start free — no card</Link>
                   <Link className="inline-flex items-center justify-center bg-white hover:bg-gray-50 text-gray-800 font-semibold text-sm sm:text-base px-6 py-3.5 rounded-xl border border-gray-200 shadow-sm transition-colors" href="/contact">Book a 15-min demo</Link>
                 </div>
               </div>
@@ -499,17 +499,17 @@ export default function LandingPage() {
                 <div className="bg-gray-50 rounded-2xl border border-gray-100 p-4 sm:p-6 flex flex-col lg:flex-row gap-6 items-center justify-between">
                   <div className="w-full lg:w-1/2 space-y-4">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
-                      <span className="w-2 h-2 rounded-full bg-[#00C675]" /> Template Approved by Meta
+                      <span className="w-2 h-2 rounded-full bg-[#1B6B4A]" /> Template Approved by Meta
                     </div>
                     <h3 className="text-xl font-bold">Personalised Flash Sale Broadcast</h3>
                     <div className="bg-white rounded-xl p-4 border border-gray-200 text-sm font-mono text-gray-700 space-y-2 shadow-sm">
                       <p className="text-xs text-gray-400">{'// Template with dynamic variable mapping'}</p>
                       <p>Hey <span className="bg-amber-100 text-amber-900 px-1 rounded">{'{{1: First Name}}'}</span>! 👋 We noticed you left <span className="bg-amber-100 text-amber-900 px-1 rounded">{'{{2: Product Name}}'}</span> in your cart.</p>
-                      <p>Here is an exclusive 15% discount for you in <span className="bg-amber-100 text-amber-900 px-1 rounded">{'{{3: City}}'}</span>: code <span className="font-bold text-[#00C675]">WHATSAPP15</span>.</p>
+                      <p>Here is an exclusive 15% discount for you in <span className="bg-amber-100 text-amber-900 px-1 rounded">{'{{3: City}}'}</span>: code <span className="font-bold text-[#1B6B4A]">WHATSAPP15</span>.</p>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-gray-500 font-medium pt-2">
                       {CAMPAIGN_STATS.map((s) => (
-                        <span key={s} className="flex items-center gap-1"><span className="text-[#00C675]">✓</span> {s}</span>
+                        <span key={s} className="flex items-center gap-1"><span className="text-[#1B6B4A]">✓</span> {s}</span>
                       ))}
                     </div>
                   </div>
@@ -526,14 +526,14 @@ export default function LandingPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="max-w-3xl mb-12">
                 <div className="inline-flex items-center gap-2 mb-4">
-                  <span className="h-1 w-5 rounded-full bg-[#00C675]" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-[#00C675]">AI AGENTS</span>
+                  <span className="h-1 w-5 rounded-full bg-[#1B6B4A]" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-[#1B6B4A]">AI AGENTS</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight">An assistant for each part of the conversation</h2>
                 <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">Trained on your catalogue, your prices and your policies — so it answers like someone who works there, and hands over the moment a person is needed.</p>
               </div>
               <div className="border-b border-gray-200 mb-10 flex space-x-8 text-sm sm:text-base font-semibold">
-                <button className="pb-4 text-[#00C675] border-b-2 border-[#00C675] flex items-center gap-2" type="button">Capturing leads</button>
+                <button className="pb-4 text-[#1B6B4A] border-b-2 border-[#1B6B4A] flex items-center gap-2" type="button">Capturing leads</button>
                 <button className="pb-4 text-gray-500 flex items-center gap-2" type="button">Helping people buy</button>
                 <button className="pb-4 text-gray-500 flex items-center gap-2" type="button">After the order</button>
               </div>
@@ -543,7 +543,7 @@ export default function LandingPage() {
                   <div className="space-y-4 pt-2">
                     {AGENT_TAB_CHECKS.map((c) => (
                       <div key={c} className="flex items-start gap-3">
-                        <span className="text-[#00C675] font-bold text-base mt-0.5">✓</span>
+                        <span className="text-[#1B6B4A] font-bold text-base mt-0.5">✓</span>
                         <span className="text-gray-700 text-sm sm:text-base font-medium">{c}</span>
                       </div>
                     ))}
@@ -555,7 +555,7 @@ export default function LandingPage() {
                 <div className="lg:col-span-6 flex justify-center">
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-5 max-w-md w-full space-y-4">
                     <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
-                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-[#00C675] font-bold">🤖</div>
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-[#1B6B4A] font-bold">🤖</div>
                       <div>
                         <div className="text-sm font-bold">AISEND. LeadBot</div>
                         <div className="text-xs text-emerald-600 font-medium">Online • Instant Reply</div>
@@ -563,10 +563,10 @@ export default function LandingPage() {
                     </div>
                     <div className="space-y-3 text-xs sm:text-sm">
                       <div className="bg-gray-100 text-gray-800 p-3 rounded-2xl rounded-tl-none max-w-[85%]">Hi there! Welcome to AISEND. How many contacts do you plan to message monthly?</div>
-                      <div className="bg-[#00C675] text-[#fff] p-3 rounded-2xl rounded-tr-none ml-auto max-w-[80%]">Around 50,000 customers for our upcoming festive promotion.</div>
+                      <div className="bg-[#1B6B4A] text-[#fff] p-3 rounded-2xl rounded-tr-none ml-auto max-w-[80%]">Around 50,000 customers for our upcoming festive promotion.</div>
                       <div className="bg-gray-100 text-gray-800 p-3 rounded-2xl rounded-tl-none max-w-[85%]">Perfect! Based on your volume, you qualify for our Enterprise API tier with unlimited broadcast speed. Would you like to schedule a quick 10-minute demo today?</div>
                       <div className="flex gap-2 pt-2">
-                        <button className="flex-1 bg-emerald-50 text-[#00C675] border border-emerald-200 py-2 rounded-lg font-semibold text-xs" type="button">📅 Book 2:30 PM Demo</button>
+                        <button className="flex-1 bg-emerald-50 text-[#1B6B4A] border border-emerald-200 py-2 rounded-lg font-semibold text-xs" type="button">📅 Book 2:30 PM Demo</button>
                         <button className="flex-1 bg-white text-gray-700 border border-gray-200 py-2 rounded-lg font-semibold text-xs" type="button">💬 Talk to Human</button>
                       </div>
                     </div>
@@ -581,8 +581,8 @@ export default function LandingPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="max-w-3xl mb-12">
                 <div className="inline-flex items-center gap-2 mb-4">
-                  <span className="h-1 w-5 rounded-full bg-[#00C675]" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-[#00C675]">SEE IT WORKING</span>
+                  <span className="h-1 w-5 rounded-full bg-[#1B6B4A]" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-[#1B6B4A]">SEE IT WORKING</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight">From a customer list to a sent broadcast, in one sitting</h2>
                 <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">A three-minute walkthrough: import contacts, pick an approved template, send, and watch replies land in the shared inbox.</p>
@@ -590,8 +590,8 @@ export default function LandingPage() {
               <div className="relative rounded-3xl bg-[#092b1f] border border-emerald-900/60 shadow-2xl overflow-hidden w-full aspect-[16/9] md:h-[500px] flex items-center justify-center p-6">
                 <div className="absolute inset-0 bg-radial from-emerald-600/20 via-transparent to-transparent pointer-events-none" />
                 <div className="relative z-10 flex flex-col items-center cursor-pointer group">
-                  <div className="relative flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#00C675] text-[#fff] shadow-2xl group-hover:scale-110 transition-transform duration-300">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00C675] opacity-40" />
+                  <div className="relative flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#1B6B4A] text-[#fff] shadow-2xl group-hover:scale-110 transition-transform duration-300">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1B6B4A] opacity-40" />
                     <svg className="w-8 h-8 sm:w-10 sm:h-10 ml-1 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                   </div>
                   <div className="mt-4 text-center">
@@ -622,7 +622,7 @@ export default function LandingPage() {
                       <p className="mt-3 text-sm text-gray-500 leading-relaxed">{r.body}</p>
                     </div>
                     <div className="mt-8 pt-4 border-t border-gray-100 flex items-center justify-between">
-                      <a className="inline-flex items-center text-sm font-bold text-[#0066A2] group-hover:text-[#00C675] transition-colors" href="#">Download PDF <span className="ml-1.5 group-hover:translate-x-1 transition-transform">→</span></a>
+                      <a className="inline-flex items-center text-sm font-bold text-[#0066A2] group-hover:text-[#1B6B4A] transition-colors" href="#">Download PDF <span className="ml-1.5 group-hover:translate-x-1 transition-transform">→</span></a>
                       <span className="text-xs text-gray-400 font-medium">{r.pages}</span>
                     </div>
                   </div>

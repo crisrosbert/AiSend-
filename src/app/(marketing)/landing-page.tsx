@@ -158,8 +158,8 @@ export default function LandingPage() {
                     <span>✨ Meta Official Business Solution Partner</span>
                   </div>
                   <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.12]">
-                    5X Your Revenue with{' '}
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#1B6B4A] to-[#6FD9A0]">Next-Gen WhatsApp</span> Marketing
+                    Your Customers Are Already on WhatsApp{' '}
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#1B6B4A] to-[#6FD9A0]">Now Your Sales Can Be</span> Too
                   </h1>
                   <p className="mt-6 text-base sm:text-lg text-gray-600 max-w-2xl leading-relaxed">
                     Broadcast campaigns to millions, automate conversations with intelligent AI agents, collect seamless in-chat payments, and 5X conversions with official Meta WhatsApp APIs.

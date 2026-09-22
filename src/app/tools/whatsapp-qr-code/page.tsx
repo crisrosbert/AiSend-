@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { QrCodeTool } from './qr-code-tool'
+import { SiteFooter } from '@/components/layout/site-footer'
 
 export const metadata: Metadata = {
   title: 'Free WhatsApp QR Code Generator',
@@ -197,16 +198,7 @@ export default function WhatsAppQrCodePage() {
         </p>
       </main>
 
-      <footer style={{ borderTop: '1px solid #eef2f0', padding: '26px 0' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 20px', display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', fontSize: 13, color: '#9aa8a0' }}>
-          <span>© {new Date().getFullYear()} AiSend — a WE3 Media product.</span>
-          <span style={{ display: 'flex', gap: 20 }}>
-            <Link href="/tools" style={{ color: '#46584f', textDecoration: 'none' }}>All tools</Link>
-            <Link href="/privacy" style={{ color: '#46584f', textDecoration: 'none' }}>Privacy</Link>
-            <Link href="/" style={{ color: '#46584f', textDecoration: 'none' }}>AiSend home</Link>
-          </span>
-        </div>
-      </footer>
+      <SiteFooter />
 
       <script
         type="application/ld+json"

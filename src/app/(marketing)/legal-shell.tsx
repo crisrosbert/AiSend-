@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ReactNode } from 'react'
+import { SiteFooter } from '@/components/layout/site-footer'
 
 /**
  * Shared chrome (header + footer) for the public legal/contact pages so
@@ -58,17 +59,7 @@ export default function LegalShell({
         {children}
       </main>
 
-      {/* footer */}
-      <footer style={{ borderTop: '1px solid #eef2f0', padding: '28px 0' }}>
-        <div className="ls-wrap" style={{ maxWidth: 1180, display: 'flex', flexWrap: 'wrap', gap: 18, justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#9aa8a0' }}>
-          <span>© {new Date().getFullYear()} AiSend. Made in India.</span>
-          <span style={{ display: 'flex', gap: 22 }}>
-            <Link href="/privacy" style={{ color: '#46584f', textDecoration: 'none' }}>Privacy</Link>
-            <Link href="/terms" style={{ color: '#46584f', textDecoration: 'none' }}>Terms</Link>
-            <Link href="/contact" style={{ color: '#46584f', textDecoration: 'none' }}>Contact</Link>
-          </span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

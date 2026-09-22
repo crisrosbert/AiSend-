@@ -71,9 +71,6 @@ export function SiteHeader() {
         <div className="flex items-center gap-8">
           <Link aria-label="AiSend Home" className="flex items-center focus:outline-none" href="/">
             <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 fill-current text-[#1B6B4A]" viewBox="0 0 24 24">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
               <div className="flex items-center text-2xl font-black tracking-tight select-none">
                 <span className="text-[#1B6B4A]">AI</span>
                 <span className="text-emerald-950 ml-0.5">SEND</span>

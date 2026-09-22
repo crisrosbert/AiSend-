@@ -1,194 +1,206 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { QrCodeTool } from './qr-code-tool'
 import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
+import '../../(marketing)/landing.css'
 
 export const metadata: Metadata = {
-  title: 'Free WhatsApp QR Code Generator',
+  title: 'WhatsApp Bulk Message Sender — Official API, Zero Ban Risk',
   description:
-    'Turn your WhatsApp number into a downloadable QR code — for posters, business cards, packaging, or a storefront sign. No signup, generated in your browser, free forever.',
+    'Send WhatsApp messages in bulk through the official Meta Cloud API — no browser automation, no number bans. Delivery tracking, opt-outs, and template approval built in.',
   robots: { index: true, follow: true },
-  alternates: { canonical: 'https://app.performancemktg.net/tools/whatsapp-qr-code' },
+  alternates: { canonical: 'https://app.performancemktg.net/tools/whatsapp-bulk-sender' },
 }
 
-const USE_CASES = [
-  { t: 'Storefront window or door', d: 'A passerby scans on their way in — or without ever walking in — and starts a chat before you’ve said a word. Works for shops, salons, and clinics alike.' },
-  { t: 'Business cards', d: 'One scan beats reading a phone number out loud at a networking event, and it never gets mistyped into someone’s contacts.' },
-  { t: 'Product packaging & inserts', d: 'Every box you ship becomes a support and reorder channel — no app to install, no form to fill in.' },
-  { t: 'Restaurant table tents & menus', d: 'Guests order, ask about allergens, or leave feedback without waving down a waiter or downloading an app.' },
-  { t: 'Print ads, flyers & hoardings', d: 'An offline campaign finally gets a measurable response channel — every scan is a lead, not a guess.' },
-  { t: 'Instagram/Facebook story stickers', d: 'Screenshot-friendly, and works in places a tappable link can’t go — a static image, a printed catalogue, a video thumbnail.' },
-  { t: 'Event badges & registration desks', d: 'Attendees message the organiser instantly for directions, schedule changes, or support — no queue at an info desk.' },
-  { t: 'Vehicle decals for delivery/service fleets', d: 'Anyone who sees your van on the road can reach you the same second, instead of remembering a number for later (and forgetting it).' },
+const COMPARE: Array<{ label: string; official: string | boolean; unofficial: string | boolean }> = [
+  { label: 'Built on Meta’s official Cloud API', official: true, unofficial: false },
+  { label: 'Risk of your number getting banned', official: 'None', unofficial: 'Real, and common' },
+  { label: 'Delivery / read receipts per recipient', official: true, unofficial: false },
+  { label: 'Message templates reviewed by Meta', official: true, unofficial: false },
+  { label: 'Automatic opt-out handling (STOP/START)', official: true, unofficial: false },
+  { label: 'Per-message pricing is Meta’s own, no markup', official: true, unofficial: 'Varies / hidden' },
+  { label: 'Keeps working if WhatsApp changes their app', official: true, unofficial: false },
+]
+
+const STEPS = [
+  { n: '1', t: 'Connect your number', d: 'A guided flow links your WhatsApp number to Meta’s official API — no code, no developer.' },
+  { n: '2', t: 'Pick a template & audience', d: 'Write or choose an approved message template, then pick contacts by tag, list, or upload.' },
+  { n: '3', t: 'Send & track', d: 'Watch sent, delivered, and read counts update live. Opt-outs are handled automatically.' },
+]
+
+const WHO_FOR = [
+  { t: 'E-commerce & D2C', d: 'Order confirmations, shipping updates, abandoned-cart nudges, and flash-sale drops to your whole list at once.' },
+  { t: 'Real estate & property', d: 'New-listing alerts and price-drop notices to every buyer who’s enquired, segmented by budget or locality.' },
+  { t: 'Coaching, courses & education', d: 'Batch reminders, assignment nudges, and enrolment offers to students and leads without a group-chat mess.' },
+  { t: 'Clinics & healthcare', d: 'Appointment reminders and health-camp announcements — utility templates, not marketing, so open rates stay high.' },
+  { t: 'Agencies managing multiple clients', d: 'Run separate broadcasts per client number from one dashboard instead of juggling logins.' },
+  { t: 'Events & webinars', d: 'Registration confirmations, day-before reminders, and post-event follow-ups to everyone who signed up.' },
 ]
 
 const FAQS = [
   {
-    q: 'What happens when someone scans this QR code?',
-    a: 'Their phone’s camera recognises the code, shows a notification, and tapping it opens WhatsApp with a chat to your number already started — with your optional pre-filled message sitting in the text box, ready to send with one tap.',
+    q: 'Why do some bulk WhatsApp senders get numbers banned?',
+    a: 'Most cheap "bulk sender" tools work by automating the WhatsApp Web browser session — logging in as if a human were clicking send hundreds of times. WhatsApp actively detects and bans numbers that behave like this. The official Cloud API (what AiSend uses) is a completely different, sanctioned integration — Meta expects and rate-limits it, rather than treating it as abuse.',
   },
   {
-    q: 'Is the QR code free to use commercially — packaging, print ads, storefronts?',
-    a: 'Yes. It’s a standard QR code encoding a wa.me link; there’s no license fee, no attribution requirement, and no expiry date. Print it as many times as you like.',
+    q: 'Is this the same WhatsApp Business API businesses like Amazon and Zomato use?',
+    a: 'Yes — the exact same Meta Cloud API. AiSend is the dashboard on top of it: templates, contact lists, scheduling, and delivery tracking, without writing any code.',
   },
   {
-    q: 'Will the QR code stop working if I change my number?',
-    a: 'Yes — the code is tied to the exact number (and message) you generated it with. If your number changes, come back and generate a fresh one, then replace the old print material.',
+    q: 'How much does sending in bulk actually cost?',
+    a: 'You pay Meta’s own per-message rate (₹1.09 for a marketing message, ₹0.145 for a utility message as of this writing) with no markup from AiSend. Replies inside an open 24-hour conversation are free.',
   },
   {
-    q: 'What size should I print it at?',
-    a: 'The downloaded PNG is generated at a high resolution suitable for most posters, table tents, and packaging. For very large prints — banners, hoardings, vehicle wraps — regenerate the code immediately before printing rather than stretching an old file, since re-scaling a small image blurs the fine squares a scanner needs to read.',
+    q: 'Do I need a developer to set this up?',
+    a: 'No. Connect your WhatsApp number through a guided one-click flow, pick or write a message template, upload your contact list, and send — the whole thing is a dashboard, not an API you integrate yourself.',
   },
   {
-    q: 'Do I need a plain background, or can I put this on a colourful design?',
-    a: 'QR scanners need clear contrast between the code and its background, plus a quiet margin (blank space) around all four sides — at least the width of one module. Placing it on a busy photo or a low-contrast colour is the single most common reason a printed QR code fails to scan.',
+    q: 'What happens to contacts who reply STOP?',
+    a: 'They’re automatically marked opted-out and excluded from every future broadcast — this is handled for you, not something you have to remember to filter yourself.',
   },
   {
-    q: 'How do I know the QR code actually works before I print 500 copies?',
-    a: 'Print one test copy first (or scan it straight off your screen) with two or three different phones — iPhone’s camera and a couple of Android phones from different brands, since camera QR readers vary slightly in how much blur or glare they tolerate.',
+    q: 'How many people can I actually message in one broadcast?',
+    a: 'There’s no hard cap in AiSend itself — the limit is Meta’s own messaging tier for your number, which starts at 250 unique recipients per rolling 24 hours for a new number and rises automatically as you send quality messages with good delivery and low block rates.',
   },
   {
-    q: 'Can I track how many people scanned it?',
-    a: 'A plain QR code like this one can’t report scans back to you — it’s just an image encoding a link. If you need scan counts (to measure whether a print campaign is working), that requires a trackable/dynamic QR code, which is on our roadmap for AiSend.',
+    q: 'What is a message template, and why can’t I just send free text to everyone?',
+    a: 'Outside a 24-hour conversation window, WhatsApp only allows pre-approved "template" messages — this is a platform-wide anti-spam rule, not an AiSend limitation. You write the template once, Meta reviews it (usually within minutes to a few hours), and you reuse it for every broadcast.',
   },
   {
-    q: 'Does this work for WhatsApp Business accounts too, or only personal numbers?',
-    a: 'Both. A WhatsApp Business number and a personal WhatsApp number use the exact same wa.me link format, so the QR code works identically either way.',
+    q: 'Can I schedule a broadcast for later, or send it right now?',
+    a: 'Both — send immediately or schedule for a specific date and time, useful for time-zone-sensitive offers or coordinating with a launch.',
   },
 ]
 
-export default function WhatsAppQrCodePage() {
+export default function WhatsAppBulkSenderPage() {
   return (
-    <div style={{ fontFamily: 'var(--font-sans)', color: '#0b231a', background: '#f4f8f6', minHeight: '100vh' }}>
-      <SiteHeader />
+    <>
+      <div className="lp" style={{ fontFamily: "'Inter', sans-serif" }}>
+        <SiteHeader />
 
-      <main style={{ maxWidth: 1000, margin: '0 auto', padding: '48px 20px 90px' }}>
-        <div style={{ textAlign: 'center', maxWidth: 660, margin: '0 auto 40px' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,40px)', fontWeight: 800, margin: '0 0 12px', letterSpacing: '-.02em' }}>
-            Free WhatsApp QR code generator
-          </h1>
-          <p style={{ fontSize: 15.5, color: '#5b6b63', margin: 0 }}>
-            Print it, post it, package it — anyone who scans it lands straight in a chat with you on WhatsApp.
-            No app, no signup, nothing saved.
-          </p>
-        </div>
-
-        <QrCodeTool />
-
-        {/* What is it */}
-        <section style={{ marginTop: 70, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 12px' }}>
-            What is a WhatsApp QR code?
-          </h2>
-          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: '0 0 12px', maxWidth: 760 }}>
-            It’s an ordinary QR code — the same square, black-and-white pattern used for menus and payments —
-            except the link it encodes is a WhatsApp &ldquo;click-to-chat&rdquo; address (<code>wa.me/&lt;number&gt;</code>).
-            Point any phone camera at it, and instead of opening a website, it opens a WhatsApp conversation with
-            that number, with a message already typed in if you’ve set one.
-          </p>
-          <p style={{ fontSize: 14.5, lineHeight: 1.7, color: '#46584f', margin: 0, maxWidth: 760 }}>
-            The advantage over just printing your number is obvious the moment someone tries it: nobody has to
-            manually save a contact, switch apps, and remember to type in the right country code. It’s the
-            difference between a customer thinking about messaging you and actually doing it.
-          </p>
+        <section className="relative pt-16 pb-16 overflow-hidden gradient-hero-bg">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+            <span className="inline-block px-3.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-[#14523A] mb-5">
+              Official Meta Cloud API
+            </span>
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.12]">
+              Send WhatsApp messages in bulk without risking your number
+            </h1>
+            <p className="mt-5 text-base sm:text-lg text-gray-600 leading-relaxed">
+              Most &ldquo;bulk WhatsApp sender&rdquo; tools automate a browser session behind your back — and WhatsApp bans
+              numbers that do that. AiSend runs on Meta&apos;s own official API, the same one real businesses use.
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Link
+                href="/signup"
+                className="inline-flex items-center justify-center bg-[#1B6B4A] hover:bg-[#14523A] text-[#fff] font-bold text-base px-8 py-4 rounded-xl shadow-lg transition-all duration-200 transform hover:-translate-y-0.5"
+              >
+                Start sending free <span className="ml-2">→</span>
+              </Link>
+              <a href="#compare" className="inline-flex items-center text-[#14523A] font-semibold text-base">
+                See why it&apos;s safer ↓
+              </a>
+            </div>
+          </div>
         </section>
 
-        {/* Use cases */}
-        <section style={{ marginTop: 40 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 20px', textAlign: 'center' }}>
-            Where businesses actually put this
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 16 }}>
-            {USE_CASES.map((u) => (
-              <div key={u.t} style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
-                <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 6px' }}>{u.t}</h3>
-                <p style={{ fontSize: 13, lineHeight: 1.55, color: '#5b6b63', margin: 0 }}>{u.d}</p>
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10">
+            <h2 className="text-2xl font-bold">Why most bulk senders get numbers banned</h2>
+            <p className="mt-4 text-base text-gray-600 leading-relaxed max-w-3xl">
+              A lot of cheap &ldquo;WhatsApp sender&rdquo; tools work by remote-controlling a browser logged into WhatsApp
+              Web — clicking send over and over, faster than a human ever could. WhatsApp&apos;s systems are built to
+              spot exactly that pattern, and the number attached to it gets banned, sometimes permanently, with no
+              appeal. AiSend never touches WhatsApp Web. Every message goes through Meta&apos;s official Cloud API —
+              the same sanctioned channel Meta itself rate-limits and expects businesses to use.
+            </p>
+          </section>
+
+          <section id="compare" className="mt-16 scroll-mt-24">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">
+              Official API vs. a typical &ldquo;bulk sender&rdquo; tool
+            </h2>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="grid grid-cols-[1fr_110px_130px] sm:grid-cols-[1fr_140px_160px] bg-gray-50 border-b border-gray-100 px-4 sm:px-6 py-3 text-[11px] sm:text-xs font-bold uppercase tracking-wide text-gray-500">
+                <span />
+                <span className="text-center text-[#14523A]">AiSend</span>
+                <span className="text-center">Typical tool</span>
               </div>
-            ))}
-          </div>
-        </section>
-
-        {/* How to scan */}
-        <section style={{ marginTop: 40, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 16px' }}>
-            How to scan a WhatsApp QR code
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
-            <div>
-              <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 8px' }}>On an iPhone</h3>
-              <p style={{ fontSize: 13.5, lineHeight: 1.65, color: '#5b6b63', margin: 0 }}>
-                Open the built-in Camera app (no third-party scanner needed) and point it at the code. A
-                notification banner appears at the top — tap it to open WhatsApp.
-              </p>
+              {COMPARE.map((row, i) => (
+                <div
+                  key={row.label}
+                  className={`grid grid-cols-[1fr_110px_130px] sm:grid-cols-[1fr_140px_160px] items-center px-4 sm:px-6 py-3.5 text-xs sm:text-sm ${i === 0 ? '' : 'border-t border-gray-100'}`}
+                >
+                  <span className="text-gray-800">{row.label}</span>
+                  <span className={`text-center font-bold ${row.official === true ? 'text-[#14523A]' : 'text-gray-800'}`}>
+                    {row.official === true ? '✓' : row.official === false ? '—' : row.official}
+                  </span>
+                  <span className={`text-center ${row.unofficial === false ? 'text-gray-300' : 'text-red-600'}`}>
+                    {row.unofficial === true ? '✓' : row.unofficial === false ? '—' : row.unofficial}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div>
-              <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 8px' }}>On Android</h3>
-              <p style={{ fontSize: 13.5, lineHeight: 1.65, color: '#5b6b63', margin: 0 }}>
-                Most Android phones scan QR codes directly from the Camera app the same way as iPhone. If yours
-                doesn’t, open WhatsApp itself → Settings → the camera icon next to your name → Scan Code.
-              </p>
+          </section>
+
+          <section className="mt-16">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Live in three steps</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {STEPS.map((s) => (
+                <div key={s.n} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-7">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-50 text-[#14523A] font-extrabold text-sm flex items-center justify-center mb-4">
+                    {s.n}
+                  </div>
+                  <h3 className="text-base font-bold">{s.t}</h3>
+                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">{s.d}</p>
+                </div>
+              ))}
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* QR vs link */}
-        <section style={{ marginTop: 40 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 16px', textAlign: 'center' }}>
-            QR code or plain link — which one do you need?
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
-            <div style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
-              <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 8px', color: '#0f6e37' }}>Use a QR code when…</h3>
-              <p style={{ fontSize: 13.5, lineHeight: 1.65, color: '#5b6b63', margin: 0 }}>
-                Someone will encounter your number somewhere physical — a shop, a printed page, packaging, a
-                signboard — where there’s nothing to tap, only something to point a camera at.
-              </p>
+          <section className="mt-16">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Built for the businesses actually sending in bulk</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {WHO_FOR.map((v) => (
+                <div key={v.t} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <h3 className="text-base font-bold">{v.t}</h3>
+                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">{v.d}</p>
+                </div>
+              ))}
             </div>
-            <div style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 20 }}>
-              <h3 style={{ fontSize: 14.5, fontWeight: 700, margin: '0 0 8px', color: '#0f6e37' }}>Use a plain link when…</h3>
-              <p style={{ fontSize: 13.5, lineHeight: 1.65, color: '#5b6b63', margin: 0 }}>
-                Someone is already looking at a screen — your Instagram bio, a website button, an email signature.
-                A tap is faster there than opening a camera. Our{' '}
-                <Link href="/tools/whatsapp-link-generator" style={{ color: '#0f6e37', fontWeight: 700 }}>link generator</Link>{' '}
-                covers that case.
-              </p>
+          </section>
+
+          <section className="mt-16 bg-[#1B6B4A] rounded-3xl px-8 py-12 sm:px-14 sm:py-14 text-center">
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#fff]">Your customers are already on WhatsApp</h2>
+            <p className="mt-3 text-sm sm:text-base text-emerald-100">
+              Start free — 100 contacts, 2 broadcasts a month, no card required.
+            </p>
+            <Link
+              href="/signup"
+              className="mt-7 inline-flex items-center justify-center bg-[#fff] hover:bg-emerald-50 text-[#1B6B4A] font-bold text-base px-8 py-3.5 rounded-xl shadow-lg transition-colors"
+            >
+              Start free trial <span className="ml-2">→</span>
+            </Link>
+          </section>
+
+          <section className="mt-16 max-w-3xl mx-auto">
+            <h2 className="text-3xl font-extrabold tracking-tight text-center mb-10">Common questions</h2>
+            <div className="divide-y divide-gray-200 border-y border-gray-200">
+              {FAQS.map((f) => (
+                <details key={f.q} className="group py-5">
+                  <summary className="flex justify-between items-center font-semibold text-base sm:text-lg list-none cursor-pointer focus:outline-none">
+                    <span>{f.q}</span>
+                    <span className="transition group-open:rotate-180 text-gray-500">
+                      <svg fill="none" height="20" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6" /></svg>
+                    </span>
+                  </summary>
+                  <p className="text-gray-600 mt-3 text-sm sm:text-base leading-relaxed">{f.a}</p>
+                </details>
+              ))}
             </div>
-          </div>
-        </section>
-
-        {/* Printing tips */}
-        <section style={{ marginTop: 40, background: '#fff', border: '1px solid #e6ece9', borderRadius: 18, padding: 30 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, margin: '0 0 14px' }}>
-            Before you print — 4 things that make a QR code fail
-          </h2>
-          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.85, color: '#46584f' }}>
-            <li><strong>Too small.</strong> Under roughly 2 cm (0.8&Prime;) square, most phone cameras struggle at normal reading distance.</li>
-            <li><strong>Low contrast.</strong> Placing it on a busy photo, a gradient, or a colour close to the code’s own black/white breaks most scanners.</li>
-            <li><strong>No quiet margin.</strong> The blank border around the code needs to stay blank — text or graphics crowding right up to the edge confuses the scanner.</li>
-            <li><strong>Stretched from a small file.</strong> Enlarging a small saved image blurs the fine squares. Regenerate at the size you actually need instead.</li>
-          </ul>
-        </section>
-
-        {/* FAQ */}
-        <section style={{ marginTop: 50, maxWidth: 720, marginLeft: 'auto', marginRight: 'auto' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: '0 0 22px' }}>
-            Common questions
-          </h2>
-          {FAQS.map((f) => (
-            <div key={f.q} style={{ borderTop: '1px solid #e6ece9', padding: '18px 0' }}>
-              <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: '0 0 6px' }}>{f.q}</h3>
-              <p style={{ fontSize: 14, lineHeight: 1.6, color: '#5b6b63', margin: 0 }}>{f.a}</p>
-            </div>
-          ))}
-        </section>
-
-        <p style={{ marginTop: 40, textAlign: 'center', fontSize: 13, color: '#6b7c73' }}>
-          Want to know how many people actually scanned it, and reply to them automatically?{' '}
-          <Link href="/signup" style={{ color: '#0f6e37', fontWeight: 700 }}>Try AiSend free →</Link>
-        </p>
-      </main>
-
+          </section>
+        </main>
+      </div>
       <SiteFooter />
 
       <script
@@ -205,6 +217,6 @@ export default function WhatsAppQrCodePage() {
           }),
         }}
       />
-    </div>
+    </>
   )
 }

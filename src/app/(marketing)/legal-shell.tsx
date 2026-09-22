@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { ReactNode } from 'react'
+import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
 
 /**
@@ -35,16 +35,7 @@ export default function LegalShell({
         .ls-prose strong { color: ${INK}; }
       `}</style>
 
-      {/* header */}
-      <header style={{ borderBottom: '1px solid #eef2f0', background: 'rgba(255,255,255,.9)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 30 }}>
-        <div className="ls-wrap" style={{ maxWidth: 1180, display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: INK }}>
-            <div style={{ width: 32, height: 32, borderRadius: 9, background: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700 }}>C</div>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>AiSend <span style={{ color: BRAND }}>WA</span></span>
-          </Link>
-          <Link href="/" style={{ color: '#46584f', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>← Back to home</Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       {/* title band */}
       <div style={{ background: 'linear-gradient(180deg,#effaf4,#fff)', borderBottom: '1px solid #eef2f0', padding: '48px 0' }}>

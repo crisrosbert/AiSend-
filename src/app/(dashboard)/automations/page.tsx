@@ -19,13 +19,18 @@
 // live or paused, what fires it, and whether it has actually run.
 //
 // ── COLOUR ───────────────────────────────────────────────────────────
-// WhatsApp's own palette, used the way WhatsApp uses it:
-//   #25D366  the signature green — status dots, accents, tinted fills
-//   #128C7E  mid teal-green — secondary emphasis
-//   #075E54  deep teal — primary buttons, because white text on the
-//            bright green fails contrast badly (≈2.9:1). The deep tone
-//            passes AA comfortably and reads more considered.
-//   #DCF8C6  the outgoing chat-bubble green, used sparingly for chips.
+// Used to hardcode WhatsApp's own palette here (#25D366 etc.), in its
+// own local `--wa*` variables — which meant this page silently ignored
+// the app's real theme in globals.css. Now maps onto the same --brand
+// scale everything else uses, kept at three depths for the same reason
+// as before: white text on the brightest tone reads poorly, so buttons
+// carry the darkest one.
+//   --brand        the accent — status dots, borders, tinted fills
+//   --brand-deep   secondary emphasis (hover states)
+//   --brand-press  primary buttons — the brightest tone under white
+//                  text still fails contrast; the darkest passes AA
+//                  comfortably and reads more considered.
+//   --brand-100    the outgoing chat-bubble tint, used sparingly for chips.
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -391,13 +396,10 @@ function RuleCard({
 
 const css = `
 .au-rules{
-  /* WhatsApp's own palette — see the note at the top of this file for
-     why the deep teal carries the buttons rather than the bright green. */
-  --wa:#25D366;
-  --wa-mid:#128C7E;
-  --wa-deep:#075E54;
-  --wa-tint:#e8f8ef;
-  --wa-bubble:#dcf8c6;
+  /* Inherits --brand / --brand-deep / --brand-press / --brand-50 /
+     --brand-100 from :root in globals.css — see the note at the top of
+     this file for why buttons use the darkest tone rather than --brand
+     directly. */
 
   --ink:#0b1f1a;
   --muted:#5f7069;
@@ -422,7 +424,7 @@ const css = `
   background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
 .ar-head-left{display:flex;align-items:center;gap:13px}
 .ar-head-ic{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;flex-shrink:0;
-  background:var(--wa-tint);color:var(--wa-deep)}
+  background:var(--brand-50);color:var(--brand-press)}
 .ar-head h1{font-size:20px;font-weight:800}
 .ar-head p{font-size:13px;color:var(--muted);margin:3px 0 0;line-height:1.45}
 
@@ -431,24 +433,24 @@ const css = `
   font-family:inherit;font-size:13px;font-weight:700;padding:11px 18px;border-radius:11px;transition:.16s;
   white-space:nowrap;text-decoration:none}
 .ar-btn:disabled{opacity:.55;cursor:default;transform:none!important}
-.ar-btn-primary{background:var(--wa-deep);color:#fff}
-.ar-btn-primary:hover:not(:disabled){background:var(--wa-mid);transform:translateY(-1px);
+.ar-btn-primary{background:var(--brand-press);color:#fff}
+.ar-btn-primary:hover:not(:disabled){background:var(--brand-deep);transform:translateY(-1px);
   box-shadow:0 6px 16px rgba(7,94,84,.24)}
 .ar-btn-sm{padding:8px 14px;font-size:12.5px}
 .ar-icon-btn{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;flex-shrink:0;
   border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;transition:.15s}
-.ar-icon-btn:hover{background:var(--wa-tint);border-color:var(--wa);color:var(--wa-deep)}
+.ar-icon-btn:hover{background:var(--brand-50);border-color:var(--brand);color:var(--brand-press)}
 
 /* toolbar */
 .ar-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
 .ar-counts{display:flex;gap:14px}
 .ar-count{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;color:var(--muted)}
 .ar-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block}
-.ar-dot.live{background:var(--wa);box-shadow:0 0 0 3px rgba(37,211,102,.18)}
+.ar-dot.live{background:var(--brand);box-shadow:0 0 0 3px rgba(27,107,74,.18)}
 .ar-dot.off{background:#c3cfca}
 .ar-search{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);
   border-radius:11px;padding:0 14px;max-width:300px;flex:1;transition:.15s}
-.ar-search:focus-within{border-color:var(--wa);box-shadow:0 0 0 3px rgba(37,211,102,.16)}
+.ar-search:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px rgba(27,107,74,.16)}
 .ar-search svg{color:var(--faint);flex-shrink:0}
 .ar-search input{border:none;outline:none;background:none;font-family:inherit;font-size:13.5px;
   padding:10px 0;width:100%;color:var(--ink)}
@@ -463,9 +465,9 @@ const css = `
 .ar-tpl{display:flex;gap:11px;align-items:flex-start;text-align:left;background:var(--surface);
   border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;font-family:inherit;
   transition:.16s}
-.ar-tpl:hover{border-color:var(--wa);background:var(--wa-tint);transform:translateY(-1px)}
+.ar-tpl:hover{border-color:var(--brand);background:var(--brand-50);transform:translateY(-1px)}
 .ar-tpl-ic{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;flex-shrink:0;
-  background:var(--wa-tint);color:var(--wa-deep)}
+  background:var(--brand-50);color:var(--brand-press)}
 .ar-tpl:hover .ar-tpl-ic{background:#fff}
 .ar-tpl-body{min-width:0}
 .ar-tpl-body strong{display:block;font-size:13.5px;font-weight:750;font-family:"Sora",sans-serif;
@@ -480,14 +482,14 @@ const css = `
   display:flex;flex-direction:column;transition:.18s;position:relative;overflow:hidden}
 /* A live rule gets a green edge — state you can read across the grid
    without parsing any text. */
-.ar-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--wa)}
+.ar-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--brand)}
 .ar-card.paused::before{background:#dfe7e3}
 .ar-card:hover{border-color:#cfdad5;box-shadow:0 10px 30px rgba(11,31,26,.07);transform:translateY(-2px)}
 .ar-card.paused{background:#fcfdfc}
 .ar-card.paused .ar-card-body h3{color:var(--muted)}
 .ar-card-top{display:flex;gap:12px;align-items:flex-start}
 .ar-ic{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;flex-shrink:0;
-  background:var(--wa-tint);color:var(--wa-deep)}
+  background:var(--brand-50);color:var(--brand-press)}
 .ar-card.paused .ar-ic{background:#f1f5f3;color:var(--faint)}
 .ar-card-body{flex:1;min-width:0}
 .ar-card-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
@@ -495,12 +497,12 @@ const css = `
 .ar-card-desc{font-size:12.5px;color:var(--muted);margin:4px 0 0;line-height:1.5}
 .ar-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;padding:3px 9px;
   border-radius:99px;white-space:nowrap;flex-shrink:0}
-.ar-pill.live{background:var(--wa-tint);color:var(--wa-deep)}
+.ar-pill.live{background:var(--brand-50);color:var(--brand-press)}
 .ar-pill.off{background:#f1f5f3;color:var(--faint)}
 .ar-chips{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 8px;flex:1;align-content:flex-start}
 .ar-chip{font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:99px;white-space:nowrap}
-.ar-chip.trigger{background:var(--wa-bubble);color:#2f5233}
-.ar-chip.runs{background:var(--wa-tint);color:var(--wa-deep)}
+.ar-chip.trigger{background:var(--brand-100);color:#2f5233}
+.ar-chip.runs{background:var(--brand-50);color:var(--brand-press)}
 .ar-chip.quiet{background:#fdf4e7;color:#a1660b}
 .ar-meta{font-size:11px;color:var(--faint);margin:0 0 14px}
 .ar-card-actions{display:flex;gap:8px;align-items:center}
@@ -509,8 +511,8 @@ const css = `
 /* toggle */
 .ar-toggle{position:relative;width:42px;height:24px;border-radius:99px;background:#d5ded9;border:none;
   cursor:pointer;transition:.2s;flex-shrink:0;padding:0}
-.ar-toggle.on{background:var(--wa)}
-.ar-toggle:focus-visible{outline:2px solid var(--wa-deep);outline-offset:2px}
+.ar-toggle.on{background:var(--brand)}
+.ar-toggle:focus-visible{outline:2px solid var(--brand-press);outline-offset:2px}
 .ar-knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;
   transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.24)}
 .ar-toggle.on .ar-knob{left:21px}
@@ -519,7 +521,7 @@ const css = `
 .ar-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:56px 20px;
   background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
 .ar-empty-ic{display:grid;place-items:center;width:56px;height:56px;border-radius:17px;
-  background:var(--wa-tint);color:var(--wa-deep);margin-bottom:4px}
+  background:var(--brand-50);color:var(--brand-press);margin-bottom:4px}
 .ar-empty h3{font-size:16px;font-weight:750}
 .ar-empty p{font-size:13px;color:var(--muted);max-width:340px;line-height:1.55;margin:0 0 10px}
 

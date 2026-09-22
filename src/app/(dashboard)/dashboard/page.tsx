@@ -132,7 +132,7 @@ export default function DashboardPage() {
         <KpiCard icon={<MessageSquare size={18} />} tint="green"
           label="Active Chats" value={metrics?.activeConversations.current ?? 0}
           delta={metrics?.activeConversations.previous ?? 0}
-          spark={incomingSpark} sparkColor="#16a34a" loading={loading} />
+          spark={incomingSpark} sparkColor="#1B6B4A" loading={loading} />
         <KpiCard icon={<Users size={18} />} tint="blue"
           label="New Contacts" value={metrics?.newContactsToday.current ?? 0}
           delta={(metrics?.newContactsToday.current ?? 0) - (metrics?.newContactsToday.previous ?? 0)}
@@ -361,7 +361,7 @@ function Step({ state, title, desc }: { state: "done" | "pending" | "reward"; ti
       </div>
       <div className="cwa-step-title">{title}</div>
       {state !== "reward" && (
-        <div className="cwa-step-state" style={{ color: state === "done" ? "#34c77b" : "#fbbf24" }}>
+        <div className="cwa-step-state" style={{ color: state === "done" ? "var(--mint)" : "#fbbf24" }}>
           {state === "done" ? "DONE" : "PENDING"}
         </div>
       )}
@@ -372,7 +372,13 @@ function Step({ state, title, desc }: { state: "done" | "pending" | "reward"; ti
 
 const cssStyles = `
 .cwa-dash{
-  --brand:#16a34a;--brand-deep:#15803d;--brand-50:#f0fdf4;--brand-100:#dcfce7;
+  /* --brand / --brand-deep / --brand-50 / --brand-100 / --brand-press
+     used to be redeclared here with their own hardcoded green (#16a34a),
+     completely separate from the app's real theme in globals.css. That's
+     why editing globals.css never changed this page: this block was its
+     own island. Removed on purpose — these now inherit straight from
+     :root in globals.css, so this page follows the same brand color as
+     everywhere else with zero extra edits here. */
   --blue:#2563eb;--blue-50:#eff6ff;--violet:#7c3aed;--violet-50:#f5f3ff;
   --amber:#d97706;--amber-50:#fffbeb;--pink:#db2777;--pink-50:#fdf2f8;
   --teal:#0d9488;--teal-50:#f0fdfa;
@@ -383,7 +389,7 @@ const cssStyles = `
 .cwa-dash h1,.cwa-dash h2,.cwa-dash h3,.cwa-dash h4,.cwa-dash h5{font-family:"Sora","Plus Jakarta Sans",sans-serif;letter-spacing:-.02em;margin:0}
 .cwa-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
 .cwa-section-label{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--muted);text-transform:uppercase;margin:4px 2px}
-.cwa-banner{border-radius:var(--r);padding:15px 18px;color:#fff;background:linear-gradient(120deg,#16a34a,#15803d 60%,#14532d);display:flex;align-items:center;gap:13px;box-shadow:var(--shadow);position:relative;overflow:hidden;margin-bottom:16px}
+.cwa-banner{border-radius:var(--r);padding:15px 18px;color:#fff;background:linear-gradient(120deg,var(--brand),var(--brand-deep) 60%,var(--brand-press));display:flex;align-items:center;gap:13px;box-shadow:var(--shadow);position:relative;overflow:hidden;margin-bottom:16px}
 .cwa-banner::after{content:"";position:absolute;right:-30px;top:-50px;width:170px;height:170px;border-radius:50%;background:rgba(255,255,255,.08)}
 .cwa-banner-emoji{display:grid;place-items:center;flex-shrink:0}
 .cwa-banner-text{flex:1;min-width:0}
@@ -394,7 +400,7 @@ const cssStyles = `
 .cwa-btn{border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:12.5px;padding:9px 15px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:.18s;white-space:nowrap;flex-shrink:0;text-decoration:none}
 .cwa-btn-sm{font-size:12px;padding:8px 14px}
 .cwa-btn-full{width:100%}
-.cwa-btn-primary{background:var(--brand);color:#fff;box-shadow:0 5px 16px rgba(22,163,74,.3)}
+.cwa-btn-primary{background:var(--brand);color:#fff;box-shadow:0 5px 16px rgba(27,107,74,.3)}
 .cwa-btn-primary:hover{background:var(--brand-deep);transform:translateY(-1px)}
 .cwa-btn-white{background:#fff;color:var(--brand-deep);box-shadow:0 5px 16px rgba(0,0,0,.16)}
 .cwa-btn-dark{background:var(--ink);color:#fff}
@@ -429,7 +435,7 @@ const cssStyles = `
 .cwa-badge-red{background:#fef2f2;color:#dc2626}
 .cwa-badge-muted{background:#f1f5f9;color:#64748b}
 .cwa-stat-big{font-family:"Sora";font-size:22px;font-weight:800}
-.cwa-steps-card{padding:18px 16px;background:linear-gradient(135deg,#15803d,#14532d);color:#fff;border:none}
+.cwa-steps-card{padding:18px 16px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-press));color:#fff;border:none}
 @media(min-width:480px){.cwa-steps-card{padding:20px 22px}}
 .cwa-steps-head{display:flex;align-items:flex-start;gap:9px;margin-bottom:16px}
 .cwa-bag{flex-shrink:0;margin-top:1px;color:#fbbf24}
@@ -439,7 +445,7 @@ const cssStyles = `
 .cwa-step{display:flex;flex-direction:column;align-items:center;text-align:center;flex:1;position:relative;z-index:2;gap:5px}
 .cwa-step-circle{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px}
 @media(min-width:480px){.cwa-step-circle{width:32px;height:32px}}
-.cwa-step-done .cwa-step-circle{background:#34c77b;color:#06351f}
+.cwa-step-done .cwa-step-circle{background:var(--mint);color:var(--brand-press)}
 .cwa-step-pending .cwa-step-circle{background:#fbbf24;color:#3a2900}
 .cwa-step-reward .cwa-step-circle{background:rgba(255,255,255,.2);color:#fff}
 .cwa-step-title{font-size:9px;font-weight:700;opacity:.92;line-height:1.2}
@@ -450,7 +456,7 @@ const cssStyles = `
 @media(min-width:480px){.cwa-step-desc{font-size:10px}}
 .cwa-track{position:absolute;top:14px;left:9%;right:9%;height:3px;background:rgba(255,255,255,.18);z-index:1}
 @media(min-width:480px){.cwa-track{top:16px}}
-.cwa-track-fill{height:100%;width:15%;background:#34c77b;border-radius:3px}
+.cwa-track-fill{height:100%;width:15%;background:var(--mint);border-radius:3px}
 .cwa-feature-grid{display:grid;grid-template-columns:1fr;gap:10px}
 @media(min-width:560px){.cwa-feature-grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1100px){.cwa-feature-grid{grid-template-columns:repeat(3,1fr)}}
@@ -496,7 +502,7 @@ const cssStyles = `
 .cwa-empty h5{font-size:15px}
 .cwa-empty p{font-size:12.5px;color:var(--muted);max-width:260px;line-height:1.5;margin:0 0 6px}
 .cwa-profile{display:flex;align-items:center;gap:12px;padding:16px 18px}
-.cwa-profile-pic{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#4ade80,#16a34a);flex-shrink:0;display:grid;place-items:center;color:#053b2a;font-weight:800;font-family:"Sora";font-size:18px}
+.cwa-profile-pic{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--mint),var(--brand));flex-shrink:0;display:grid;place-items:center;color:var(--brand-press);font-weight:800;font-family:"Sora";font-size:18px}
 .cwa-profile-meta{min-width:0}
 .cwa-num{font-family:"Sora";font-weight:800;font-size:15px}
 .cwa-ptag{font-size:10px;font-weight:800;color:var(--muted);letter-spacing:.05em}

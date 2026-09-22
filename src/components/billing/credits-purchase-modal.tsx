@@ -103,7 +103,7 @@ export function CreditsPurchaseModal({
           name: "AiSend",
           description: `Conversation credits recharge ₹${amount}`,
           order_id: data.order.id,
-          theme: { color: "#16a34a" },
+          theme: { color: "#1B6B4A" },
           handler: async (resp: Record<string, string>) => {
             // Verify + credit on the server.
             const v = await fetch("/api/billing/verify", {
@@ -241,35 +241,35 @@ const styles = `
 @keyframes ccPop{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
 .cc-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #eef2f0;position:sticky;top:0;background:#fff;z-index:1}
 .cc-head-title{display:flex;align-items:center;gap:9px;font-size:14.5px;font-weight:800;color:#0f172a;font-family:"Sora",sans-serif;letter-spacing:-.01em}
-.cc-head-ic{width:28px;height:28px;border-radius:8px;background:#f0fdf4;color:#15803d;display:grid;place-items:center;flex-shrink:0}
+.cc-head-ic{width:28px;height:28px;border-radius:8px;background:var(--brand-50);color:var(--brand-deep);display:grid;place-items:center;flex-shrink:0}
 .cc-x{background:#f1f5f9;border:none;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;cursor:pointer;color:#64748b;transition:.15s}
 .cc-x:hover{background:#e2e8f0;color:#0f172a}
 .cc-body{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
 .cc-balance{font-size:12.5px;color:#64748b;background:#f8fafc;border:1px solid #eef2f0;border-radius:10px;padding:9px 13px}
-.cc-balance strong{color:#15803d;font-family:"Sora";font-weight:800;margin-left:4px}
+.cc-balance strong{color:var(--brand-deep);font-family:"Sora";font-weight:800;margin-left:4px}
 .cc-card{border:1px solid #eef2f0;border-radius:14px;padding:16px}
 .cc-label{font-size:14px;font-weight:800;color:#0f172a;font-family:"Sora";display:block}
 .cc-label-sm{font-size:12px;font-weight:700;color:#475569;display:flex;align-items:center;gap:4px;margin:10px 0 5px}
 .cc-label-sm svg{color:#94a3b8}
 .cc-hint{font-size:11.5px;color:#94a3b8;margin:3px 0 12px;line-height:1.4}
 .cc-input-wrap{display:flex;align-items:center;border:1.5px solid #e2e8f0;border-radius:11px;padding:0 13px;transition:.15s}
-.cc-input-wrap:focus-within{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.1)}
+.cc-input-wrap:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px rgba(27,107,74,.1)}
 .cc-input-wrap.sm{padding:0 11px}
 .cc-rupee{color:#64748b;font-weight:700;font-size:15px}
 .cc-input{border:none;outline:none;padding:11px 8px;font-size:15px;font-weight:700;width:100%;font-family:"Sora",sans-serif;color:#0f172a;background:transparent}
 .cc-input:disabled{color:#94a3b8}
 .cc-presets{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:11px}
 .cc-preset{border:1.5px solid #e2e8f0;background:#fff;border-radius:9px;padding:8px 4px;font-size:11.5px;font-weight:700;color:#475569;cursor:pointer;transition:.15s;font-family:inherit;white-space:nowrap}
-.cc-preset:hover{border-color:#16a34a;color:#15803d}
-.cc-preset.active{background:#f0fdf4;border-color:#16a34a;color:#15803d}
-.cc-bonus{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#15803d;background:#f0fdf4;border-radius:9px;padding:8px 11px;margin-top:11px}
+.cc-preset:hover{border-color:var(--brand);color:var(--brand-deep)}
+.cc-preset.active{background:var(--brand-50);border-color:var(--brand);color:var(--brand-deep)}
+.cc-bonus{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--brand-deep);background:var(--brand-50);border-radius:9px;padding:8px 11px;margin-top:11px}
 .cc-bonus svg{color:#f59e0b}
-.cc-buy{width:100%;margin-top:13px;background:#16a34a;color:#fff;border:none;border-radius:11px;padding:13px;font-size:14px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:.16s;font-family:inherit;box-shadow:0 6px 18px rgba(22,163,74,.3)}
-.cc-buy:hover:not(:disabled){background:#15803d;transform:translateY(-1px)}
+.cc-buy{width:100%;margin-top:13px;background:var(--brand);color:#fff;border:none;border-radius:11px;padding:13px;font-size:14px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:.16s;font-family:inherit;box-shadow:0 6px 18px rgba(27,107,74,.3)}
+.cc-buy:hover:not(:disabled){background:var(--brand-deep);transform:translateY(-1px)}
 .cc-buy:disabled{opacity:.7;cursor:default}
 .cc-auto-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:800;color:#0f172a;font-family:"Sora"}
 .cc-toggle{width:42px;height:24px;border-radius:99px;background:#cbd5e1;border:none;cursor:pointer;position:relative;transition:.2s;padding:0}
-.cc-toggle.on{background:#16a34a}
+.cc-toggle.on{background:var(--brand)}
 .cc-knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 .cc-toggle.on .cc-knob{left:21px}
 .cc-auto-body.disabled{opacity:.55}

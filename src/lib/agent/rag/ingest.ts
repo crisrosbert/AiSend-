@@ -8,6 +8,7 @@
 //   - POST /api/agent/ingest  (API route that calls this)
 
 import { createClient } from '@supabase/supabase-js'
+import { embedBatch, hasEmbeddingKey } from './embed'
 
 // Untyped admin client (cast to any) — same pattern as runner.ts.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -114,11 +115,39 @@ export async function ingestSource(
     }))
 
     const BATCH = 50
+
+    // 4b. Embed each chunk, in the same batches as the insert below.
+    //
+    // Vector search is a pure upgrade over the full-text search that
+    // already runs: a chunk with no embedding just keeps answering the
+    // old way, so a missing OPENAI_API_KEY or a failed embeddings call
+    // degrades this to what ingest already did before today, not to an
+    // ingest failure. One request per batch rather than per chunk — a
+    // 40-chunk site costs one or two calls, not forty.
+    const embeddings: (number[] | null)[] = new Array(rows.length).fill(null)
+    if (hasEmbeddingKey()) {
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const slice = rows.slice(i, i + BATCH)
+        try {
+          const vectors = await embedBatch(slice.map((row) => row.content))
+          vectors.forEach((vector, j) => {
+            embeddings[i + j] = vector
+          })
+        } catch (err) {
+          console.error('[rag/ingest] embedding batch failed, storing without vectors:', err)
+        }
+      }
+    }
+
     let inserted = 0
     for (let i = 0; i < rows.length; i += BATCH) {
+      const slice = rows.slice(i, i + BATCH).map((row, j) => ({
+        ...row,
+        embedding: embeddings[i + j],
+      }))
       const { error } = await db()
         .from('agent_kb_chunks')
-        .insert(rows.slice(i, i + BATCH))
+        .insert(slice)
       if (error) {
         console.error('[rag/ingest] batch insert error:', error.message)
       } else {

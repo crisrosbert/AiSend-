@@ -1,12 +1,22 @@
 // src/lib/agent/rag/retrieve.ts
 //
-// Phase 1: full-text keyword search via Postgres tsvector/tsquery.
-// Phase 2: vector similarity via pgvector (uncomment when ready).
+// Phase 1: vector similarity via pgvector — matches on meaning, so
+//          "do you take walk-ins?" can find a page that only ever says
+//          "appointments welcome, no booking required". Needs
+//          OPENAI_API_KEY and 010_kb_chunk_embeddings.sql applied.
+// Phase 2: full-text keyword search via Postgres tsvector/tsquery —
+//          the original implementation, still what answers every query
+//          until the phase 1 migration is applied, and still what
+//          answers when phase 1 finds nothing (a chunk stored before
+//          010_kb_chunk_embeddings.sql has no embedding yet).
+// Phase 3: plain ILIKE, if even the full-text RPC isn't installed.
 //
 // Called by: src/lib/agent/tools/knowledge-base-tools.ts
-// Database:  agent_kb_chunks (created in 015_agent_tables.sql)
+// Database:  agent_kb_chunks (created in 015_agent_tables.sql, embedding
+//            column added in 2026_09_23_kb_chunk_embeddings.sql)
 
 import { createClient } from '@supabase/supabase-js'
+import { embedText, hasEmbeddingKey } from './embed'
 
 // Untyped admin client. We cast to `any` because this project does not
 // generate Supabase types — same pattern as src/lib/journeys/runner.ts.
@@ -55,9 +65,12 @@ export interface KnowledgeChunk {
 /**
  * Find the most relevant knowledge chunks for a query.
  *
- * Phase 1 — keyword search using Postgres full-text search.
- * Works out of the box with no extra extensions. Good for FAQs,
- * pricing, timings, policies — structured SMB content.
+ * Phase 1 — vector similarity, when OPENAI_API_KEY is set. Matches on
+ * meaning: "walk-ins?" can find a page that only ever says "no booking
+ * required" without sharing a single word with the question.
+ * Phase 2 — Postgres full-text search, always available, and what
+ * answers when phase 1 is unconfigured or finds nothing (a chunk stored
+ * before the embedding column existed has no vector yet).
  *
  * Returns empty array (never throws) so the agent can gracefully
  * fall back to its base knowledge when no chunks match.
@@ -76,7 +89,11 @@ export async function retrieve(
     // else's business.
     if (args.journeyId === null) return []
 
-    // ── Phase 1: Postgres full-text search via RPC ──
+    // ── Phase 1: vector similarity via pgvector ──
+    const vectorResults = await tryVectorSearch(args, max)
+    if (vectorResults && vectorResults.length > 0) return vectorResults
+
+    // ── Phase 2: Postgres full-text search via RPC ──
     const { data, error } = await db().rpc('search_kb_chunks', {
       p_tenant_id: args.tenantId,
       p_journey_id: args.journeyId ?? null,
@@ -104,6 +121,57 @@ export async function retrieve(
     console.error('[rag/retrieve] unhandled error:', err)
     return []
   }
+}
+
+/**
+ * Vector similarity via the match_kb_chunks RPC
+ * (2026_09_23_kb_chunk_embeddings.sql).
+ *
+ * Returns null — not [] — for "vector search isn't available right
+ * now", so the caller knows to fall through to full-text search rather
+ * than reporting a genuine zero-match empty answer. An empty array
+ * means "asked pgvector, it found nothing"; null means "didn't get to
+ * ask" (no key, RPC missing, embedding call failed).
+ */
+async function tryVectorSearch(
+  args: RetrieveArgs,
+  max: number,
+): Promise<KnowledgeChunk[] | null> {
+  if (!hasEmbeddingKey()) return null
+
+  let queryEmbedding: number[]
+  try {
+    queryEmbedding = await embedText(args.query)
+  } catch (err) {
+    console.error('[rag/retrieve] query embedding failed:', err)
+    return null
+  }
+
+  const { data, error } = await db().rpc('match_kb_chunks', {
+    p_tenant_id: args.tenantId,
+    p_journey_id: args.journeyId ?? null,
+    p_query_embedding: queryEmbedding,
+    p_max: max,
+  })
+
+  if (error) {
+    // Expected until 2026_09_23_kb_chunk_embeddings.sql is applied —
+    // logged at a lower level than the full-text error below, since
+    // this one is the normal state for every tenant until they migrate.
+    console.warn('[rag/retrieve] vector search unavailable:', error.message)
+    return null
+  }
+
+  if (!data) return null
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map((row) => ({
+    id: row.id,
+    content: row.content,
+    sourceId: row.source_id,
+    chunkIndex: row.chunk_index,
+    score: row.rank,
+  }))
 }
 
 /**

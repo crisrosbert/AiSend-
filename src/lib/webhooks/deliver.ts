@@ -78,14 +78,37 @@ interface SendResult {
   statusCode: number | null
   error: string | null
   retryable: boolean
+  /** Seconds the receiver asked us to wait, from a Retry-After header.
+   *  Overrides our own backoff schedule when present — respecting it
+   *  is what keeps a rate-limited receiver from being hit again before
+   *  it's ready. */
+  retryAfterSeconds: number | null
 }
+
+/** Retry-After is either delta-seconds ("120") or an HTTP-date. Returns
+ *  null for anything else, including a date that's already past. */
+function parseRetryAfter(header: string | null): number | null {
+  if (!header) return null
+  const asSeconds = Number(header)
+  if (Number.isFinite(asSeconds) && asSeconds >= 0) return Math.min(asSeconds, 3600)
+  const asDate = Date.parse(header)
+  if (Number.isNaN(asDate)) return null
+  const deltaMs = asDate - Date.now()
+  return deltaMs > 0 ? Math.min(Math.ceil(deltaMs / 1000), 3600) : null
+}
+
+/** Status codes worth retrying, beyond plain 5xx — matches the set
+ *  Wassist documents: 429 (rate limited), 408 (request timeout), 425
+ *  (too early). Any other 4xx means the receiver rejected this exact
+ *  request on purpose, and retrying won't change that. */
+const RETRYABLE_4XX = new Set([408, 425, 429])
 
 async function sendOnce(delivery: DeliveryRow, endpoint: EndpointRow): Promise<SendResult> {
   let secret: string
   try {
     secret = decrypt(endpoint.secret_encrypted)
   } catch (err) {
-    return { ok: false, statusCode: null, error: `secret decrypt failed: ${err}`, retryable: false }
+    return { ok: false, statusCode: null, error: `secret decrypt failed: ${err}`, retryable: false, retryAfterSeconds: null }
   }
 
   const rawBody = JSON.stringify(delivery.payload)
@@ -107,20 +130,22 @@ async function sendOnce(delivery: DeliveryRow, endpoint: EndpointRow): Promise<S
       signal: controller.signal,
     })
     if (res.ok) {
-      return { ok: true, statusCode: res.status, error: null, retryable: false }
+      return { ok: true, statusCode: res.status, error: null, retryable: false, retryAfterSeconds: null }
     }
-    // Only server errors are worth retrying — a 4xx is the receiver
-    // telling us, deliberately, that this exact request is wrong.
-    const retryable = res.status >= 500
+    // Server errors, and the specific 4xx codes above, are worth
+    // retrying. Any other 4xx is the receiver telling us, deliberately,
+    // that this exact request is wrong — retrying won't change that.
+    const retryable = res.status >= 500 || RETRYABLE_4XX.has(res.status)
     return {
       ok: false,
       statusCode: res.status,
       error: `HTTP ${res.status}`,
       retryable,
+      retryAfterSeconds: retryable ? parseRetryAfter(res.headers.get('retry-after')) : null,
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    return { ok: false, statusCode: null, error: message, retryable: true }
+    return { ok: false, statusCode: null, error: message, retryable: true, retryAfterSeconds: null }
   } finally {
     clearTimeout(timeout)
   }
@@ -160,7 +185,10 @@ async function recordOutcome(
   const exhausted = !result.retryable || attemptCount >= MAX_ATTEMPTS
 
   if (!exhausted) {
-    const backoffSeconds = RETRY_BACKOFF_SECONDS[attemptCount - 1] ?? RETRY_BACKOFF_SECONDS.at(-1)!
+    const ourBackoff = RETRY_BACKOFF_SECONDS[attemptCount - 1] ?? RETRY_BACKOFF_SECONDS.at(-1)!
+    // A receiver-supplied Retry-After wins over our own schedule — it's
+    // the receiver telling us specifically when it'll be ready again.
+    const backoffSeconds = result.retryAfterSeconds ?? ourBackoff
     const nextAttemptAt = new Date(Date.now() + backoffSeconds * 1000).toISOString()
     await admin
       .from('webhook_deliveries')

@@ -10,6 +10,16 @@ export const WEBHOOK_EVENT_TYPES = [
   'message.sent',
   'message.status_updated',
   'conversation.created',
+  // Fired instead of message.received, to exactly one endpoint, when a
+  // conversation has been subscribed for BYOA routing (see routing.ts)
+  // — the agent/journey/automation pipeline does not run for it.
+  'subscription.message.received',
+  'subscription.activated',
+  'subscription.revoked',
+  // Never emitted by real activity — only by the "Send test event"
+  // button, so a developer can verify their receiver without waiting
+  // for a real WhatsApp message.
+  'test.ping',
 ] as const
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number]
@@ -56,3 +66,16 @@ export interface MessageReceivedPayload {
     ctwaClid: string | null
   } | null
 }
+
+/** subscription.message.received payload — message.received's fields
+ *  plus which webhook this conversation is routed to. */
+export interface SubscriptionMessageReceivedPayload extends MessageReceivedPayload {
+  routing: 'webhook'
+  webhookId: string
+}
+
+export interface SubscriptionChangedPayload {
+  conversationId: string
+  webhookId: string
+}
+

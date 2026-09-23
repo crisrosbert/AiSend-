@@ -9,8 +9,8 @@ import { runJourneysForInbound } from '@/lib/journeys/runner'
 import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
 import { handleWhatsAppMessage } from '@/lib/whatsapp-agent/handler'
 import { handleInboundConsent } from '@/lib/optin/manager'
-import { emitWebhookEvent } from '@/lib/webhooks/dispatch'
-import type { MessageReceivedPayload } from '@/lib/webhooks/events'
+import { emitWebhookEvent, emitWebhookEventToEndpoint } from '@/lib/webhooks/dispatch'
+import type { MessageReceivedPayload, SubscriptionMessageReceivedPayload } from '@/lib/webhooks/events'
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _adminClient: any = null
@@ -542,16 +542,41 @@ async function processMessage(
   }
   await flagBroadcastReplyIfAny(userId, contactRecord.id)
 
-  // ── OUTBOUND WEBHOOKS ──
-  // Fan this message out to any third-party endpoint the tenant has
-  // registered (src/lib/webhooks). Best-effort: a subscriber that's
-  // down or slow must never affect message delivery or the agent
-  // reply below, so failures here are swallowed after logging. Keyed
-  // on Meta's own message id, so a Meta webhook retry (same message,
-  // second POST) can't create a second delivery per endpoint.
+  const inboundText = contentText ?? message.text?.body ?? ''
+  // ── OPT-IN / OPT-OUT (compliance) ──
+  // Honor STOP/START immediately, and regardless of BYOA routing below
+  // — AiSend is the platform of record with Meta, so this stays ours
+  // even when a conversation has been handed off. If the message was a
+  // consent keyword, record it and stop — don't run agents/journeys/
+  // webhooks on it.
+  const consentHandled = await handleInboundConsent({
+    userId,
+    contactId: contactRecord.id,
+    phone: senderPhone,
+    inboundText,
+  })
+  if (consentHandled) return
+
+  const referral = message.referral ?? null
+
+  // ── OUTBOUND WEBHOOKS / BYOA ROUTING ──
+  // Best-effort: a subscriber that's down or slow must never affect
+  // message delivery or the agent reply below, so failures here are
+  // swallowed after logging. Keyed on Meta's own message id, so a Meta
+  // webhook retry (same message, second POST) can't create a second
+  // delivery per endpoint.
+  //
+  // A conversation "subscribed" to an endpoint (routing_mode='webhook',
+  // set via /api/webhooks/conversations/[id]/subscribe — the BYOA
+  // handoff, mirroring Wassist's conversations.subscribe) gets
+  // subscription.message.received sent to that ONE endpoint instead of
+  // the normal fan-out, and AiSend's own ads agent/journeys/AI
+  // agent/automation replies are skipped for it entirely — the
+  // developer's own backend owns the reply from here.
+  const isWebhookRouted =
+    conversation.routing_mode === 'webhook' && !!conversation.routing_endpoint_id
   try {
-    const referral = message.referral
-    const payload: MessageReceivedPayload = {
+    const basePayload: MessageReceivedPayload = {
       conversationId: conversation.id,
       contact: {
         id: contactRecord.id,
@@ -574,31 +599,36 @@ async function processMessage(
           }
         : null,
     }
-    await emitWebhookEvent({
-      userId,
-      type: 'message.received',
-      data: payload,
-      eventId: message.id,
-    })
+    if (isWebhookRouted) {
+      const subPayload: SubscriptionMessageReceivedPayload = {
+        ...basePayload,
+        routing: 'webhook',
+        webhookId: conversation.routing_endpoint_id,
+      }
+      await emitWebhookEventToEndpoint({
+        userId,
+        endpointId: conversation.routing_endpoint_id,
+        type: 'subscription.message.received',
+        data: subPayload,
+        eventId: message.id,
+      })
+    } else {
+      await emitWebhookEvent({
+        userId,
+        type: 'message.received',
+        data: basePayload,
+        eventId: message.id,
+      })
+    }
   } catch (err) {
     console.error('[webhooks] message.received emit failed:', err)
   }
 
-  const inboundText = contentText ?? message.text?.body ?? ''
-  // ── OPT-IN / OPT-OUT (compliance) ──
-  // Honor STOP/START immediately. If the message was a consent keyword,
-  // record it and stop — don't run agents/journeys on it.
-  const consentHandled = await handleInboundConsent({
-    userId,
-    contactId: contactRecord.id,
-    phone: senderPhone,
-    inboundText,
-  })
-  if (consentHandled) return
+  if (isWebhookRouted) return
+
   // ── ADS AI MODULE (separate, sellable, gated per client) ──
   // If this client bought the ads agent AND this is an ad lead, the AI
   // module handles it and we SKIP the normal journey/automation path.
-  const referral = message.referral ?? null
   const isAdLead = !!(referral && (referral.source_id || referral.source_type === 'ad'))
   if (adsAgentEnabled && adsAgentId && isAdLead) {
     const handled = await handleAdLead({

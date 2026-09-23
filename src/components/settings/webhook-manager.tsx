@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, Trash2, RefreshCw, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
+import { Plus, Trash2, RefreshCw, ChevronDown, ChevronUp, Copy, Check, Send, Search, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -238,6 +238,26 @@ export function WebhookManager() {
     }
   }
 
+  const [testingId, setTestingId] = useState<string | null>(null)
+
+  async function sendTestEvent(id: string) {
+    setTestingId(id)
+    try {
+      const res = await fetch(`/api/webhooks/endpoints/${id}/test`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      const status = data.delivery?.status
+      if (status === 'succeeded') toast.success('Test event delivered')
+      else toast.error(`Test event ${status ?? 'not delivered'} — check the delivery log below`)
+      if (expandedId === id) setExpandedId(null) // force remount so the log refetches
+      setTimeout(() => setExpandedId(id), 0)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send test event')
+    } finally {
+      setTestingId(null)
+    }
+  }
+
   async function toggleActive(endpoint: Endpoint) {
     try {
       const res = await fetch(`/api/webhooks/endpoints/${endpoint.id}`, {
@@ -375,6 +395,15 @@ export function WebhookManager() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => sendTestEvent(ep.id)}
+                        disabled={testingId === ep.id || !ep.is_active}
+                        title="Send test event"
+                        className="rounded-md p-1.5 text-slate-400 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40"
+                      >
+                        <Send className={`size-4 ${testingId === ep.id ? 'animate-pulse' : ''}`} />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => rotateSecret(ep.id)}
                         title="Rotate secret"
                         className="rounded-md p-1.5 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
@@ -410,6 +439,195 @@ export function WebhookManager() {
                     </div>
                   </div>
                   {expanded && <DeliveryLog endpointId={ep.id} />}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <ConversationRouting endpoints={endpoints.filter((e) => e.is_active)} />
+    </div>
+  )
+}
+
+interface RoutedConversation {
+  id: string
+  routing_mode: 'agent' | 'webhook'
+  routing_endpoint_id: string | null
+  contacts: { name: string | null; phone: string } | { name: string | null; phone: string }[]
+}
+
+function contactOf(c: RoutedConversation) {
+  return Array.isArray(c.contacts) ? c.contacts[0] : c.contacts
+}
+
+/**
+ * BYOA handoff — Wassist's `conversations.subscribe`/`unsubscribe`.
+ * Routes one conversation to a developer's own backend: AiSend's own
+ * agent/journey/automation replies stop for it (see the routing check
+ * in src/app/api/whatsapp/webhook/route.ts), and the developer's
+ * endpoint gets subscription.message.received instead of the normal
+ * message.received fan-out.
+ */
+function ConversationRouting({ endpoints }: { endpoints: Endpoint[] }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<RoutedConversation[]>([])
+  const [searching, setSearching] = useState(false)
+  const [subscribed, setSubscribed] = useState<RoutedConversation[]>([])
+  const [loadingSubscribed, setLoadingSubscribed] = useState(true)
+  const [pickedEndpoint, setPickedEndpoint] = useState<Record<string, string>>({})
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const loadSubscribed = useCallback(async () => {
+    setLoadingSubscribed(true)
+    try {
+      const res = await fetch('/api/webhooks/conversations')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setSubscribed(data.conversations ?? [])
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load subscribed conversations')
+    } finally {
+      setLoadingSubscribed(false)
+    }
+  }, [])
+
+  useEffect(() => { loadSubscribed() }, [loadSubscribed])
+
+  async function search() {
+    if (!query.trim()) return
+    setSearching(true)
+    try {
+      const res = await fetch(`/api/webhooks/conversations?q=${encodeURIComponent(query.trim())}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setResults(data.conversations ?? [])
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Search failed')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  async function subscribe(conversationId: string) {
+    const endpointId = pickedEndpoint[conversationId]
+    if (!endpointId) {
+      toast.error('Pick an endpoint first')
+      return
+    }
+    setBusyId(conversationId)
+    try {
+      const res = await fetch(`/api/webhooks/conversations/${conversationId}/subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint_id: endpointId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success('Conversation handed off — AiSend will no longer auto-reply on it')
+      setResults((r) => r.map((c) => (c.id === conversationId ? { ...c, routing_mode: 'webhook', routing_endpoint_id: endpointId } : c)))
+      await loadSubscribed()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to subscribe')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function unsubscribe(conversationId: string) {
+    setBusyId(conversationId)
+    try {
+      const res = await fetch(`/api/webhooks/conversations/${conversationId}/unsubscribe`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success('Conversation handed back to AiSend')
+      setResults((r) => r.map((c) => (c.id === conversationId ? { ...c, routing_mode: 'agent', routing_endpoint_id: null } : c)))
+      await loadSubscribed()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to unsubscribe')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#e7ece9] bg-white p-6 shadow-sm">
+      <h2 className="text-base font-bold text-[#0c1f17]">Conversation routing (BYOA)</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Hand one conversation entirely to your own backend — AiSend&apos;s agent, journeys and
+        automations stop replying on it, and your endpoint gets every message instead.
+      </p>
+
+      <div className="mt-4 flex gap-2">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && search()}
+          placeholder="Search by contact name or phone"
+        />
+        <Button type="button" variant="outline" onClick={search} disabled={searching}>
+          <Search className="size-4" /> Search
+        </Button>
+      </div>
+
+      {results.length > 0 && (
+        <div className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-100">
+          {results.map((c) => {
+            const contact = contactOf(c)
+            const isWebhook = c.routing_mode === 'webhook'
+            return (
+              <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-800">{contact?.name || contact?.phone}</p>
+                  <p className="text-xs text-slate-400">{contact?.phone}</p>
+                </div>
+                {isWebhook ? (
+                  <Button type="button" variant="outline" size="sm" disabled={busyId === c.id} onClick={() => unsubscribe(c.id)}>
+                    <Unlink className="size-3.5" /> Unsubscribe
+                  </Button>
+                ) : (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <select
+                      value={pickedEndpoint[c.id] ?? ''}
+                      onChange={(e) => setPickedEndpoint((p) => ({ ...p, [c.id]: e.target.value }))}
+                      className="rounded-md border border-slate-200 px-2 py-1.5 text-xs"
+                    >
+                      <option value="">Choose endpoint…</option>
+                      {endpoints.map((ep) => (
+                        <option key={ep.id} value={ep.id}>{ep.url}</option>
+                      ))}
+                    </select>
+                    <Button type="button" size="sm" disabled={busyId === c.id} onClick={() => subscribe(c.id)}>
+                      Subscribe
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <div className="mt-5">
+        <p className="text-xs font-semibold text-slate-500 mb-2">Currently handed off</p>
+        {loadingSubscribed ? (
+          <p className="text-xs text-slate-400">Loading…</p>
+        ) : subscribed.length === 0 ? (
+          <p className="text-xs text-slate-400">No conversations are routed to a webhook right now.</p>
+        ) : (
+          <div className="divide-y divide-slate-100 rounded-lg border border-slate-100">
+            {subscribed.map((c) => {
+              const contact = contactOf(c)
+              return (
+                <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-800">{contact?.name || contact?.phone}</p>
+                    <p className="text-xs text-slate-400">{contact?.phone}</p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" disabled={busyId === c.id} onClick={() => unsubscribe(c.id)}>
+                    <Unlink className="size-3.5" /> Unsubscribe
+                  </Button>
                 </div>
               )
             })}

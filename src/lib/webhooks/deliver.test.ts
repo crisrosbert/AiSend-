@@ -68,7 +68,7 @@ describe('attemptDelivery', () => {
     }
     const { admin } = makeAdminMock(delivery, endpoint)
     ;(globalThis as unknown as { __ADMIN__: unknown }).__ADMIN__ = admin
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, headers: { get: () => null } }))
 
     const { attemptDelivery } = await loadDeliver()
     await attemptDelivery('d1')
@@ -89,7 +89,7 @@ describe('attemptDelivery', () => {
     }
     const { admin } = makeAdminMock(delivery, endpoint)
     ;(globalThis as unknown as { __ADMIN__: unknown }).__ADMIN__ = admin
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, headers: { get: () => null } }))
 
     const { attemptDelivery } = await loadDeliver()
     const before = Date.now()
@@ -114,7 +114,7 @@ describe('attemptDelivery', () => {
     }
     const { admin } = makeAdminMock(delivery, endpoint)
     ;(globalThis as unknown as { __ADMIN__: unknown }).__ADMIN__ = admin
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400 }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400, headers: { get: () => null } }))
 
     const { attemptDelivery } = await loadDeliver()
     await attemptDelivery('d1')
@@ -135,7 +135,7 @@ describe('attemptDelivery', () => {
     }
     const { admin } = makeAdminMock(delivery, endpoint)
     ;(globalThis as unknown as { __ADMIN__: unknown }).__ADMIN__ = admin
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400 }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400, headers: { get: () => null } }))
 
     const { attemptDelivery } = await loadDeliver()
     await attemptDelivery('d1')
@@ -157,7 +157,7 @@ describe('attemptDelivery', () => {
     }
     const { admin } = makeAdminMock(delivery, endpoint)
     ;(globalThis as unknown as { __ADMIN__: unknown }).__ADMIN__ = admin
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503, headers: { get: () => null } }))
 
     const { attemptDelivery } = await loadDeliver()
     await attemptDelivery('d1')
@@ -165,6 +165,32 @@ describe('attemptDelivery', () => {
     expect(delivery.status).toBe('abandoned')
     expect(delivery.attempt_count).toBe(4)
     expect(endpoint.consecutive_failures).toBe(1)
+  })
+
+  it('retries a 429, honoring a numeric Retry-After header over its own backoff', async () => {
+    const delivery: FakeRow = {
+      id: 'd1', endpoint_id: 'e1', event_type: 'message.received',
+      event_id: 'evt-1', payload: { id: 'evt-1', type: 'message.received', created: 1, data: {} },
+      attempt_count: 0,
+    }
+    const endpoint: FakeRow = {
+      id: 'e1', url: 'https://example.com/hook', secret_encrypted: 'enc:secret',
+      is_active: true, consecutive_failures: 0,
+    }
+    const { admin } = makeAdminMock(delivery, endpoint)
+    ;(globalThis as unknown as { __ADMIN__: unknown }).__ADMIN__ = admin
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false, status: 429, headers: { get: (h: string) => (h === 'retry-after' ? '120' : null) },
+    }))
+
+    const { attemptDelivery } = await loadDeliver()
+    const before = Date.now()
+    await attemptDelivery('d1')
+
+    expect(delivery.status).toBe('pending')
+    const nextAt = new Date(delivery.next_attempt_at as string).getTime()
+    // Retry-After: 120 should win over the 10s default backoff.
+    expect(nextAt - before).toBeGreaterThanOrEqual(115_000)
   })
 
   it('does nothing when the endpoint has already been disabled', async () => {

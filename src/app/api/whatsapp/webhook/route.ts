@@ -9,6 +9,8 @@ import { runJourneysForInbound } from '@/lib/journeys/runner'
 import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
 import { handleWhatsAppMessage } from '@/lib/whatsapp-agent/handler'
 import { handleInboundConsent } from '@/lib/optin/manager'
+import { emitWebhookEvent } from '@/lib/webhooks/dispatch'
+import type { MessageReceivedPayload } from '@/lib/webhooks/events'
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _adminClient: any = null
@@ -539,6 +541,49 @@ async function processMessage(
     console.error('Error updating conversation:', convError)
   }
   await flagBroadcastReplyIfAny(userId, contactRecord.id)
+
+  // ── OUTBOUND WEBHOOKS ──
+  // Fan this message out to any third-party endpoint the tenant has
+  // registered (src/lib/webhooks). Best-effort: a subscriber that's
+  // down or slow must never affect message delivery or the agent
+  // reply below, so failures here are swallowed after logging. Keyed
+  // on Meta's own message id, so a Meta webhook retry (same message,
+  // second POST) can't create a second delivery per endpoint.
+  try {
+    const referral = message.referral
+    const payload: MessageReceivedPayload = {
+      conversationId: conversation.id,
+      contact: {
+        id: contactRecord.id,
+        phone: senderPhone,
+        name: contactRecord.name ?? contactName ?? null,
+      },
+      message: {
+        id: message.id,
+        type: message.type,
+        text: contentText,
+        timestamp: new Date(parseInt(message.timestamp) * 1000).toISOString(),
+      },
+      referral: referral
+        ? {
+            sourceUrl: referral.source_url ?? null,
+            sourceId: referral.source_id ?? null,
+            sourceType: referral.source_type ?? null,
+            headline: referral.headline ?? null,
+            ctwaClid: referral.ctwa_clid ?? null,
+          }
+        : null,
+    }
+    await emitWebhookEvent({
+      userId,
+      type: 'message.received',
+      data: payload,
+      eventId: message.id,
+    })
+  } catch (err) {
+    console.error('[webhooks] message.received emit failed:', err)
+  }
+
   const inboundText = contentText ?? message.text?.body ?? ''
   // ── OPT-IN / OPT-OUT (compliance) ──
   // Honor STOP/START immediately. If the message was a consent keyword,

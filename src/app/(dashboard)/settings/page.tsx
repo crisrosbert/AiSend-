@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Settings, MessageSquare, Tag, User, Zap, Download, Building2 } from 'lucide-react';
+import { Settings, MessageSquare, Tag, User, Zap, Download, Building2, Webhook } from 'lucide-react';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { BusinessProfile } from '@/components/settings/business-profile';
 import { BusinessManager } from '@/components/settings/business-manager';
@@ -13,9 +13,10 @@ import { ProfileForm } from '@/components/settings/profile-form';
 import { PasswordForm } from '@/components/settings/password-form';
 import { SessionsCard } from '@/components/settings/sessions-card';
 import { DataExport } from '@/components/settings/data-export';
+import { WebhookManager } from '@/components/settings/webhook-manager';
 import CannedRepliesPage from './canned-replies/page';
 
-const TAB_VALUES = ['profile', 'businesses', 'whatsapp', 'templates', 'tags', 'canned-replies', 'export'] as const;
+const TAB_VALUES = ['profile', 'businesses', 'whatsapp', 'templates', 'tags', 'canned-replies', 'webhooks', 'export'] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
 const TABS: { value: TabValue; label: string; icon: typeof User }[] = [
@@ -25,6 +26,7 @@ const TABS: { value: TabValue; label: string; icon: typeof User }[] = [
   { value: 'templates',      label: 'Templates',      icon: MessageSquare },
   { value: 'tags',           label: 'Tags',           icon: Tag },
   { value: 'canned-replies', label: 'Quick Replies',  icon: Zap },
+  { value: 'webhooks',       label: 'Webhooks',       icon: Webhook },
   { value: 'export',         label: 'Export Data',    icon: Download },
 ];
 
@@ -108,6 +110,12 @@ function SettingsInner() {
       <div className={tab === 'canned-replies' ? 'block' : 'hidden'}>
         <CannedRepliesPage />
       </div>
+
+      {tab === 'webhooks' && (
+        <div className="block">
+          <WebhookManager />
+        </div>
+      )}
 
       {/* Mounted only when open: the export component queries on demand,
           but there is no reason to keep it in the tree otherwise. */}

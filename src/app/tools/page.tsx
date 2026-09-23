@@ -37,6 +37,12 @@ const TOOLS = [
     desc: 'Bold, italic, strikethrough, and bullets — with a live chat preview.',
     tag: 'Editor',
   },
+  {
+    href: '/tools/whatsapp-catalog-builder',
+    name: 'WhatsApp Catalogue Builder',
+    desc: 'Paste your store URL and get a ready-to-send WhatsApp product list.',
+    tag: 'Auto-discovery',
+  },
 ]
 
 export default function ToolsIndexPage() {

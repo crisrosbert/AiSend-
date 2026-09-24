@@ -7,8 +7,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
-
 // ─── Supabase admin (bypasses RLS for batch upserts) ─────────────────────────
 
 let _admin: ReturnType<typeof createAdminClient> | null = null
@@ -100,7 +98,6 @@ async function embedProducts(
   products: ScrapedProduct[],
   storeUrl: string
 ): Promise<void> {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   const admin = supabaseAdmin()
   const base = storeUrl.replace(/\/$/, '')
 
@@ -112,10 +109,17 @@ async function embedProducts(
       [p.name, p.description].filter(Boolean).join(' — ').slice(0, 500)
     )
 
-    const { data: embeddings } = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: inputs,
+    const embRes = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ model: 'text-embedding-3-small', input: inputs }),
     })
+    if (!embRes.ok) throw new Error(`[Sync] OpenAI embed error: ${embRes.status}`)
+    const embJson = await embRes.json() as { data: Array<{ embedding: number[] }> }
+    const embeddings = embJson.data
 
     const rows = batch.map((p, idx) => ({
       user_id: userId,
@@ -127,7 +131,7 @@ async function embedProducts(
       image_url: p.image_url,
       product_url: p.product_url ?? `${base}/products/${p.external_id}`,
       in_stock: p.in_stock,
-      embedding: JSON.stringify(embeddings[idx].embedding),
+      embedding: JSON.stringify(embeddings[idx]!.embedding),
       updated_at: new Date().toISOString(),
     }))
 

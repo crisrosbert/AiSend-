@@ -32,7 +32,7 @@ export function TemplateLibrary({ onUsed }: { onUsed?: () => void }) {
 
   const filtered = filterTemplates(industry, category, language, search);
 
-  const useTemplate = async (tpl: LibraryTemplate) => {
+  const handleUseTemplate = async (tpl: LibraryTemplate) => {
     if (!user) {
       toast.error('Please log in first');
       return;
@@ -172,7 +172,7 @@ export function TemplateLibrary({ onUsed }: { onUsed?: () => void }) {
                     {tpl.industry} · {tpl.language === 'hi' ? 'Hindi' : tpl.language}
                   </span>
                   <button
-                    onClick={() => useTemplate(tpl)}
+                    onClick={() => handleUseTemplate(tpl)}
                     disabled={usingId === tpl.id || used}
                     className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-60 ${
                       used

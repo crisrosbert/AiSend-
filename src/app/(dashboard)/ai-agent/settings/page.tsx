@@ -53,6 +53,7 @@ export default function AiAgentSettingsPage() {
   const [error, setError]       = useState<string | null>(null)
   const [elapsed, setElapsed]   = useState(0)
   const timerRef                = useRef<ReturnType<typeof setInterval> | null>(null)
+  const elapsedRef              = useRef(0)
 
   // Form state
   const [storeName, setStoreName]   = useState('')
@@ -125,8 +126,13 @@ export default function AiAgentSettingsPage() {
 
   // ── Stopwatch helpers ─────────────────────────────────────────────────────────
   function startTimer() {
+    elapsedRef.current = 0
     setElapsed(0)
-    timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000)
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = setInterval(() => {
+      elapsedRef.current += 1
+      setElapsed(elapsedRef.current)
+    }, 1000)
   }
 
   function stopTimer() {

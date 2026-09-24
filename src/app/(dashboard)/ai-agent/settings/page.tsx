@@ -98,13 +98,19 @@ export default function AiAgentSettingsPage() {
 
   useEffect(() => { void loadConfig() }, [loadConfig])
 
-  // ── Poll sync status while running ───────────────────────────────────────────
+  // ── Poll sync status ONLY on page load when DB shows a stale 'running' state ──
+  // (i.e. a previous sync was interrupted — we don't poll during an active sync
+  //  because the embed loop manages state directly via setConfig)
   useEffect(() => {
     if (!config?.id) return
-    const isRunning = config.scrape_status === 'running' || config.embed_status === 'running'
-    if (!isRunning) return
+    if (syncing) return // active sync: let the embed loop manage state, don't poll
+    const isStaleRunning = config.scrape_status === 'running' || config.embed_status === 'running'
+    if (!isStaleRunning) return
 
+    // Stale running state on load — poll until it resolves or we reset it to failed
+    let attempts = 0
     const interval = setInterval(async () => {
+      attempts++
       const { data } = await supabase
         .from('ai_agent_configs')
         .select('scrape_status, embed_status, last_synced_at')
@@ -115,13 +121,20 @@ export default function AiAgentSettingsPage() {
         setConfig((prev) => prev ? { ...prev, ...data } : prev)
         if (data.scrape_status !== 'running' && data.embed_status !== 'running') {
           clearInterval(interval)
-          setSyncing(false)
         }
+      }
+      // After 10 polls (40s) with no change, mark as failed so UI unblocks
+      if (attempts >= 10) {
+        clearInterval(interval)
+        setConfig((prev) => prev
+          ? { ...prev, scrape_status: prev.scrape_status === 'running' ? 'failed' : prev.scrape_status, embed_status: prev.embed_status === 'running' ? 'failed' : prev.embed_status }
+          : prev
+        )
       }
     }, 4000)
 
     return () => clearInterval(interval)
-  }, [config?.id, config?.scrape_status, config?.embed_status]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [config?.id, syncing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Stopwatch: driven by isSyncRunning, not by startTimer/stopTimer ──────────
   const isSyncRunning = syncing || config?.scrape_status === 'running' || config?.embed_status === 'running'

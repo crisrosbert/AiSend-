@@ -135,7 +135,8 @@ async function embedProducts(
       updated_at: new Date().toISOString(),
     }))
 
-    const { error } = await admin
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin as any)
       .from('ai_agent_products')
       .upsert(rows, { onConflict: 'user_id,external_id' })
 

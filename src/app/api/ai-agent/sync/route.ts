@@ -96,15 +96,77 @@ interface ShopifyProduct {
 // ─── Unicode Sanitizer ───────────────────────────────────────────────────────
 
 /**
- * Remove invalid Unicode surrogate pairs from text.
- * Shopify's body_html sometimes contains lone surrogates (\uD800-\uDFFF)
- * which PostgreSQL JSONB rejects with error 22P02.
- * This strips them so the text can be safely stored.
+ * Remove characters that PostgreSQL JSONB rejects.
+ *
+ * PostgreSQL JSONB throws error 22P02 for:
+ *   1. Lone Unicode surrogates (\uD800-\uDFFF without a valid pair)
+ *   2. Null bytes (\u0000)
+ *
+ * This function handles BOTH layers of the problem:
+ *
+ * LAYER 1 — sanitizeJsonEscapes():
+ *   Shopify's JSON response may contain literal escape sequences like
+ *   \uD83D or \uDC00 as 6-character ASCII strings in the raw JSON text.
+ *   These look harmless to JavaScript but become real surrogates after
+ *   JSON.parse(). We strip lone surrogate escapes and null escapes from
+ *   the raw JSON text BEFORE parsing.
+ *
+ * LAYER 2 — sanitizeUnicode():
+ *   After parsing, some strings may still contain actual lone surrogate
+ *   code units (from Shopify's HTML entities, copy-paste, etc.).
+ *   This character-by-character scan catches anything Layer 1 missed.
+ *
+ * Call order: sanitizeJsonEscapes(rawText) → JSON.parse() → sanitizeUnicode(string fields)
+ */
+
+/**
+ * LAYER 1: Strip problematic \uXXXX escape sequences from raw JSON text.
+ *
+ * Targets:
+ *   - \u0000           → null byte (PostgreSQL JSONB rejects)
+ *   - \uD800 - \uDBFF  → high surrogates (only valid if followed by \uDC00-\uDFFF)
+ *   - \uDC00 - \uDFFF  → low surrogates (only valid if preceded by \uD800-\uDBFF)
+ *
+ * Strategy:
+ *   1. First, remove all lone LOW surrogates (not preceded by a high surrogate)
+ *   2. Then, remove all lone HIGH surrogates (not followed by a low surrogate)
+ *   3. Remove null byte escapes
+ *   This preserves valid surrogate pairs like 😀 (emoji 😀)
+ */
+function sanitizeJsonEscapes(jsonText: string): string {
+  // Step 1: Remove null byte escapes
+  let clean = jsonText.replace(/\\u0000/gi, '')
+
+  // Step 2: Remove lone LOW surrogates (\uDC00-\uDFFF not preceded by \uD800-\uDBFF)
+  // Negative lookbehind: only match \uDCxx if NOT preceded by \uD[89AB]xx
+  clean = clean.replace(
+    /(?<!\\u[dD][89aAbB][0-9a-fA-F]{2})\\u[dD][cCdDeEfF][0-9a-fA-F]{2}/gi,
+    ''
+  )
+
+  // Step 3: Remove lone HIGH surrogates (\uD800-\uDBFF not followed by \uDC00-\uDFFF)
+  // Negative lookahead: only match \uD8xx if NOT followed by \uDCxx
+  clean = clean.replace(
+    /\\u[dD][89aAbB][0-9a-fA-F]{2}(?!\\u[dD][cCdDeEfF][0-9a-fA-F]{2})/gi,
+    ''
+  )
+
+  return clean
+}
+
+/**
+ * LAYER 2: Remove actual lone surrogate code units from JavaScript strings.
+ * This runs AFTER JSON.parse() on individual string values.
+ * Also strips null characters (\0) that might have been decoded.
  */
 function sanitizeUnicode(text: string): string {
   let result = ''
   for (let i = 0; i < text.length; i++) {
     const code = text.charCodeAt(i)
+
+    // Skip null bytes
+    if (code === 0) continue
+
     if (code >= 0xD800 && code <= 0xDBFF) {
       // High surrogate — check if valid pair follows
       const next = i + 1 < text.length ? text.charCodeAt(i + 1) : 0
@@ -215,11 +277,12 @@ async function scrapeShopify(storeUrl: string): Promise<ScrapedProduct[]> {
       break
     }
 
-    // Parse JSON with Unicode sanitization — Shopify responses can contain
-    // lone surrogates that break PostgreSQL JSONB storage
+    // ── TWO-LAYER Unicode sanitization ──
+    // LAYER 1: Strip problematic \uXXXX escape sequences from raw JSON
+    // (catches lone surrogates and null bytes in the JSON text itself)
     const rawText = await res.text()
-    const cleanText = sanitizeUnicode(rawText)
-    const data = JSON.parse(cleanText) as { products: ShopifyProduct[] }
+    const cleanJson = sanitizeJsonEscapes(rawText)
+    const data = JSON.parse(cleanJson) as { products: ShopifyProduct[] }
 
     // No more products = we've reached the last page
     if (!data.products?.length) break

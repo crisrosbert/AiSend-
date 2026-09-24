@@ -58,8 +58,7 @@ async function scrapeShopify(storeUrl: string): Promise<ScrapedProduct[]> {
   const base = storeUrl.replace(/\/$/, '')
   const all: ScrapedProduct[] = []
 
-  // TEST CAP: 10 products — remove `&limit=10` once confirmed working
-  const res = await fetch(`${base}/products.json?limit=10`, {
+  const res = await fetch(`${base}/products.json?limit=50`, {
     headers: { 'User-Agent': 'AiSend-Agent/1.0' },
     signal: AbortSignal.timeout(8_000),
   })

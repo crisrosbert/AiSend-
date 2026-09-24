@@ -240,6 +240,9 @@ async function handleCheckoutFlow(
     case 'awaiting_payment_choice': {
       // Detect payment choice from message or button reply
       const msg = inboundMessage.toLowerCase()
+      console.log(`[Engine] awaiting_payment_choice — inboundMessage: "${inboundMessage}", lowercase: "${msg}"`)
+      console.log(`[Engine] Cart state: items=${cart.items.length}, total=${cart.totalAmount}, address=${cart.deliveryAddress?.fullAddress || 'none'}`)
+
       let paymentMethod: 'ONLINE' | 'COD' | null = null
 
       if (/online|pay now|upi|card|pay_online|razorpay/i.test(msg)) {
@@ -247,6 +250,8 @@ async function handleCheckoutFlow(
       } else if (/cod|cash|pay_cod|cash on delivery/i.test(msg)) {
         paymentMethod = 'COD'
       }
+
+      console.log(`[Engine] Detected payment method: ${paymentMethod ?? 'NONE'}`)
 
       if (!paymentMethod) {
         // Customer sent something else — remind them of the options
@@ -263,9 +268,12 @@ async function handleCheckoutFlow(
       }
 
       // Process the payment choice
+      console.log(`[Engine] Calling processPaymentChoice with method=${paymentMethod}`)
       const result = await processPaymentChoice(
         userId, contactPhone, cart, paymentMethod, waCreds, supabase
       )
+      console.log(`[Engine] processPaymentChoice result: success=${result.success}, orderId=${result.orderId}, message=${result.message ? 'yes' : 'empty'}`)
+
       logEvent(userId, contactPhone, 'checkout_payment', {
         method: paymentMethod,
         orderId: result.orderId,
@@ -273,7 +281,9 @@ async function handleCheckoutFlow(
       }, supabase)
 
       // processPaymentChoice sends CTA card or confirmation directly
-      return result.message || null
+      // For COD: returns confirmation text. For ONLINE: returns '' (CTA card sent directly)
+      if (result.message) return result.message
+      return null
     }
 
     // ── Step: Waiting for payment completion ──

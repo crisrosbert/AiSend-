@@ -102,8 +102,24 @@ interface ShopifyProduct {
  * This strips them so the text can be safely stored.
  */
 function sanitizeUnicode(text: string): string {
-  // eslint-disable-next-line no-control-regex
-  return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+  let result = ''
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i)
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      // High surrogate — check if valid pair follows
+      const next = i + 1 < text.length ? text.charCodeAt(i + 1) : 0
+      if (next >= 0xDC00 && next <= 0xDFFF) {
+        result += text[i] + text[i + 1]  // Valid pair — keep both
+        i++  // Skip next char (already included)
+      }
+      // Lone high surrogate — skip it
+    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+      // Lone low surrogate — skip it
+    } else {
+      result += text[i]  // Normal character — keep it
+    }
+  }
+  return result
 }
 
 // ─── Shopify → Our Format Converter ──────────────────────────────────────────
@@ -199,7 +215,11 @@ async function scrapeShopify(storeUrl: string): Promise<ScrapedProduct[]> {
       break
     }
 
-    const data = await res.json() as { products: ShopifyProduct[] }
+    // Parse JSON with Unicode sanitization — Shopify responses can contain
+    // lone surrogates that break PostgreSQL JSONB storage
+    const rawText = await res.text()
+    const cleanText = sanitizeUnicode(rawText)
+    const data = JSON.parse(cleanText) as { products: ShopifyProduct[] }
 
     // No more products = we've reached the last page
     if (!data.products?.length) break
@@ -287,12 +307,12 @@ export async function POST(req: Request) {
   const rows = products.map((p) => ({
     user_id: user.id,
     external_id: p.external_id,
-    name: p.name,
-    description: p.description,
+    name: sanitizeUnicode(p.name),
+    description: p.description ? sanitizeUnicode(p.description) : null,
     price: p.price,
     currency: p.currency,
-    image_url: p.image_url,            // First image (backward compat)
-    image_urls: p.image_urls,           // ALL images (for WhatsApp carousel)
+    image_url: p.image_url,
+    image_urls: p.image_urls,
     product_url: p.product_url,
     in_stock: p.in_stock,
     updated_at: new Date().toISOString(),

@@ -61,6 +61,7 @@ interface ScrapedProduct {
   name: string               // Product title (+ variant title if multi-variant)
   description: string | null // HTML stripped, max 500 chars
   price: number              // Parsed from Shopify variant price string
+  compare_at_price: number | null // Original MRP before discount (for showing "48% off")
   currency: string           // Default: 'INR' (configurable per store later)
   image_url: string | null   // First image URL (backward compat)
   image_urls: string[]       // ALL image URLs for this product (for carousel)
@@ -72,6 +73,7 @@ interface ScrapedProduct {
 interface ShopifyVariant {
   id: number
   price: string                       // Price as string, e.g. "650.00"
+  compare_at_price: string | null     // Original MRP before discount (null if no discount)
   inventory_quantity: number           // Current stock count
   title: string                       // Variant title, e.g. "Large / Red"
   inventory_management: string | null  // null = not tracked, "shopify" = tracked by Shopify
@@ -219,6 +221,7 @@ function shopifyProductToScraped(p: ShopifyProduct, base: string): ScrapedProduc
       : null,
 
     price: parseFloat(v.price) || 0,
+    compare_at_price: v.compare_at_price ? parseFloat(v.compare_at_price) || null : null,
     currency: 'INR',  // TODO: Make this configurable per store in ai_agent_configs
 
     // First image for backward compatibility (existing code uses this)
@@ -373,6 +376,7 @@ export async function POST(req: Request) {
     name: sanitizeUnicode(p.name),
     description: p.description ? sanitizeUnicode(p.description) : null,
     price: p.price,
+    compare_at_price: p.compare_at_price,
     currency: p.currency,
     image_url: p.image_url,
     image_urls: p.image_urls,

@@ -622,7 +622,7 @@ async function processMessage(
   if (!agentReplied) {
     try {
       console.log(`[ai-agent] Dispatching: type=${message.type}, inboundText="${inboundText}", from=${senderPhone}`)
-      void handleAiAgentMessage({
+      await handleAiAgentMessage({
         userId,
         contactPhone: senderPhone,
         inboundMessage: inboundText,

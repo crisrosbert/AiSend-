@@ -9,6 +9,9 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Bot, Save, RefreshCw, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Loader2, Timer } from 'lucide-react'
 
+// Stable singleton supabase client (avoids recreating on every render)
+const supabase = createClient()
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AgentConfig {
@@ -43,8 +46,6 @@ function formatElapsed(seconds: number): string {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AiAgentSettingsPage() {
-  const supabase = createClient()
-
   const [config, setConfig]     = useState<AgentConfig | null>(null)
   const [loading, setLoading]   = useState(true)
   const [saving, setSaving]     = useState(false)
@@ -52,8 +53,7 @@ export default function AiAgentSettingsPage() {
   const [saveMsg, setSaveMsg]   = useState<string | null>(null)
   const [error, setError]       = useState<string | null>(null)
   const [elapsed, setElapsed]   = useState(0)
-  const timerRef                = useRef<ReturnType<typeof setInterval> | null>(null)
-  const elapsedRef              = useRef(0)
+  const syncStartRef            = useRef<number | null>(null)
 
   // Form state
   const [storeName, setStoreName]   = useState('')
@@ -116,7 +116,6 @@ export default function AiAgentSettingsPage() {
         if (data.scrape_status !== 'running' && data.embed_status !== 'running') {
           clearInterval(interval)
           setSyncing(false)
-          stopTimer()
         }
       }
     }, 4000)
@@ -124,22 +123,21 @@ export default function AiAgentSettingsPage() {
     return () => clearInterval(interval)
   }, [config?.id, config?.scrape_status, config?.embed_status]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Stopwatch helpers ─────────────────────────────────────────────────────────
-  function startTimer() {
-    elapsedRef.current = 0
+  // ── Stopwatch: driven by isSyncRunning, not by startTimer/stopTimer ──────────
+  const isSyncRunning = syncing || config?.scrape_status === 'running' || config?.embed_status === 'running'
+
+  useEffect(() => {
+    if (!isSyncRunning) {
+      syncStartRef.current = null
+      return
+    }
+    if (!syncStartRef.current) syncStartRef.current = Date.now()
     setElapsed(0)
-    if (timerRef.current) clearInterval(timerRef.current)
-    timerRef.current = setInterval(() => {
-      elapsedRef.current += 1
-      setElapsed(elapsedRef.current)
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - (syncStartRef.current ?? Date.now())) / 1000))
     }, 1000)
-  }
-
-  function stopTimer() {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
-  }
-
-  useEffect(() => () => stopTimer(), [])
+    return () => clearInterval(id)
+  }, [isSyncRunning])
 
   // ── Save settings ─────────────────────────────────────────────────────────────
   async function handleSave() {
@@ -182,10 +180,9 @@ export default function AiAgentSettingsPage() {
 
     setSyncing(true)
     setError(null)
-    startTimer()
 
     const userId = await getAuthUserId()
-    if (!userId) { setError('Not logged in.'); setSyncing(false); stopTimer(); return }
+    if (!userId) { setError('Not logged in.'); setSyncing(false); return }
 
     // Upsert config first so the row definitely exists
     await supabase.from('ai_agent_configs').upsert({
@@ -212,7 +209,6 @@ export default function AiAgentSettingsPage() {
       const body = await res.json().catch(() => ({}))
       setError('Sync failed: ' + (body.error ?? res.statusText))
       setSyncing(false)
-      stopTimer()
     }
     // On success: polling useEffect updates config + stops timer when done
   }
@@ -229,8 +225,6 @@ export default function AiAgentSettingsPage() {
   const syncSt = config
     ? statusLabel(config.scrape_status, config.embed_status)
     : { text: 'Not synced', color: 'text-gray-500' }
-
-  const isSyncRunning = syncing || config?.scrape_status === 'running' || config?.embed_status === 'running'
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">

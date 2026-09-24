@@ -1,15 +1,20 @@
 /**
  * File: src/app/api/ai-agent/sync/route.ts
  * Purpose: Trigger product catalog sync for AI Agent
- * Flow: auth → scrape store URL → upsert products → embed → mark done
+ * Flow: auth → scrape store URL → upsert raw products → embed in small batches → mark done
+ *
+ * Strategy: Save all products first (no embeddings), then embed batch-by-batch.
+ * Each batch is committed immediately so progress survives a timeout.
+ * Works on Vercel Hobby (60s limit) for stores with ≤ ~300 products.
+ * For larger stores, upgrade to Vercel Pro (maxDuration = 300).
  */
 
-// Allow up to 5 minutes for large catalogs (Vercel Pro/Team plans)
-export const maxDuration = 300
+export const maxDuration = 60 // Hobby plan limit; change to 300 on Pro
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+
 // ─── Supabase admin (bypasses RLS for batch upserts) ─────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,33 +43,44 @@ interface ScrapedProduct {
   in_stock: boolean
 }
 
-// ─── Scraper: fetch products from store URL ───────────────────────────────────
-// Supports Shopify JSON API. Falls back to empty array on unknown stores.
+// ─── Scraper ──────────────────────────────────────────────────────────────────
 
 async function scrapeProducts(storeUrl: string): Promise<ScrapedProduct[]> {
-  const url = storeUrl.replace(/\/$/, '')
+  const base = storeUrl.replace(/\/$/, '')
+  const all: ScrapedProduct[] = []
 
-  // Try Shopify products.json (works on all Shopify stores without auth)
-  try {
-    const res = await fetch(`${url}/products.json?limit=250`, {
-      headers: { 'User-Agent': 'AiSend-Agent/1.0' },
-      next: { revalidate: 0 },
-    })
-    if (res.ok) {
+  // Shopify: paginate through products.json (250 per page max)
+  // TEST MODE: limited to 5 pages (~1250 products max)
+  const MAX_PAGES = 5
+  let page = 1
+  while (page <= MAX_PAGES) {
+    try {
+      const res = await fetch(`${base}/products.json?limit=250&page=${page}`, {
+        headers: { 'User-Agent': 'AiSend-Agent/1.0' },
+        signal: AbortSignal.timeout(15_000), // 15s per page fetch
+      })
+      if (!res.ok) break
       const data = await res.json() as { products: ShopifyProduct[] }
-      return data.products.flatMap(shopifyProductToScraped)
+      if (!data.products || data.products.length === 0) break
+
+      const scraped = data.products.flatMap((p) => shopifyProductToScraped(p, base))
+      all.push(...scraped)
+
+      if (data.products.length < 250) break // last page
+      page++
+    } catch {
+      break
     }
-  } catch {
-    // Not a Shopify store or network error — fall through
   }
 
-  return []
+  return all
 }
 
 interface ShopifyVariant {
   id: number
   price: string
   inventory_quantity: number
+  title: string
 }
 
 interface ShopifyImage {
@@ -80,53 +96,31 @@ interface ShopifyProduct {
   images: ShopifyImage[]
 }
 
-function shopifyProductToScraped(p: ShopifyProduct): ScrapedProduct[] {
-  // One row per variant; fall back to first variant price for single-variant products
+function shopifyProductToScraped(p: ShopifyProduct, base: string): ScrapedProduct[] {
+  const hasMultipleVariants = p.variants.length > 1
   return p.variants.map((v) => ({
     external_id: String(v.id),
-    name: p.variants.length > 1 ? `${p.title} — ${v.price}` : p.title,
+    name: hasMultipleVariants ? `${p.title} — ${v.title}` : p.title,
     description: p.body_html ? p.body_html.replace(/<[^>]+>/g, '').slice(0, 500) : null,
-    price: parseFloat(v.price),
-    currency: 'INR',                       // Shopify doesn't expose currency in products.json
+    price: parseFloat(v.price) || 0,
+    currency: 'INR',
     image_url: p.images[0]?.src ?? null,
-    product_url: null,                     // set below after we know store URL
+    product_url: `${base}/products/${p.handle}`,
     in_stock: v.inventory_quantity > 0,
   }))
 }
 
-// ─── Embedder: batch embed product text with OpenAI ──────────────────────────
+// ─── Save raw products (no embeddings yet) ────────────────────────────────────
 
-const EMBED_BATCH = 100   // OpenAI allows up to 2048 inputs; keep batches safe
-
-async function embedProducts(
+async function saveRawProducts(
   userId: string,
   products: ScrapedProduct[],
-  storeUrl: string
 ): Promise<void> {
   const admin = supabaseAdmin()
-  const base = storeUrl.replace(/\/$/, '')
+  const BATCH = 100
 
-  for (let i = 0; i < products.length; i += EMBED_BATCH) {
-    const batch = products.slice(i, i + EMBED_BATCH)
-
-    // Build embedding input: name + description for semantic richness
-    const inputs = batch.map((p) =>
-      [p.name, p.description].filter(Boolean).join(' — ').slice(0, 500)
-    )
-
-    const embRes = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ model: 'text-embedding-3-small', input: inputs }),
-    })
-    if (!embRes.ok) throw new Error(`[Sync] OpenAI embed error: ${embRes.status}`)
-    const embJson = await embRes.json() as { data: Array<{ embedding: number[] }> }
-    const embeddings = embJson.data
-
-    const rows = batch.map((p, idx) => ({
+  for (let i = 0; i < products.length; i += BATCH) {
+    const rows = products.slice(i, i + BATCH).map((p) => ({
       user_id: userId,
       external_id: p.external_id,
       name: p.name,
@@ -134,9 +128,9 @@ async function embedProducts(
       price: p.price,
       currency: p.currency,
       image_url: p.image_url,
-      product_url: p.product_url ?? `${base}/products/${p.external_id}`,
+      product_url: p.product_url,
       in_stock: p.in_stock,
-      embedding: JSON.stringify(embeddings[idx]!.embedding),
+      // embedding intentionally null — filled in next step
       updated_at: new Date().toISOString(),
     }))
 
@@ -144,8 +138,69 @@ async function embedProducts(
       .from('ai_agent_products')
       .upsert(rows, { onConflict: 'user_id,external_id' })
 
-    if (error) throw new Error(`[Sync] Upsert failed: ${error.message}`)
+    if (error) throw new Error(`[Sync] Save raw failed: ${error.message}`)
   }
+}
+
+// ─── Embed products in small batches ─────────────────────────────────────────
+
+const EMBED_BATCH = 20 // small batches: faster per-batch, survives partial timeout
+
+async function embedProducts(
+  userId: string,
+  products: ScrapedProduct[],
+): Promise<{ embedded: number; failed: number }> {
+  const admin = supabaseAdmin()
+  let embedded = 0
+  let failed = 0
+
+  for (let i = 0; i < products.length; i += EMBED_BATCH) {
+    const batch = products.slice(i, i + EMBED_BATCH)
+
+    const inputs = batch.map((p) =>
+      [p.name, p.description].filter(Boolean).join(' — ').slice(0, 500)
+    )
+
+    try {
+      const embRes = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: 'text-embedding-3-small', input: inputs }),
+        signal: AbortSignal.timeout(20_000), // 20s per batch
+      })
+
+      if (!embRes.ok) {
+        const errText = await embRes.text()
+        console.error(`[Sync] OpenAI embed error ${embRes.status}: ${errText}`)
+        failed += batch.length
+        continue
+      }
+
+      const embJson = await embRes.json() as { data: Array<{ embedding: number[] }> }
+
+      // Update each product's embedding individually (avoids full row re-upsert)
+      const updates = batch.map((p, idx) =>
+        admin
+          .from('ai_agent_products')
+          .update({
+            embedding: JSON.stringify(embJson.data[idx]!.embedding),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', userId)
+          .eq('external_id', p.external_id)
+      )
+      await Promise.all(updates)
+      embedded += batch.length
+    } catch (err) {
+      console.error(`[Sync] Embed batch ${i}–${i + EMBED_BATCH} failed:`, err)
+      failed += batch.length
+    }
+  }
+
+  return { embedded, failed }
 }
 
 // ─── Route Handler ────────────────────────────────────────────────────────────
@@ -158,7 +213,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // 2. Parse request
+  // 2. Parse body
   const body = await req.json() as { storeUrl?: string }
   const storeUrl = body.storeUrl?.trim()
   if (!storeUrl) {
@@ -170,10 +225,10 @@ export async function POST(req: Request) {
   // 3. Mark scrape as running
   await admin
     .from('ai_agent_configs')
-    .update({ scrape_status: 'running', updated_at: new Date().toISOString() })
+    .update({ scrape_status: 'running', embed_status: 'pending', updated_at: new Date().toISOString() })
     .eq('user_id', user.id)
 
-  // 4. Scrape products
+  // 4. Scrape
   let products: ScrapedProduct[]
   try {
     products = await scrapeProducts(storeUrl)
@@ -186,15 +241,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Scrape failed' }, { status: 502 })
   }
 
+  // ── TESTING CAP: limit to 10 products — remove once sync is confirmed working ──
+  if (products.length > 10) products = products.slice(0, 10)
+  // ─────────────────────────────────────────────────────────────────────────────
+
   if (products.length === 0) {
     await admin
       .from('ai_agent_configs')
       .update({ scrape_status: 'failed', updated_at: new Date().toISOString() })
       .eq('user_id', user.id)
-    return NextResponse.json({ error: 'No products found at that URL' }, { status: 422 })
+    return NextResponse.json(
+      { error: 'No products found. Make sure the URL is a Shopify store (e.g. https://yourstore.myshopify.com).' },
+      { status: 422 }
+    )
   }
 
-  // 5. Mark scrape done, embedding running
+  // 5. Save raw products (fast — no embeddings yet)
+  try {
+    await saveRawProducts(user.id, products)
+  } catch (err) {
+    console.error('[Sync] Save raw error:', err)
+    await admin
+      .from('ai_agent_configs')
+      .update({ scrape_status: 'failed', updated_at: new Date().toISOString() })
+      .eq('user_id', user.id)
+    return NextResponse.json({ error: 'Failed to save products' }, { status: 500 })
+  }
+
+  // 6. Mark scrape done, embedding starting
   await admin
     .from('ai_agent_configs')
     .update({
@@ -204,17 +278,13 @@ export async function POST(req: Request) {
     })
     .eq('user_id', user.id)
 
-  // 6. Embed + upsert synchronously (must complete before Vercel kills the function)
+  // 7. Embed (synchronous — must finish before Vercel kills the function)
+  let embedded = 0
+  let failed = 0
   try {
-    await embedProducts(user.id, products, storeUrl)
-    await admin
-      .from('ai_agent_configs')
-      .update({
-        embed_status: 'done',
-        last_synced_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', user.id)
+    const result = await embedProducts(user.id, products)
+    embedded = result.embedded
+    failed = result.failed
   } catch (err) {
     console.error('[Sync] Embed error:', err)
     await admin
@@ -224,6 +294,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Embedding failed' }, { status: 500 })
   }
 
-  // 7. Done
-  return NextResponse.json({ ok: true, productsFound: products.length })
+  // 8. Mark done (even if some batches failed — partial catalog still usable)
+  const finalStatus = failed === 0 ? 'done' : embedded > 0 ? 'done' : 'failed'
+  await admin
+    .from('ai_agent_configs')
+    .update({
+      embed_status: finalStatus,
+      last_synced_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', user.id)
+
+  return NextResponse.json({
+    ok: true,
+    productsFound: products.length,
+    embedded,
+    failed,
+  })
 }

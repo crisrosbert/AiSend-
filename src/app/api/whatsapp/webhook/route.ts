@@ -8,6 +8,7 @@ import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { runJourneysForInbound } from '@/lib/journeys/runner'
 import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
 import { handleWhatsAppMessage } from '@/lib/whatsapp-agent/handler'
+import { handleAiAgentMessage } from '@/lib/ai-agent/engine'
 import { handleInboundConsent } from '@/lib/optin/manager'
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -612,6 +613,22 @@ async function processMessage(
       })
     } catch (err) {
       console.error('[whatsapp-agent] dispatch failed:', err)
+    }
+  }
+
+    // ── AI ECOMMERCE AGENT ──
+  // Runs after WhatsApp agent. Completely separate — own tables, own config.
+  // Only activates if merchant has an active ai_agent_configs row.
+  if (!agentReplied) {
+    try {
+      void handleAiAgentMessage({
+        userId,
+        contactPhone: senderPhone,
+        inboundMessage: inboundText,
+        supabase: supabaseAdmin(),
+      })
+    } catch (err) {
+      console.error('[ai-ecommerce-agent] dispatch failed:', err)
     }
   }
 

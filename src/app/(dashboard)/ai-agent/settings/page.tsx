@@ -7,8 +7,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useAuth } from '@/hooks/useAuth'
-import { useBusiness } from '@/hooks/useBusiness'
+import { useBusiness } from '@/hooks/use-business'
 import { Bot, Save, RefreshCw, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,7 +43,6 @@ function statusLabel(scrape: string, embed: string): { text: string; color: stri
 
 export default function AiAgentSettingsPage() {
   const supabase = createClient()
-  const { profile } = useAuth()
   const { businessId, loading: businessLoading } = useBusiness()
 
   const [config, setConfig] = useState<AgentConfig | null>(null)

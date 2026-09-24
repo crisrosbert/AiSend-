@@ -4,6 +4,9 @@
  * Flow: auth → scrape store URL → upsert products → embed → mark done
  */
 
+// Allow up to 5 minutes for large catalogs (Vercel Pro/Team plans)
+export const maxDuration = 300
+
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
@@ -201,26 +204,26 @@ export async function POST(req: Request) {
     })
     .eq('user_id', user.id)
 
-  // 6. Embed + upsert (runs async — client polls for status)
-  embedProducts(user.id, products, storeUrl)
-    .then(async () => {
-      await admin
-        .from('ai_agent_configs')
-        .update({
-          embed_status: 'done',
-          last_synced_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', user.id)
-    })
-    .catch(async (err) => {
-      console.error('[Sync] Embed error:', err)
-      await admin
-        .from('ai_agent_configs')
-        .update({ embed_status: 'failed', updated_at: new Date().toISOString() })
-        .eq('user_id', user.id)
-    })
+  // 6. Embed + upsert synchronously (must complete before Vercel kills the function)
+  try {
+    await embedProducts(user.id, products, storeUrl)
+    await admin
+      .from('ai_agent_configs')
+      .update({
+        embed_status: 'done',
+        last_synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', user.id)
+  } catch (err) {
+    console.error('[Sync] Embed error:', err)
+    await admin
+      .from('ai_agent_configs')
+      .update({ embed_status: 'failed', updated_at: new Date().toISOString() })
+      .eq('user_id', user.id)
+    return NextResponse.json({ error: 'Embedding failed' }, { status: 500 })
+  }
 
-  // 7. Return immediately — client polls scrape_status / embed_status
+  // 7. Done
   return NextResponse.json({ ok: true, productsFound: products.length })
 }

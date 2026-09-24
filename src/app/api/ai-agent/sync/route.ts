@@ -93,6 +93,19 @@ interface ShopifyProduct {
   images: ShopifyImage[]      // ALL product images (what we want for carousel)
 }
 
+// ─── Unicode Sanitizer ───────────────────────────────────────────────────────
+
+/**
+ * Remove invalid Unicode surrogate pairs from text.
+ * Shopify's body_html sometimes contains lone surrogates (\uD800-\uDFFF)
+ * which PostgreSQL JSONB rejects with error 22P02.
+ * This strips them so the text can be safely stored.
+ */
+function sanitizeUnicode(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+}
+
 // ─── Shopify → Our Format Converter ──────────────────────────────────────────
 
 /**
@@ -120,11 +133,11 @@ function shopifyProductToScraped(p: ShopifyProduct, base: string): ScrapedProduc
 
     // If multi-variant, append variant title so customer can distinguish:
     // "Green Tea" → "Green Tea — 100g Pack" and "Green Tea — 250g Pack"
-    name: multi ? `${p.title} — ${v.title}` : p.title,
+    name: sanitizeUnicode(multi ? `${p.title} — ${v.title}` : p.title),
 
-    // Strip HTML tags from Shopify description, truncate to 500 chars
+    // Strip HTML tags from Shopify description, sanitize Unicode, truncate to 500 chars
     description: p.body_html
-      ? p.body_html.replace(/<[^>]+>/g, '').slice(0, 500)
+      ? sanitizeUnicode(p.body_html.replace(/<[^>]+>/g, '')).slice(0, 500)
       : null,
 
     price: parseFloat(v.price) || 0,

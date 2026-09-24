@@ -1,44 +1,43 @@
 /**
  * ============================================================================
  * File: src/lib/ai-agent/product-response.ts
- * Purpose: Send product cards via WhatsApp — CTA URL buttons + multi-image carousel
+ * Purpose: Send rich product cards via WhatsApp — Amazon-style formatting
  * ============================================================================
  *
  * Card styles supported:
  *
- * 1. INTERACTIVE CTA URL CARD (primary — professional style):
- *    ┌─────────────────────┐
- *    │   [Product Image]   │
- *    │                     │
- *    │ Name — description  │
- *    │ ₹Price              │
- *    │                     │
- *    │  🔗 View Product    │  ← Clickable button opens product page
- *    └─────────────────────┘
+ * 1. RICH PRODUCT CARD (primary — Amazon-style):
+ *    ┌─────────────────────────────────┐
+ *    │       [Product Image]           │
+ *    │                                 │
+ *    │ *Product Name*                  │
+ *    │ ₹259  ~₹499~  (-48% OFF)       │  ← Price + MRP strikethrough + discount
+ *    │ ✅ In Stock                      │
+ *    │ 📦 Free delivery available       │
+ *    │                                 │
+ *    │  🛒 Add to Cart                 │  ← Quick reply button
+ *    │  🔗 View Product                │  ← CTA URL button (opens store)
+ *    └─────────────────────────────────┘
  *
  * 2. MULTI-IMAGE CAROUSEL (when product has multiple images):
- *    Sends 1st card as CTA URL (with product info)
- *    Then sends remaining images as plain image messages (gallery feel)
+ *    Sends each image as a swipeable card with product info
  *    Max 4 images per product to avoid spam
  *
  * 3. INTERACTIVE BUTTONS (for checkout payment choice):
- *    ┌─────────────────────┐
- *    │  Choose payment:    │
- *    │                     │
- *    │  [Pay Online]       │
- *    │  [Cash on Delivery] │
- *    └─────────────────────┘
+ *    ┌─────────────────────────┐
+ *    │  Choose payment:        │
+ *    │  [Pay Online]           │
+ *    │  [Cash on Delivery]     │
+ *    └─────────────────────────┘
  *
- * 4. PAYMENT LINK CTA (for checkout):
- *    ┌─────────────────────┐
- *    │  Order #abc ready!  │
- *    │  Total: ₹650        │
- *    │                     │
- *    │  🔗 Pay ₹650        │  ← Opens Razorpay payment page
- *    └─────────────────────┘
+ * 4. PAYMENT LINK CTA (for Razorpay checkout):
+ *    ┌─────────────────────────┐
+ *    │  Order #abc ready!      │
+ *    │  Total: ₹650            │
+ *    │  🔗 Pay ₹650            │
+ *    └─────────────────────────┘
  *
- * Fallback: If interactive messages fail (older API version),
- *           falls back to plain image + caption messages.
+ * Fallback: If interactive messages fail, falls back to plain image + caption.
  * ============================================================================
  */
 
@@ -62,11 +61,6 @@ const MAX_IMAGES_PER_PRODUCT = 4 // Max images per product (carousel cards)
 /**
  * Generic WhatsApp message sender.
  * All message types go through this to centralize error handling and logging.
- *
- * @param phone   - Recipient WhatsApp number
- * @param payload - Full WhatsApp API message payload (without messaging_product and to)
- * @param creds   - WhatsApp Business API credentials
- * @returns true if sent successfully, false if failed
  */
 async function sendWhatsAppMessage(
   phone: string,
@@ -99,34 +93,90 @@ async function sendWhatsAppMessage(
   }
 }
 
+// ─── Price & Discount Formatters ─────────────────────────────────────────────
+
+/**
+ * Format currency symbol based on currency code.
+ */
+function currencySymbol(currency: string): string {
+  return currency === 'INR' ? '₹' : currency
+}
+
+/**
+ * Calculate discount percentage between MRP and selling price.
+ * Returns null if no discount or compare_at_price not available.
+ */
+function discountPercent(price: number, compareAtPrice: number | null): number | null {
+  if (!compareAtPrice || compareAtPrice <= price) return null
+  return Math.round(((compareAtPrice - price) / compareAtPrice) * 100)
+}
+
+/**
+ * Build rich price line — Amazon style:
+ * "₹259  ~₹499~  *48% OFF*"   (with discount)
+ * "₹259"                       (without discount)
+ *
+ * WhatsApp formatting: *bold*, ~strikethrough~, _italic_
+ */
+function buildPriceLine(product: RetrievedProduct): string {
+  const sym = currencySymbol(product.currency)
+  const price = `*${sym}${product.price.toFixed(0)}*`
+
+  const discount = discountPercent(product.price, product.compare_at_price)
+  if (discount && product.compare_at_price) {
+    const mrp = `~${sym}${product.compare_at_price.toFixed(0)}~`
+    return `${price}  ${mrp}  *-${discount}% OFF*`
+  }
+  return price
+}
+
 // ─── Caption Builders ────────────────────────────────────────────────────────
 
 /**
- * Build clean product caption for CTA card.
- * Style: "Product Name — short description. ₹Price."
- * Matches the professional WhatsApp commerce style (like reference screenshots).
+ * Build rich product caption — Amazon/e-commerce style.
+ *
+ * Format:
+ *   *Product Name*
+ *   ₹259  ~₹499~  *-48% OFF*
+ *   ✅ In Stock · 📦 Free delivery
+ *   Short description here...
  */
-function buildProductCaption(product: RetrievedProduct): string {
-  const sym = product.currency === 'INR' ? '₹' : product.currency
-  const desc = product.description
-    ? product.description.replace(/\s+/g, ' ').trim().slice(0, 200)
-    : ''
+function buildRichCaption(product: RetrievedProduct): string {
+  const lines: string[] = []
 
-  const parts: string[] = []
-  parts.push(`*${product.name}*`)
-  if (desc) parts.push(desc)
-  parts.push(`${sym}${product.price.toFixed(0)}.`)
+  // Product name (bold)
+  lines.push(`*${product.name}*`)
 
-  // Only show stock status if out of stock (in-stock is implied)
-  if (!product.in_stock) parts.push('Currently out of stock.')
+  // Price line with discount
+  lines.push(buildPriceLine(product))
 
-  return parts.join(' — ')
+  // Stock + delivery status line
+  const statusParts: string[] = []
+  if (product.in_stock) {
+    statusParts.push('✅ In Stock')
+  } else {
+    statusParts.push('❌ Out of Stock')
+  }
+  statusParts.push('📦 Free delivery')
+  lines.push(statusParts.join(' · '))
+
+  // Short description (max 150 chars, clean)
+  if (product.description) {
+    const desc = product.description
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 150)
+    if (desc.length > 0) {
+      lines.push(`\n_${desc}_`)
+    }
+  }
+
+  return lines.join('\n')
 }
 
 /**
  * Build CTA button display text.
- * WhatsApp limits button text to 20 characters.
- * Format: "View [first 2-3 words of product name]"
+ * WhatsApp limits CTA button text to 20 characters.
  */
 function ctaButtonText(productName: string): string {
   const words = productName.split(/[\s—]+/)
@@ -138,19 +188,13 @@ function ctaButtonText(productName: string): string {
 // ─── Product Card Senders ────────────────────────────────────────────────────
 
 /**
- * Send a single interactive CTA URL product card.
- * This is the primary card format — image + caption + "View Product" button.
+ * Send a single rich interactive CTA URL product card.
+ * This is the primary card — image + rich caption + "View Product" button.
  *
- * WhatsApp interactive message format:
- * {
- *   type: "interactive",
- *   interactive: {
- *     type: "cta_url",
- *     header: { type: "image", image: { link: "..." } },
- *     body: { text: "Product name — description. ₹Price." },
- *     action: { name: "cta_url", parameters: { display_text: "View Product", url: "..." } }
- *   }
- * }
+ * WhatsApp interactive CTA URL format:
+ * - header: product image
+ * - body: rich formatted text (name, price, discount, stock)
+ * - action: CTA URL button linking to product page
  */
 async function sendProductCTACard(
   phone: string,
@@ -161,7 +205,7 @@ async function sendProductCTACard(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const interactive: Record<string, any> = {
     type: 'cta_url',
-    body: { text: buildProductCaption(product) },
+    body: { text: buildRichCaption(product) },
     action: {
       name: 'cta_url',
       parameters: {
@@ -184,7 +228,7 @@ async function sendProductCTACard(
     interactive,
   }, creds)
 
-  // If interactive fails (API version doesn't support it), try fallback
+  // If interactive fails, try fallback plain message
   if (!success) {
     return sendFallbackImageCard(phone, product, imageUrl, creds)
   }
@@ -192,9 +236,46 @@ async function sendProductCTACard(
 }
 
 /**
+ * Send "Add to Cart" quick reply button after the product card.
+ * This is a separate interactive button message that lets customer
+ * add the product without typing — one-tap experience.
+ *
+ * Button ID format: "add_cart_{external_id}" — parsed by intent detector
+ */
+async function sendAddToCartButton(
+  phone: string,
+  product: RetrievedProduct,
+  creds: WhatsAppCredentials
+): Promise<boolean> {
+  const sym = currencySymbol(product.currency)
+
+  return sendWhatsAppMessage(phone, {
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: {
+        text: `🛒 _${product.name}_ — ${sym}${product.price.toFixed(0)}`,
+      },
+      action: {
+        buttons: [
+          {
+            type: 'reply',
+            reply: { id: `add_cart_${product.external_id}`, title: '🛒 Add to Cart' },
+          },
+          {
+            type: 'reply',
+            reply: { id: `buy_now_${product.external_id}`, title: '⚡ Buy Now' },
+          },
+        ],
+      },
+    },
+  }, creds)
+}
+
+/**
  * Send additional product images (for carousel effect).
- * These are plain image messages without CTA button — just the image.
- * Sent after the main CTA card to create a gallery/carousel feel.
+ * These are plain image messages — sent after the main CTA card to
+ * create a gallery/carousel feel in WhatsApp.
  */
 async function sendAdditionalImage(
   phone: string,
@@ -208,8 +289,8 @@ async function sendAdditionalImage(
 }
 
 /**
- * Fallback: plain image + caption (for older WhatsApp Business API versions
- * that don't support interactive CTA URL messages).
+ * Fallback: plain image + rich caption (for older WhatsApp Business API
+ * versions that don't support interactive CTA URL messages).
  */
 async function sendFallbackImageCard(
   phone: string,
@@ -217,14 +298,8 @@ async function sendFallbackImageCard(
   imageUrl: string | null,
   creds: WhatsAppCredentials
 ): Promise<boolean> {
-  const sym = product.currency === 'INR' ? '₹' : product.currency
-  const stock = product.in_stock ? '✅ In Stock' : '❌ Out of Stock'
-  const caption = [
-    `*${product.name}*`,
-    `💰 ${sym}${product.price.toFixed(0)}`,
-    stock,
-    product.product_url ? `🔗 ${product.product_url}` : '',
-  ].filter(Boolean).join('\n')
+  const caption = buildRichCaption(product)
+    + (product.product_url ? `\n\n🔗 ${product.product_url}` : '')
 
   if (imageUrl) {
     return sendWhatsAppMessage(phone, {
@@ -232,7 +307,7 @@ async function sendFallbackImageCard(
       image: { link: imageUrl, caption },
     }, creds)
   }
-  // No image at all — send as text
+  // No image — send as text
   return sendWhatsAppMessage(phone, {
     type: 'text',
     text: { body: caption },
@@ -243,21 +318,22 @@ async function sendFallbackImageCard(
 
 /**
  * sendProductCardsToCustomer
- * Main entry point — sends product cards to customer on WhatsApp.
+ * Main entry point — sends rich product cards to customer on WhatsApp.
  *
  * For each product:
- *   1. Sends main CTA URL card (first image + product info + View button)
+ *   1. Sends main CTA URL card (first image + rich info + View button)
  *   2. If product has multiple images → sends remaining images as carousel
+ *   3. Sends "Add to Cart" / "Buy Now" quick reply buttons
  *
  * Image carousel strategy:
- *   - First image: Shown in the main CTA card (has product info + button)
- *   - Images 2-4: Sent as plain image messages (creates gallery scroll)
+ *   - First image: Shown in the main CTA card header
+ *   - Images 2-4: Sent as plain image messages (swipeable gallery)
  *   - Max 4 images per product to avoid WhatsApp spam detection
  *
- * @param recipientPhone - Customer's WhatsApp number
- * @param products       - Retrieved products to show (max MAX_PRODUCTS)
- * @param creds          - WhatsApp API credentials
- * @param productImageMap - Optional map of product ID → all image URLs (from DB)
+ * @param recipientPhone  - Customer's WhatsApp number
+ * @param products        - Retrieved products to show (max MAX_PRODUCTS)
+ * @param creds           - WhatsApp API credentials
+ * @param productImageMap - Optional map of product ID → all image URLs (deprecated, use image_urls)
  */
 export async function sendProductCardsToCustomer(
   recipientPhone: string,
@@ -270,20 +346,21 @@ export async function sendProductCardsToCustomer(
   const toShow = products.slice(0, MAX_PRODUCTS)
 
   for (const product of toShow) {
-    // Get all images for this product
-    const allImages = productImageMap?.get(product.id)
+    // Get all images — prefer image_urls from DB, fallback to map or single image
+    const allImages = product.image_urls
+      ?? productImageMap?.get(product.id)
       ?? (product.image_url ? [product.image_url] : [])
 
-    // Card 1: Main CTA card with first image + product info
+    // Card 1: Main CTA card with first image + rich product info
     const mainImage = allImages[0] ?? product.image_url
     try {
       await sendProductCTACard(recipientPhone, product, mainImage, creds)
     } catch (err) {
       console.error(`[ProductResponse] Main card failed for "${product.name}":`, err)
-      continue  // Skip carousel images if main card failed
+      continue  // Skip carousel + buttons if main card failed
     }
 
-    // Cards 2-4: Additional images (carousel effect)
+    // Cards 2-4: Additional images (carousel effect — swipeable in WhatsApp)
     const extraImages = allImages.slice(1, MAX_IMAGES_PER_PRODUCT)
     for (const imgUrl of extraImages) {
       try {
@@ -292,6 +369,14 @@ export async function sendProductCardsToCustomer(
         console.error(`[ProductResponse] Extra image failed:`, err)
         // Don't break — try remaining images
       }
+    }
+
+    // Quick action buttons: "Add to Cart" + "Buy Now"
+    try {
+      await sendAddToCartButton(recipientPhone, product, creds)
+    } catch (err) {
+      console.error(`[ProductResponse] Add to cart button failed:`, err)
+      // Non-critical — product card already sent
     }
   }
 }
@@ -302,12 +387,6 @@ export async function sendProductCardsToCustomer(
  * sendPaymentLinkCard
  * Sends Razorpay payment link as an interactive CTA URL button.
  * Professional style — customer taps button to open payment page.
- *
- * Card format:
- *   "🎉 Order #abc ready! Total: ₹650. Link expires in 24 hours."
- *   [ Pay ₹650 ] ← CTA button opens Razorpay payment page
- *
- * Falls back to plain text with URL if CTA fails.
  */
 export async function sendPaymentLinkCard(
   phone: string,
@@ -348,13 +427,6 @@ export async function sendPaymentLinkCard(
  * sendInteractiveButtons
  * Sends WhatsApp interactive reply buttons (max 3 buttons).
  * Used for checkout payment choice, confirmations, etc.
- *
- * WhatsApp button format:
- *   - type: "reply" (user taps, WhatsApp sends the button text as message)
- *   - max 3 buttons per message
- *   - max 20 chars per button title
- *
- * Falls back to numbered text list if buttons fail.
  *
  * @param phone    - Recipient phone number
  * @param bodyText - Message body above the buttons

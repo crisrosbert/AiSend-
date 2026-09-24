@@ -199,6 +199,7 @@ export default function AiAgentSettingsPage() {
 
     setConfig((prev) => prev ? { ...prev, scrape_status: 'running', embed_status: 'pending' } : prev)
 
+    // STEP 1: Scrape products (fast, <5s)
     const res = await fetch('/api/ai-agent/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -209,8 +210,43 @@ export default function AiAgentSettingsPage() {
       const body = await res.json().catch(() => ({}))
       setError('Sync failed: ' + (body.error ?? res.statusText))
       setSyncing(false)
+      return
     }
-    // On success: polling useEffect updates config + stops timer when done
+
+    // STEP 2: Embed in small batches — keep calling until done
+    setConfig((prev) => prev ? { ...prev, scrape_status: 'done', embed_status: 'running' } : prev)
+
+    let attempts = 0
+    const MAX_ATTEMPTS = 30 // 30 × 5 products = 150 products max; increase as needed
+
+    while (attempts < MAX_ATTEMPTS) {
+      attempts++
+      try {
+        const embRes = await fetch('/api/ai-agent/embed', { method: 'POST' })
+        if (!embRes.ok) {
+          const body = await embRes.json().catch(() => ({}))
+          setError('Embedding failed: ' + (body.error ?? embRes.statusText))
+          setSyncing(false)
+          return
+        }
+        const embBody = await embRes.json() as { done: boolean; remaining: number }
+        if (embBody.done) {
+          setConfig((prev) => prev ? { ...prev, embed_status: 'done' } : prev)
+          setSyncing(false)
+          return
+        }
+        // Small delay between batches to avoid hammering the API
+        await new Promise((r) => setTimeout(r, 500))
+      } catch (err) {
+        console.error('[Embed loop] error:', err)
+        setError('Embedding failed — check console')
+        setSyncing(false)
+        return
+      }
+    }
+
+    setError('Embedding timed out. Try syncing again to continue.')
+    setSyncing(false)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────

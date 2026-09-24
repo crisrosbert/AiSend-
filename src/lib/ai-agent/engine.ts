@@ -67,6 +67,7 @@ import {
   formatCartSummaryText, persistCartToSession, setCheckoutStep,
 } from './cart'
 import { initiateCheckout, processDeliveryAddress, processPaymentChoice } from './checkout'
+import type { RetrievedProduct } from './retriever'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -148,6 +149,27 @@ async function loadProductImages(
     }
   }
   return map
+}
+
+/**
+ * Look up a product by its Shopify external_id (variant ID).
+ * Used when customer taps "Add to Cart" or "Buy Now" quick reply buttons
+ * which carry the external_id in their button ID.
+ */
+async function findProductByExternalId(
+  userId: string,
+  externalId: string,
+  supabase: SupabaseClient
+): Promise<RetrievedProduct | null> {
+  const { data, error } = await supabase
+    .from('ai_agent_products')
+    .select('id, external_id, name, description, price, compare_at_price, currency, image_url, image_urls, product_url, in_stock')
+    .eq('user_id', userId)
+    .eq('external_id', externalId)
+    .single()
+
+  if (error || !data) return null
+  return { ...data, similarity: 1.0 } as RetrievedProduct
 }
 
 /** Send text reply via WhatsApp API (direct send, not through product-response.ts) */
@@ -367,6 +389,71 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
     await appendMessageToSession({
       userId, contactPhone,
       newMessages: [msg('user', inboundMessage)],
+      needsHuman: false, supabase,
+    })
+    return true
+  }
+
+  // ── Handle "Add to Cart" / "Buy Now" quick reply button taps ──
+  // Button IDs: "add_cart_{external_id}" and "buy_now_{external_id}"
+  // These come from product card buttons — intercept before intent detection
+  const addCartMatch = inboundMessage.match(/^add_cart_(.+)$/i)
+  const buyNowMatch = !addCartMatch ? inboundMessage.match(/^buy_now_(.+)$/i) : null
+
+  if (addCartMatch || buyNowMatch) {
+    const externalId = (addCartMatch?.[1] || buyNowMatch?.[1]) as string
+    console.log(`[Engine] Button tap detected: ${addCartMatch ? 'ADD_TO_CART' : 'BUY_NOW'}, externalId=${externalId}`)
+
+    const product = await findProductByExternalId(userId, externalId, supabase)
+
+    if (!product) {
+      const reply = `Sorry, I couldn't find that product. It may have been updated. Try searching again!`
+      await sendText(contactPhone, reply, waCreds)
+      await appendMessageToSession({
+        userId, contactPhone,
+        newMessages: [msg('user', inboundMessage), msg('assistant', reply)],
+        needsHuman: false, supabase,
+      })
+      return true
+    }
+
+    // Add to cart
+    const currentCart = getCartFromSession(session.cart)
+    const cartResult = addProductToCart(currentCart, product, 1)
+
+    if (cartResult.success) {
+      await persistCartToSession(userId, contactPhone, cartResult.updatedCart, supabase)
+      logEvent(userId, contactPhone, 'cart_add', {
+        productName: product.name,
+        externalId,
+        source: addCartMatch ? 'add_cart_button' : 'buy_now_button',
+        cartTotal: cartResult.updatedCart.totalAmount,
+      }, supabase)
+
+      if (buyNowMatch) {
+        // Buy Now → add to cart + immediately start checkout
+        const { message: checkoutMsg, updatedCart: checkoutCart } = initiateCheckout(cartResult.updatedCart)
+        await persistCartToSession(userId, contactPhone, checkoutCart, supabase)
+        await sendText(contactPhone, checkoutMsg, waCreds)
+        await appendMessageToSession({
+          userId, contactPhone,
+          newMessages: [msg('user', `Buy Now: ${product.name}`), msg('assistant', checkoutMsg)],
+          needsHuman: false, supabase,
+        })
+        logEvent(userId, contactPhone, 'checkout_started', {
+          items: checkoutCart.items.length,
+          total: checkoutCart.totalAmount,
+          source: 'buy_now_button',
+        }, supabase)
+        return true
+      }
+    }
+
+    // Add to Cart → send confirmation
+    await sendText(contactPhone, cartResult.message, waCreds)
+    await appendMessageToSession({
+      userId, contactPhone,
+      newMessages: [msg('user', `Add to Cart: ${product.name}`), msg('assistant', cartResult.message)],
       needsHuman: false, supabase,
     })
     return true

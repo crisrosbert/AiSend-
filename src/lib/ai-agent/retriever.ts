@@ -44,11 +44,51 @@ async function embedQuery(queryText: string): Promise<number[]> {
   return data.data[0].embedding
 }
 
+// ─── Generic Browse Patterns ─────────────────────────────────────────────────
+
+/** Detects generic browsing queries that won't match specific product embeddings */
+const BROWSE_PATTERNS = /^(show|what|list|browse|see|view|display|tell)\b.*(product|item|catalog|collection|have|sell|offer|available|stock)/i
+
+// ─── Fallback: Popular Products ──────────────────────────────────────────────
+
+/**
+ * Fetch popular/recent products when vector search returns nothing.
+ * Falls back to newest in-stock products (no embedding needed).
+ */
+async function fetchPopularProducts(
+  userId: string,
+  supabase: SupabaseClient,
+  limit: number = MAX_PRODUCTS_TO_RETRIEVE
+): Promise<RetrievedProduct[]> {
+  const { data, error } = await supabase
+    .from('ai_agent_products')
+    .select('id, external_id, name, description, price, currency, image_url, product_url, in_stock')
+    .eq('user_id', userId)
+    .eq('in_stock', true)
+    .order('updated_at', { ascending: false })
+    .limit(limit)
+
+  if (error || !data?.length) {
+    // If no in-stock products, try any products
+    const { data: anyProducts } = await supabase
+      .from('ai_agent_products')
+      .select('id, external_id, name, description, price, currency, image_url, product_url, in_stock')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(limit)
+    if (!anyProducts?.length) return []
+    return anyProducts.map((p) => ({ ...p, similarity: 0 })) as RetrievedProduct[]
+  }
+
+  return data.map((p) => ({ ...p, similarity: 0 })) as RetrievedProduct[]
+}
+
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
 /**
  * retrieveProductsForQuery
- * Converts customer query to vector → cosine similarity search → returns top-K products
+ * Converts customer query to vector → cosine similarity search → returns top-K products.
+ * For generic browsing queries ("show me products"), falls back to popular products.
  */
 export async function retrieveProductsForQuery(
   userId: string,
@@ -66,9 +106,17 @@ export async function retrieveProductsForQuery(
 
   if (error) throw new Error(`[Retriever] RPC error: ${error.message}`)
 
-  const results = (products as RetrievedProduct[]) ?? []
+  let results = (products as RetrievedProduct[]) ?? []
 
   // Prefer in-stock products; fall back to all if none in stock
   const inStock = results.filter((p) => p.in_stock)
-  return inStock.length > 0 ? inStock : results
+  results = inStock.length > 0 ? inStock : results
+
+  // Fallback: if vector search returned nothing AND query looks like a generic browse → fetch popular
+  if (results.length === 0 && BROWSE_PATTERNS.test(customerQuery)) {
+    console.log(`[Retriever] Generic browse detected: "${customerQuery}" — fetching popular products`)
+    return fetchPopularProducts(userId, supabase)
+  }
+
+  return results
 }

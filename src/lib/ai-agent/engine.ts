@@ -239,15 +239,20 @@ async function handleCheckoutFlow(
     // ── Step: Waiting for payment choice (Online / COD) ──
     case 'awaiting_payment_choice': {
       // Detect payment choice from message or button reply
-      const msg = inboundMessage.toLowerCase()
-      console.log(`[Engine] awaiting_payment_choice — inboundMessage: "${inboundMessage}", lowercase: "${msg}"`)
+      const msg = inboundMessage.toLowerCase().trim()
+      console.log(`[Engine] awaiting_payment_choice — raw inboundMessage: "${inboundMessage}", length: ${inboundMessage.length}, lowercase: "${msg}"`)
       console.log(`[Engine] Cart state: items=${cart.items.length}, total=${cart.totalAmount}, address=${cart.deliveryAddress?.fullAddress || 'none'}`)
 
       let paymentMethod: 'ONLINE' | 'COD' | null = null
 
-      if (/online|pay now|upi|card|pay_online|razorpay/i.test(msg)) {
+      // Match exact button IDs first (most reliable), then fuzzy text matches
+      if (msg === 'pay_online' || msg === 'pay online') {
         paymentMethod = 'ONLINE'
-      } else if (/cod|cash|pay_cod|cash on delivery/i.test(msg)) {
+      } else if (msg === 'pay_cod' || msg === 'cash on delivery') {
+        paymentMethod = 'COD'
+      } else if (/online|pay.?now|upi|card|razorpay|gpay|paytm/i.test(msg)) {
+        paymentMethod = 'ONLINE'
+      } else if (/cod|cash|collect/i.test(msg)) {
         paymentMethod = 'COD'
       }
 

@@ -20,7 +20,7 @@ interface AgentStats {
 
 // ─── Data Fetchers ────────────────────────────────────────────────────────────
 
-async function getAgentConfig(userId: string, supabase: ReturnType<typeof createClient>) {
+async function getAgentConfig(userId: string, supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data } = await supabase
     .from('ai_agent_configs')
     .select('*')
@@ -29,7 +29,7 @@ async function getAgentConfig(userId: string, supabase: ReturnType<typeof create
   return data
 }
 
-async function getAgentStats(userId: string, supabase: ReturnType<typeof createClient>): Promise<AgentStats> {
+async function getAgentStats(userId: string, supabase: Awaited<ReturnType<typeof createClient>>): Promise<AgentStats> {
   const [products, sessions, orders] = await Promise.all([
     supabase.from('ai_agent_products').select('id', { count: 'exact', head: true }).eq('user_id', userId),
     supabase.from('ai_agent_sessions').select('id', { count: 'exact', head: true }).eq('user_id', userId),
@@ -95,7 +95,7 @@ function StatusBadge({ enabled, scrapeStatus, embedStatus }: { enabled: boolean;
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function AiAgentPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

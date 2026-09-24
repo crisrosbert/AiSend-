@@ -1,375 +1,413 @@
-// ============================================================
-// File: src/lib/ai-agent/engine.ts
-// Purpose: Main entry point for the AI Ecommerce Agent.
-//          Called by the WhatsApp webhook after existing journey
-//          and broadcast handlers have had their turn.
-//
-// Flow:
-//   1. Guard checks (agent enabled? human already handling?)
-//   2. Load agent config + conversation session from DB
-//   3. Detect customer intent (shopping / cart / checkout / etc.)
-//   4. Route to the correct handler based on intent
-//   5. Send WhatsApp reply
-//   6. Persist updated session (messages + cart)
-//   7. Log analytics event
-// ============================================================
+/**
+ * File: src/lib/ai-agent/engine.ts
+ * Purpose: Main orchestrator for AI Ecommerce Agent
+ *
+ * This is the single entry point called by the WhatsApp webhook handler.
+ * It coordinates: intent detection → product retrieval → reply generation → cart/checkout ops
+ *
+ * Called from: src/app/api/whatsapp/webhook/route.ts
+ * Completely separate from existing agent systems (src/lib/agent/, src/lib/whatsapp-agent/)
+ *
+ * Flow:
+ *   1. Check kill switch (AI_AGENT_DISABLED env var)
+ *   2. Load merchant's agent config from ai_agent_configs table
+ *   3. Load/create customer session (conversation memory + cart)
+ *   4. Detect customer intent using GPT-4o-mini
+ *   5. Route to appropriate handler (shopping / cart / checkout / greeting)
+ *   6. Send WhatsApp reply
+ */
 
-import { createClient } from '@supabase/supabase-js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { detectIntent }         from '@/lib/ai-agent/intent'
+import { detectIntent }                          from '@/lib/ai-agent/intent'
 import { getOrCreateSession, appendMessageToSession } from '@/lib/ai-agent/memory'
-import { retrieveProducts }     from '@/lib/ai-agent/retriever'
-import { generateAgentReply }   from '@/lib/ai-agent/responder'
-import { sendProductCards }     from '@/lib/ai-agent/product-response'
-import { addItemToCart, getCartSummary } from '@/lib/ai-agent/cart'
-import { initiateCheckout }     from '@/lib/ai-agent/checkout'
-import { logAgentEvent }        from '@/lib/ai-agent/analytics'
+import { retrieveProductsForQuery }              from '@/lib/ai-agent/retriever'
+import { generateAgentReply, generateGreetingReply } from '@/lib/ai-agent/responder'
+import { sendProductCardsToCustomer }            from '@/lib/ai-agent/product-response'
+import {
+  getCartFromSession,
+  addProductToCart,
+  formatCartSummaryText,
+  persistCartToSession,
+} from '@/lib/ai-agent/cart'
+import { processCheckout }                       from '@/lib/ai-agent/checkout'
 
-// ─────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-/**
- * Input passed from the WhatsApp webhook handler.
- * All fields come from the verified inbound message payload.
- */
+/** Input received from the WhatsApp webhook handler */
 export interface AiAgentInput {
-  /** The AiSend tenant (business account) who owns this agent */
-  userId: string
-  /** End customer's WhatsApp phone number (without leading +) */
-  contactPhone: string
-  /** Raw text of the customer's inbound message */
-  inboundMessage: string
-  /** Supabase client already initialised by the webhook handler */
+  userId: string          // Merchant's Supabase user ID
+  contactPhone: string    // Customer's WhatsApp phone number (with country code)
+  inboundMessage: string  // Text message sent by the customer
   supabase: SupabaseClient
 }
 
-// ─────────────────────────────────────────────────────────────
-// Kill Switch
-// ─────────────────────────────────────────────────────────────
+/** Shape of a row from ai_agent_configs table */
+interface AiAgentConfig {
+  id: string
+  user_id: string
+  store_name: string
+  brand_voice_prompt: string
+  language: string
+  is_enabled: boolean
+}
+
+/** WhatsApp credentials read from whatsapp_config table */
+interface WhatsAppCredentials {
+  phoneNumberId: string
+  accessToken: string
+}
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+/** WhatsApp Cloud API base URL */
+const WHATSAPP_GRAPH_API_URL = 'https://graph.facebook.com/v21.0'
+
+// ─── Guard: Kill Switch ────────────────────────────────────────────────────────
 
 /**
- * Returns true when the AI agent feature is globally disabled
- * via environment variable. Used as an emergency kill switch
- * without needing a code deployment.
- *
- * To disable: set AI_AGENT_DISABLED=true in Vercel env vars.
- * To re-enable: remove the variable and redeploy.
+ * isAgentGloballyDisabled
+ * Checks the AI_AGENT_DISABLED environment variable kill switch.
+ * Set AI_AGENT_DISABLED=true in Vercel to stop the agent without a deployment.
  */
 function isAgentGloballyDisabled(): boolean {
   return process.env.AI_AGENT_DISABLED === 'true'
 }
 
-// ─────────────────────────────────────────────────────────────
-// Guard: Check if agent is configured and active for this user
-// ─────────────────────────────────────────────────────────────
+// ─── Config Loader ─────────────────────────────────────────────────────────────
 
 /**
- * Loads the ai_agent_configs row for this business.
- * Returns null if:
- *  - No config exists (agent was never set up)
- *  - Agent is disabled (is_enabled = false)
- *  - Product catalog has not been embedded yet
+ * loadActiveAgentConfig
+ * Reads the merchant's AI agent configuration from ai_agent_configs table.
+ * Returns null if no config exists or if the agent is disabled for this merchant.
  */
 async function loadActiveAgentConfig(
   userId: string,
-  supabase: SupabaseClient,
-) {
-  const { data: agentConfig, error } = await supabase
+  supabase: SupabaseClient
+): Promise<AiAgentConfig | null> {
+  const { data: agentConfig, error: configError } = await supabase
     .from('ai_agent_configs')
-    .select(
-      'id, user_id, brand_name, brand_voice_prompt, language, is_enabled, embed_status',
-    )
+    .select('id, user_id, store_name, brand_voice_prompt, language, is_enabled')
+    .eq('user_id', userId)
+    .eq('is_enabled', true)
+    .single()
+
+  if (configError || !agentConfig) {
+    console.log(`[AI Agent Engine] No active config for userId=${userId} — agent skipped`)
+    return null
+  }
+
+  return agentConfig as AiAgentConfig
+}
+
+// ─── WhatsApp Helpers ──────────────────────────────────────────────────────────
+
+/**
+ * getWhatsAppCredentials
+ * Reads WhatsApp Business API credentials from the whatsapp_config table.
+ * These are the same credentials used by the existing WhatsApp messaging system.
+ */
+async function getWhatsAppCredentials(
+  userId: string,
+  supabase: SupabaseClient
+): Promise<WhatsAppCredentials | null> {
+  const { data: waConfig, error: waError } = await supabase
+    .from('whatsapp_config')
+    .select('phone_number_id, access_token')
     .eq('user_id', userId)
     .single()
 
-  if (error || !agentConfig) {
-    // No ecommerce agent configured for this business — skip silently
+  if (waError || !waConfig) {
+    console.error(`[AI Agent Engine] WhatsApp config not found for userId=${userId}`)
     return null
   }
 
-  if (!agentConfig.is_enabled) {
-    // Business has not activated the agent yet
-    return null
+  return {
+    phoneNumberId: waConfig.phone_number_id,
+    accessToken: waConfig.access_token,
   }
-
-  if (agentConfig.embed_status !== 'done') {
-    // Product catalog not embedded — agent cannot search products yet
-    console.log(`[ai-agent] embed not ready for user=${userId}, status=${agentConfig.embed_status}`)
-    return null
-  }
-
-  return agentConfig
 }
 
-// ─────────────────────────────────────────────────────────────
-// Main Handler
-// ─────────────────────────────────────────────────────────────
+/**
+ * sendWhatsAppTextMessage
+ * Sends a plain text reply to the customer via WhatsApp Cloud API.
+ */
+async function sendWhatsAppTextMessage(
+  recipientPhone: string,
+  messageText: string,
+  credentials: WhatsAppCredentials
+): Promise<void> {
+  const apiUrl = `${WHATSAPP_GRAPH_API_URL}/${credentials.phoneNumberId}/messages`
+
+  const response = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${credentials.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: recipientPhone,
+      type: 'text',
+      text: { body: messageText },
+    }),
+  })
+
+  if (!response.ok) {
+    const errorBody = await response.text()
+    throw new Error(
+      `[AI Agent Engine] WhatsApp text send failed (${response.status}): ${errorBody}`
+    )
+  }
+}
+
+// ─── Analytics Logger ──────────────────────────────────────────────────────────
+
+/**
+ * logAgentEvent
+ * Writes an event to ai_agent_events for analytics (non-blocking).
+ * Failures here never break the main agent flow.
+ */
+async function logAgentEvent(
+  userId: string,
+  contactPhone: string,
+  eventType: string,
+  eventData: Record<string, unknown>,
+  supabase: SupabaseClient
+): Promise<void> {
+  const { error } = await supabase.from('ai_agent_events').insert({
+    user_id: userId,
+    contact_phone: contactPhone,
+    event_type: eventType,
+    event_data: eventData,
+  })
+
+  if (error) {
+    console.error(`[AI Agent Engine] Failed to log event "${eventType}": ${error.message}`)
+  }
+}
+
+// ─── Main Entry Point ──────────────────────────────────────────────────────────
 
 /**
  * handleAiAgentMessage
+ * Called by the WhatsApp webhook route for every inbound message.
+ * Returns true if the AI agent handled the message, false if skipped.
  *
- * Called from the WhatsApp webhook after journeys and broadcasts
- * have been processed. Uses `void` at the call site so the webhook
- * returns 200 immediately — this function runs asynchronously.
- *
- * Returns true if the agent sent a reply, false if it skipped.
+ * The webhook route calls this inside Next.js after() so it runs async
+ * and the webhook returns 200 immediately without waiting for AI processing.
  */
-export async function handleAiAgentMessage(
-  input: AiAgentInput,
-): Promise<boolean> {
+export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean> {
   const { userId, contactPhone, inboundMessage, supabase } = input
 
-  // ── Guard 1: Global kill switch ──────────────────────────
+  // ── Guard 1: Global kill switch ──
   if (isAgentGloballyDisabled()) {
-    console.log('[ai-agent] globally disabled via AI_AGENT_DISABLED env var')
+    console.log('[AI Agent Engine] Agent globally disabled via AI_AGENT_DISABLED env var')
     return false
   }
 
-  // ── Guard 2: Agent must be configured and active ─────────
+  // ── Guard 2: Merchant config check ──
   const agentConfig = await loadActiveAgentConfig(userId, supabase)
   if (!agentConfig) return false
 
-  // ── Guard 3: Skip if a human operator has taken over ─────
-  const session = await getOrCreateSession(userId, contactPhone, supabase)
-  if (session.needs_human) {
-    console.log(`[ai-agent] human operator active for user=${userId} phone=${contactPhone}`)
+  // ── Guard 3: WhatsApp credentials ──
+  const waCredentials = await getWhatsAppCredentials(userId, supabase)
+  if (!waCredentials) return false
+
+  // ── Step 1: Load or create customer session (memory + cart) ──
+  const customerSession = await getOrCreateSession(userId, contactPhone, supabase)
+
+  // ── Guard 4: Human takeover mode ──
+  if (customerSession.needs_human) {
+    console.log(
+      `[AI Agent Engine] Session flagged needs_human — skipping AI for phone=${contactPhone}`
+    )
     return false
   }
 
-  // ── Step 1: Detect what the customer wants ────────────────
-  const intentResult = await detectIntent(
-    inboundMessage,
-    session.messages,
+  const isFirstMessage = customerSession.messages.length === 0
+
+  // ── Step 2: Detect customer intent ──
+  const intentResult = await detectIntent(inboundMessage, customerSession.messages)
+
+  console.log(
+    `[AI Agent Engine] Intent=${intentResult.intent} confidence=${intentResult.confidence} for phone=${contactPhone}`
   )
 
-  // Log that we received and processed this message
-  await logAgentEvent({
-    userId,
-    contactPhone,
-    eventType: 'message_received',
-    payload: {
-      intent: intentResult.intent,
-      message_preview: inboundMessage.slice(0, 100),
-    },
-    supabase,
-  })
+  // Log every inbound message as an event
+  void logAgentEvent(userId, contactPhone, 'message_received', {
+    intent: intentResult.intent,
+    confidence: intentResult.confidence,
+    messageLength: inboundMessage.length,
+  }, supabase)
 
-  // ── Step 2: Route based on detected intent ────────────────
-  let agentReplyText = ''
-  let handoffToHuman = false
+  // ── Step 3: Route by intent ──
+  const responderConfig = {
+    store_name: agentConfig.store_name,
+    brand_voice_prompt: agentConfig.brand_voice_prompt,
+    language: agentConfig.language,
+  }
+
+  let replyText: string
 
   switch (intentResult.intent) {
 
-    // Customer is looking for products
+    // ── GREETING ──────────────────────────────────────────────────────────────
+    case 'GREETING': {
+      replyText = await generateGreetingReply(responderConfig, isFirstMessage)
+      break
+    }
+
+    // ── SHOPPING QUERY → RAG retrieval + LLM reply + product cards ────────────
     case 'SHOPPING_QUERY': {
-      const matchedProducts = await retrieveProducts({
-        query: inboundMessage,
+      const searchQuery = intentResult.productKeywords || inboundMessage
+      const retrievedProducts = await retrieveProductsForQuery(userId, searchQuery, supabase)
+
+      replyText = await generateAgentReply(
+        responderConfig,
+        inboundMessage,
+        customerSession.messages,
+        retrievedProducts
+      )
+
+      // Send text reply first, then product image cards
+      await sendWhatsAppTextMessage(contactPhone, replyText, waCredentials)
+
+      if (retrievedProducts.length > 0) {
+        void sendProductCardsToCustomer(contactPhone, retrievedProducts, {
+          phoneNumberId: waCredentials.phoneNumberId,
+          accessToken: waCredentials.accessToken,
+        })
+      }
+
+      // Update session memory with this exchange
+      await appendMessageToSession({
         userId,
+        contactPhone,
+        newMessages: [
+          { role: 'user', content: inboundMessage },
+          { role: 'assistant', content: replyText },
+        ],
         supabase,
       })
 
-      if (matchedProducts.length === 0) {
-        agentReplyText = await generateAgentReply({
-          prompt: inboundMessage,
-          context: 'No matching products found in catalog.',
-          agentConfig,
-          conversationHistory: session.messages,
-        })
-      } else {
-        // Generate natural language intro before sending product cards
-        agentReplyText = await generateAgentReply({
-          prompt: inboundMessage,
-          context: matchedProducts
-            .map((p) => `${p.name} — ₹${p.price} — ${p.description ?? ''}`)
-            .join('\n'),
-          agentConfig,
-          conversationHistory: session.messages,
-        })
+      void logAgentEvent(userId, contactPhone, 'shopping_query', {
+        query: searchQuery,
+        productsFound: retrievedProducts.length,
+      }, supabase)
 
-        // Send product image cards after the text reply
-        await sendProductCards({
-          userId,
-          contactPhone,
-          products: matchedProducts,
-          supabase,
-        })
+      return true // Already sent reply above — skip sendWhatsAppTextMessage below
+    }
+
+    // ── CART ADD ──────────────────────────────────────────────────────────────
+    case 'CART_ADD': {
+      const searchQuery = intentResult.productKeywords || inboundMessage
+      const retrievedProducts = await retrieveProductsForQuery(userId, searchQuery, supabase)
+
+      if (retrievedProducts.length === 0) {
+        replyText = `I couldn't find that product. Could you describe what you're looking for?`
+        break
+      }
+
+      // Add the top matching product to cart
+      const topProduct = retrievedProducts[0]
+      const currentCart = getCartFromSession(customerSession.cart)
+      const cartResult = addProductToCart(currentCart, topProduct, intentResult.quantity ?? 1)
+
+      if (cartResult.success) {
+        await persistCartToSession(userId, contactPhone, cartResult.updatedCart, supabase)
+        void logAgentEvent(userId, contactPhone, 'cart_add', {
+          productId: topProduct.id,
+          productName: topProduct.name,
+          quantity: intentResult.quantity ?? 1,
+        }, supabase)
+      }
+
+      replyText = cartResult.message
+      break
+    }
+
+    // ── CART VIEW ─────────────────────────────────────────────────────────────
+    case 'CART_VIEW': {
+      const currentCart = getCartFromSession(customerSession.cart)
+      const cartSummary = formatCartSummaryText(currentCart)
+
+      if (currentCart.items.length === 0) {
+        replyText = `Your cart is empty! Tell me what you're looking for and I'll help you find it. 🛍️`
+      } else {
+        replyText = `${cartSummary}\n\nReply "checkout online" to pay now, or "checkout COD" for cash on delivery.`
       }
       break
     }
 
-    // Customer wants to add something to cart
-    case 'CART_ADD': {
-      const cartResult = await addItemToCart({
-        userId,
-        contactPhone,
-        intentResult,
-        supabase,
-      })
-      agentReplyText = cartResult.confirmationMessage
-      break
-    }
-
-    // Customer wants to see their cart
-    case 'CART_VIEW': {
-      agentReplyText = await getCartSummary(userId, contactPhone, supabase)
-      break
-    }
-
-    // Customer is ready to pay
+    // ── CHECKOUT ──────────────────────────────────────────────────────────────
     case 'CHECKOUT': {
-      agentReplyText = await initiateCheckout({
+      const currentCart = getCartFromSession(customerSession.cart)
+
+      // Detect payment method from message ("COD" / "cash" → COD, else ONLINE)
+      const isCodRequested =
+        inboundMessage.toLowerCase().includes('cod') ||
+        inboundMessage.toLowerCase().includes('cash')
+
+      const checkoutResult = await processCheckout({
         userId,
         contactPhone,
-        agentConfig,
+        contactName: '',   // Customer name not stored yet — future enhancement
+        cart: currentCart,
+        paymentMethod: isCodRequested ? 'COD' : 'ONLINE',
         supabase,
       })
+
+      replyText = checkoutResult.message
       break
     }
 
-    // Customer said hi / general greeting
-    case 'GREETING': {
-      agentReplyText = await generateAgentReply({
-        prompt: inboundMessage,
-        context: `Greet the customer warmly. Business name: ${agentConfig.brand_name ?? 'our store'}.`,
-        agentConfig,
-        conversationHistory: session.messages,
-      })
-      break
-    }
-
-    // Agent cannot help — escalate to human
+    // ── HUMAN NEEDED ──────────────────────────────────────────────────────────
     case 'HUMAN_NEEDED': {
-      handoffToHuman = true
-      agentReplyText = await generateAgentReply({
-        prompt: inboundMessage,
-        context: 'Customer needs human assistance. Apologise and say a team member will be in touch shortly.',
-        agentConfig,
-        conversationHistory: session.messages,
-      })
-
-      await logAgentEvent({
+      // Flag session so agent stops responding — human agent takes over
+      await appendMessageToSession({
         userId,
         contactPhone,
-        eventType: 'human_handoff',
-        payload: { reason: 'intent=HUMAN_NEEDED', message: inboundMessage },
+        newMessages: [{ role: 'user', content: inboundMessage }],
+        needsHuman: true,
         supabase,
       })
+
+      replyText = `I'm connecting you with our team right away. Someone will be with you shortly! 🙏`
+
+      void logAgentEvent(userId, contactPhone, 'human_takeover_requested', {
+        triggerMessage: inboundMessage,
+      }, supabase)
       break
     }
 
-    // Out of scope — politely decline
+    // ── OUT OF SCOPE / DEFAULT ────────────────────────────────────────────────
     case 'OUT_OF_SCOPE':
     default: {
-      agentReplyText = await generateAgentReply({
-        prompt: inboundMessage,
-        context: 'Customer asked something outside your scope. Politely redirect to shopping.',
-        agentConfig,
-        conversationHistory: session.messages,
-      })
+      replyText = await generateAgentReply(
+        responderConfig,
+        inboundMessage,
+        customerSession.messages,
+        []   // No product context for out-of-scope queries
+      )
       break
     }
   }
 
-  // ── Step 3: Send the text reply via WhatsApp ──────────────
-  if (agentReplyText) {
-    const { accessToken, phoneNumberId } = await getWhatsAppCredentials(
-      userId,
-      supabase,
-    )
-    await sendWhatsAppTextMessage({
-      accessToken,
-      phoneNumberId,
-      toPhone: contactPhone,
-      messageText: agentReplyText,
-    })
-  }
+  // ── Step 4: Send the reply (for all intents that didn't return early) ──
+  await sendWhatsAppTextMessage(contactPhone, replyText, waCredentials)
 
-  // ── Step 4: Update session memory ─────────────────────────
+  // ── Step 5: Save this exchange to session memory ──
   await appendMessageToSession({
     userId,
     contactPhone,
     newMessages: [
-      { role: 'user',      content: inboundMessage,  timestamp: new Date().toISOString() },
-      { role: 'assistant', content: agentReplyText,   timestamp: new Date().toISOString() },
+      { role: 'user', content: inboundMessage },
+      { role: 'assistant', content: replyText },
     ],
-    needsHuman: handoffToHuman,
     supabase,
   })
 
   return true
-}
-
-// ─────────────────────────────────────────────────────────────
-// WhatsApp Credentials Helper
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Fetches the WhatsApp access token and phone number ID
- * for this business from the whatsapp_config table.
- * These are set when the user connects their WhatsApp account.
- */
-async function getWhatsAppCredentials(
-  userId: string,
-  supabase: SupabaseClient,
-): Promise<{ accessToken: string; phoneNumberId: string }> {
-  const { data, error } = await supabase
-    .from('whatsapp_config')
-    .select('access_token, phone_number_id')
-    .eq('user_id', userId)
-    .single()
-
-  if (error || !data) {
-    throw new Error(`[ai-agent] WhatsApp credentials not found for user=${userId}`)
-  }
-
-  return {
-    accessToken:   data.access_token,
-    phoneNumberId: data.phone_number_id,
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// WhatsApp Text Message Sender
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Sends a plain text message via the WhatsApp Cloud API.
- * preview_url: false — prevents WhatsApp from expanding
- * any links inside the message text into link previews.
- */
-async function sendWhatsAppTextMessage(params: {
-  accessToken:   string
-  phoneNumberId: string
-  toPhone:       string
-  messageText:   string
-}): Promise<void> {
-  const { accessToken, phoneNumberId, toPhone, messageText } = params
-
-  const response = await fetch(
-    `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization:  `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to:   toPhone,
-        type: 'text',
-        text: {
-          body:        messageText,
-          preview_url: false,
-        },
-      }),
-    },
-  )
-
-  if (!response.ok) {
-    const errorBody = await response.json()
-    console.error('[ai-agent] WhatsApp text send failed:', errorBody)
-    throw new Error(`WhatsApp API error: ${response.status}`)
-  }
 }

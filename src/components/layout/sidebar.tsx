@@ -24,6 +24,7 @@ import {
   Bot,
   Workflow,
   BarChart3,
+  ShoppingCart,
 } from "lucide-react";
 import {
   Avatar,
@@ -39,39 +40,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const navItems = [
-  { path: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  // Next to Dashboard, not buried near Settings. Dashboard answers
-  // "what is happening right now"; Analytics answers "is this working"
-  // — and the second question is the one that decides whether someone
-  // renews, so it should not take three clicks to find.
-  { path: "analytics", label: "Analytics", icon: BarChart3 },
-  // AI Agents sits high in the list on purpose: it is the feature we
-  // want people to find, and burying it below Bookings guarantees they
-  // never will.
-  { path: "agents",    label: "AI Agents",  icon: Bot },
-  { path: "inbox",     label: "Live Chat",  icon: MessageSquare },
-  { path: "recent",    label: "Recent",     icon: History },
-  { path: "contacts",  label: "Contacts",   icon: Users },
-  { path: "pipelines", label: "Pipelines",  icon: GitBranch },
-  { path: "broadcasts",label: "Campaigns",  icon: Radio },
-  // Two builders, two jobs — the labels have to say which is which.
-  // "Chat Flows" is the visual canvas the customer experiences;
-  // "Automation Rules" is the background CRM engine. Previously the
-  // canvas had no nav entry at all and "Flows" pointed at the rules,
-  // which meant nobody could find the thing they were looking for.
-  { path: "journeys",   label: "Chat Flows", icon: Workflow },
-  { path: "automations",label: "Automation Rules", icon: Zap },
-  { path: "bookings",  label: "Bookings",   icon: CalendarCheck },
-  { path: "leads",     label: "Website Leads", icon: Globe },
-  { path: "widget",    label: "Website Widget", icon: Globe },
+  { path: "dashboard",   label: "Dashboard",        icon: LayoutDashboard },
+  { path: "analytics",   label: "Analytics",        icon: BarChart3 },
+  { path: "agents",      label: "AI Agents",        icon: Bot },
+  { path: "ai-agent",    label: "Shop Agent",       icon: ShoppingCart },
+  { path: "inbox",       label: "Live Chat",        icon: MessageSquare },
+  { path: "recent",      label: "Recent",           icon: History },
+  { path: "contacts",    label: "Contacts",         icon: Users },
+  { path: "pipelines",   label: "Pipelines",        icon: GitBranch },
+  { path: "broadcasts",  label: "Campaigns",        icon: Radio },
+  { path: "journeys",    label: "Chat Flows",       icon: Workflow },
+  { path: "automations", label: "Automation Rules", icon: Zap },
+  { path: "bookings",    label: "Bookings",         icon: CalendarCheck },
+  { path: "leads",       label: "Website Leads",    icon: Globe },
+  { path: "widget",      label: "Website Widget",   icon: Globe },
 ];
 
 const bottomNavItems = [
-  // Sits above Billing so a silent failure is seen on the way past,
-  // rather than only when somebody goes looking for it.
   { path: "health",   label: "System Health", icon: Activity },
-  { path: "billing",  label: "Billing",  icon: Wallet, absolute: true },
-  { path: "settings", label: "Settings", icon: Settings },
+  { path: "billing",  label: "Billing",       icon: Wallet, absolute: true },
+  { path: "settings", label: "Settings",      icon: Settings },
 ];
 
 interface SidebarProps {
@@ -130,10 +118,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex h-full flex-col",
           "transition-transform duration-200 ease-out will-change-transform",
-          /* mobile: full-width drawer that slides in */
           "w-64",
           open ? "translate-x-0" : "-translate-x-full",
-          /* desktop: always-visible narrow icon+label column */
           "lg:static lg:z-0 lg:w-[72px] lg:translate-x-0 lg:transition-none",
         )}
         style={{ background: "var(--brand-teal-dark, #075E54)" }}
@@ -146,7 +132,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             className="flex items-center justify-center"
             title="AiSend"
           >
-            {/* Lightning bolt logo mark */}
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl"
               style={{ background: "linear-gradient(135deg,#22c55e,#059669)" }}
@@ -161,7 +146,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             </div>
           </Link>
 
-          {/* Mobile close button */}
           <button
             type="button"
             onClick={onClose}
@@ -184,14 +168,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     title={item.label}
                     className={cn(
                       "group relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 transition-all duration-150",
-                      /* mobile: show as horizontal row */
                       "lg:flex-col",
                       active
                         ? "bg-emerald-500/15 text-emerald-400"
                         : "text-white/40 hover:bg-white/5 hover:text-white/80",
                     )}
                   >
-                    {/* Active left-bar indicator */}
                     {active && (
                       <span
                         className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full"
@@ -217,7 +199,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     <span
                       className={cn(
                         "text-center font-medium leading-none",
-                        /* on mobile (inside drawer) show label inline */
                         "hidden lg:block",
                         "text-[9.5px] tracking-wide",
                         active ? "text-emerald-400" : "text-white/40 group-hover:text-white/70",
@@ -226,7 +207,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                       {item.label}
                     </span>
 
-                    {/* Mobile drawer label */}
                     <span className="ml-3 flex-1 text-sm font-medium lg:hidden">
                       {item.label}
                     </span>
@@ -236,10 +216,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             })}
           </ul>
 
-          {/* Divider */}
           <div className="my-2 mx-3 border-t border-white/5" />
 
-          {/* Bottom nav items */}
           <ul className="flex flex-col items-center gap-0.5 px-2">
             {bottomNavItems.map((item) => {
               const active = isActive(item.path);
@@ -306,7 +284,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               className="min-w-52 border-white/10 text-slate-200"
               style={{ background: "var(--brand-teal-dark, #075E54)" }}
             >
-              {/* User info */}
               <div className="px-3 py-2 border-b border-white/5">
                 <p className="text-sm font-semibold text-white truncate">
                   {profile?.full_name ?? "User"}

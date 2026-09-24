@@ -7,6 +7,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { decrypt } from '@/lib/whatsapp/encryption'
 import { detectIntent } from './intent'
 import { getOrCreateSession, appendMessageToSession, type ConversationMessage } from './memory'
 import { retrieveProductsForQuery } from './retriever'
@@ -53,7 +54,7 @@ async function loadWaCredentials(userId: string, supabase: SupabaseClient): Prom
     .eq('user_id', userId)
     .single()
   if (error || !data) return null
-  return { phoneNumberId: data.phone_number_id, accessToken: data.access_token }
+  return { phoneNumberId: data.phone_number_id, accessToken: decrypt(data.access_token) }
 }
 
 async function sendText(phone: string, text: string, creds: WhatsAppCredentials): Promise<void> {

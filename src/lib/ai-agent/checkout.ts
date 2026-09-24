@@ -140,22 +140,48 @@ export async function processPaymentChoice(
   try {
     // Insert order record
     console.log(`[Checkout] Inserting order: userId=${userId}, phone=${contactPhone}, method=${paymentMethod}, total=${cart.totalAmount}, items=${cart.items.length}`)
-    const { data: order, error: orderError } = await supabase
+
+    // Full order payload with all columns
+    const orderPayload: Record<string, unknown> = {
+      user_id: userId,
+      contact_phone: contactPhone,
+      contact_name: contactName,
+      delivery_address: cart.deliveryAddress?.fullAddress || '',
+      items: cart.items,
+      total_amount: cart.totalAmount,
+      currency: cart.currency,
+      payment_method: paymentMethod,
+      payment_status: paymentMethod === 'COD' ? 'confirmed' : 'pending_payment',
+      razorpay_link_id: null,
+    }
+
+    let { data: order, error: orderError } = await supabase
       .from('ai_agent_orders')
-      .insert({
-        user_id: userId,
-        contact_phone: contactPhone,
-        contact_name: contactName,
-        delivery_address: cart.deliveryAddress?.fullAddress || '',
-        items: cart.items,
-        total_amount: cart.totalAmount,
-        currency: cart.currency,
-        payment_method: paymentMethod,
-        payment_status: paymentMethod === 'COD' ? 'confirmed' : 'pending_payment',
-        razorpay_link_id: null,
-      })
+      .insert(orderPayload)
       .select('id')
       .single()
+
+    // If insert fails due to missing column (PostgREST schema cache stale),
+    // retry with only the core columns that definitely exist
+    if (orderError && orderError.message?.includes('Could not find')) {
+      console.warn(`[Checkout] Column missing (schema cache stale?): ${orderError.message}`)
+      console.warn(`[Checkout] Retrying with core columns only...`)
+      const corePayload: Record<string, unknown> = {
+        user_id: userId,
+        contact_phone: contactPhone,
+        items: cart.items,
+        total_amount: cart.totalAmount,
+        payment_method: paymentMethod,
+        payment_status: paymentMethod === 'COD' ? 'confirmed' : 'pending_payment',
+      }
+      const retry = await supabase
+        .from('ai_agent_orders')
+        .insert(corePayload)
+        .select('id')
+        .single()
+      order = retry.data
+      orderError = retry.error
+    }
 
     if (orderError || !order) {
       console.error(`[Checkout] Order insert failed:`, orderError?.message, orderError?.code, orderError?.details)

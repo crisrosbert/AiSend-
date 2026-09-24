@@ -9,8 +9,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 // ─── Supabase admin (bypasses RLS for batch upserts) ─────────────────────────
 
-let _admin: ReturnType<typeof createAdminClient> | null = null
-function supabaseAdmin() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _admin: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function supabaseAdmin(): any {
   if (!_admin) {
     _admin = createAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -135,8 +137,7 @@ async function embedProducts(
       updated_at: new Date().toISOString(),
     }))
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (admin as any)
+    const { error } = await admin
       .from('ai_agent_products')
       .upsert(rows, { onConflict: 'user_id,external_id' })
 

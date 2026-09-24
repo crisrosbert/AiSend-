@@ -19,18 +19,18 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { detectIntent }                          from '@/lib/ai-agent/intent'
+import { detectIntent }                               from '@/lib/ai-agent/intent'
 import { getOrCreateSession, appendMessageToSession } from '@/lib/ai-agent/memory'
-import { retrieveProductsForQuery }              from '@/lib/ai-agent/retriever'
-import { generateAgentReply, generateGreetingReply } from '@/lib/ai-agent/responder'
-import { sendProductCardsToCustomer }            from '@/lib/ai-agent/product-response'
+import { retrieveProductsForQuery }                   from '@/lib/ai-agent/retriever'
+import { generateAgentReply, generateGreetingReply }  from '@/lib/ai-agent/responder'
+import { sendProductCardsToCustomer }                 from '@/lib/ai-agent/product-response'
 import {
   getCartFromSession,
   addProductToCart,
   formatCartSummaryText,
   persistCartToSession,
 } from '@/lib/ai-agent/cart'
-import { processCheckout }                       from '@/lib/ai-agent/checkout'
+import { processCheckout } from '@/lib/ai-agent/checkout'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +62,18 @@ interface WhatsAppCredentials {
 
 /** WhatsApp Cloud API base URL */
 const WHATSAPP_GRAPH_API_URL = 'https://graph.facebook.com/v21.0'
+
+// ─── Helper: build a timestamped message object ────────────────────────────────
+
+/**
+ * makeMessage
+ * Creates a ConversationMessage with the required timestamp field.
+ * memory.ts requires { role, content, timestamp } — this helper ensures
+ * we never forget the field when constructing messages in engine.ts.
+ */
+function makeMessage(role: 'user' | 'assistant', content: string) {
+  return { role, content, timestamp: new Date().toISOString() }
+}
 
 // ─── Guard: Kill Switch ────────────────────────────────────────────────────────
 
@@ -105,7 +117,6 @@ async function loadActiveAgentConfig(
 /**
  * getWhatsAppCredentials
  * Reads WhatsApp Business API credentials from the whatsapp_config table.
- * These are the same credentials used by the existing WhatsApp messaging system.
  */
 async function getWhatsAppCredentials(
   userId: string,
@@ -167,7 +178,6 @@ async function sendWhatsAppTextMessage(
 /**
  * logAgentEvent
  * Writes an event to ai_agent_events for analytics (non-blocking).
- * Failures here never break the main agent flow.
  */
 async function logAgentEvent(
   userId: string,
@@ -194,9 +204,6 @@ async function logAgentEvent(
  * handleAiAgentMessage
  * Called by the WhatsApp webhook route for every inbound message.
  * Returns true if the AI agent handled the message, false if skipped.
- *
- * The webhook route calls this inside Next.js after() so it runs async
- * and the webhook returns 200 immediately without waiting for AI processing.
  */
 export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean> {
   const { userId, contactPhone, inboundMessage, supabase } = input
@@ -235,7 +242,6 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
     `[AI Agent Engine] Intent=${intentResult.intent} confidence=${intentResult.confidence} for phone=${contactPhone}`
   )
 
-  // Log every inbound message as an event
   void logAgentEvent(userId, contactPhone, 'message_received', {
     intent: intentResult.intent,
     confidence: intentResult.confidence,
@@ -259,7 +265,7 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
       break
     }
 
-    // ── SHOPPING QUERY → RAG retrieval + LLM reply + product cards ────────────
+    // ── SHOPPING QUERY → RAG retrieval + LLM reply + product cards ───────────
     case 'SHOPPING_QUERY': {
       const searchQuery = intentResult.productKeywords || inboundMessage
       const retrievedProducts = await retrieveProductsForQuery(userId, searchQuery, supabase)
@@ -281,13 +287,13 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
         })
       }
 
-      // Update session memory with this exchange
+      // Update session memory
       await appendMessageToSession({
         userId,
         contactPhone,
         newMessages: [
-          { role: 'user', content: inboundMessage },
-          { role: 'assistant', content: replyText },
+          makeMessage('user', inboundMessage),
+          makeMessage('assistant', replyText),
         ],
         supabase,
       })
@@ -297,7 +303,7 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
         productsFound: retrievedProducts.length,
       }, supabase)
 
-      return true // Already sent reply above — skip sendWhatsAppTextMessage below
+      return true // Already sent reply above
     }
 
     // ── CART ADD ──────────────────────────────────────────────────────────────
@@ -310,7 +316,6 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
         break
       }
 
-      // Add the top matching product to cart
       const topProduct = retrievedProducts[0]
       const currentCart = getCartFromSession(customerSession.cart)
       const cartResult = addProductToCart(currentCart, topProduct, intentResult.quantity ?? 1)
@@ -345,7 +350,6 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
     case 'CHECKOUT': {
       const currentCart = getCartFromSession(customerSession.cart)
 
-      // Detect payment method from message ("COD" / "cash" → COD, else ONLINE)
       const isCodRequested =
         inboundMessage.toLowerCase().includes('cod') ||
         inboundMessage.toLowerCase().includes('cash')
@@ -353,7 +357,7 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
       const checkoutResult = await processCheckout({
         userId,
         contactPhone,
-        contactName: '',   // Customer name not stored yet — future enhancement
+        contactName: '',
         cart: currentCart,
         paymentMethod: isCodRequested ? 'COD' : 'ONLINE',
         supabase,
@@ -365,11 +369,10 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
 
     // ── HUMAN NEEDED ──────────────────────────────────────────────────────────
     case 'HUMAN_NEEDED': {
-      // Flag session so agent stops responding — human agent takes over
       await appendMessageToSession({
         userId,
         contactPhone,
-        newMessages: [{ role: 'user', content: inboundMessage }],
+        newMessages: [makeMessage('user', inboundMessage)],
         needsHuman: true,
         supabase,
       })
@@ -389,22 +392,22 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
         responderConfig,
         inboundMessage,
         customerSession.messages,
-        []   // No product context for out-of-scope queries
+        []
       )
       break
     }
   }
 
-  // ── Step 4: Send the reply (for all intents that didn't return early) ──
+  // ── Step 4: Send reply ──
   await sendWhatsAppTextMessage(contactPhone, replyText, waCredentials)
 
-  // ── Step 5: Save this exchange to session memory ──
+  // ── Step 5: Save exchange to session memory ──
   await appendMessageToSession({
     userId,
     contactPhone,
     newMessages: [
-      { role: 'user', content: inboundMessage },
-      { role: 'assistant', content: replyText },
+      makeMessage('user', inboundMessage),
+      makeMessage('assistant', replyText),
     ],
     supabase,
   })

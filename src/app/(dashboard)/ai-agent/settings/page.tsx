@@ -226,11 +226,13 @@ export default function AiAgentSettingsPage() {
       return
     }
 
-    // STEP 2: Embed in small batches — keep calling until done
+    // STEP 2: Embed in small batches — keep calling /api/ai-agent/embed until done
+    // Each call embeds 10 products and returns { done, embedded, remaining }
     setConfig((prev) => prev ? { ...prev, scrape_status: 'done', embed_status: 'running' } : prev)
 
     let attempts = 0
-    const MAX_ATTEMPTS = 30 // 30 × 5 products = 150 products max; increase as needed
+    const MAX_ATTEMPTS = 200  // 200 × 10 products = 2000 products max
+    let lastRemaining = Infinity  // Track progress to detect stuck loops
 
     while (attempts < MAX_ATTEMPTS) {
       attempts++
@@ -242,14 +244,29 @@ export default function AiAgentSettingsPage() {
           setSyncing(false)
           return
         }
-        const embBody = await embRes.json() as { done: boolean; remaining: number }
+        const embBody = await embRes.json() as { done: boolean; embedded: number; remaining: number }
+
+        // ── Done! All products embedded ──
         if (embBody.done) {
-          setConfig((prev) => prev ? { ...prev, embed_status: 'done' } : prev)
+          setConfig((prev) => prev ? { ...prev, embed_status: 'done', last_synced_at: new Date().toISOString() } : prev)
           setSyncing(false)
           return
         }
-        // Small delay between batches to avoid hammering the API
-        await new Promise((r) => setTimeout(r, 500))
+
+        // ── Stuck detection: if remaining isn't decreasing, embeddings aren't saving ──
+        if (embBody.remaining >= lastRemaining) {
+          // Give it 3 tries before giving up (network hiccups happen)
+          if (attempts > 3 && embBody.remaining >= lastRemaining) {
+            console.error('[Embed loop] Stuck — remaining not decreasing:', embBody.remaining)
+            setError(`Embedding stuck at ${embBody.remaining} products remaining. Check Vercel logs.`)
+            setSyncing(false)
+            return
+          }
+        }
+        lastRemaining = embBody.remaining
+
+        // Small delay between batches
+        await new Promise((r) => setTimeout(r, 300))
       } catch (err) {
         console.error('[Embed loop] error:', err)
         setError('Embedding failed — check console')

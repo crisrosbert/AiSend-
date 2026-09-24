@@ -31,11 +31,6 @@ export async function POST() {
 
   const admin = supabaseAdmin()
 
-  // Mark embedding running
-  await admin.from('ai_agent_configs')
-    .update({ embed_status: 'running', updated_at: new Date().toISOString() })
-    .eq('user_id', user.id)
-
   // Fetch next batch of products without embeddings
   const { data: products, error: fetchErr } = await admin
     .from('ai_agent_products')

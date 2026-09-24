@@ -621,7 +621,7 @@ async function processMessage(
   // Only activates if merchant has an active ai_agent_configs row.
   if (!agentReplied) {
     try {
-      await handleAiAgentMessage({
+      void handleAiAgentMessage({
         userId,
         contactPhone: senderPhone,
         inboundMessage: inboundText,
@@ -716,6 +716,30 @@ async function parseMessageContent(
       return { contentText: null, mediaUrl: null, mediaType: null }
     case 'reaction':
       return { contentText: message.reaction?.emoji || null, mediaUrl: null, mediaType: null }
+
+    // ── Interactive button/list replies ──
+    // When customer clicks a quick-reply button (e.g. "Pay Online", "Cash on Delivery")
+    // WhatsApp sends type='interactive' with button_reply or list_reply
+    case 'interactive': {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const interactive = (message as any).interactive
+      if (interactive?.button_reply) {
+        // Button reply: use the button ID as text (e.g. "pay_online", "pay_cod")
+        // Also include title as fallback for intent detection
+        return { contentText: interactive.button_reply.id || interactive.button_reply.title || null, mediaUrl: null, mediaType: null }
+      }
+      if (interactive?.list_reply) {
+        // List reply: use the list item ID or title
+        return { contentText: interactive.list_reply.id || interactive.list_reply.title || null, mediaUrl: null, mediaType: null }
+      }
+      return { contentText: null, mediaUrl: null, mediaType: null }
+    }
+
+    // ── Button template replies ──
+    // When customer clicks a template quick-reply button
+    case 'button':
+      return { contentText: (message as any).button?.text || (message as any).button?.payload || null, mediaUrl: null, mediaType: null }
+
     default:
       return { contentText: `[Unsupported message type: ${message.type}]`, mediaUrl: null, mediaType: null }
   }

@@ -33,7 +33,11 @@ interface ScrapedProduct {
   in_stock: boolean
 }
 
-interface ShopifyVariant { id: number; price: string; inventory_quantity: number; title: string }
+interface ShopifyVariant {
+  id: number; price: string; inventory_quantity: number; title: string
+  inventory_management: string | null  // null = not tracked, "shopify" = tracked
+  inventory_policy: string             // "deny" = stop selling at 0, "continue" = sell past 0
+}
 interface ShopifyImage  { src: string }
 interface ShopifyProduct {
   id: number; title: string; body_html: string | null
@@ -50,7 +54,8 @@ function shopifyProductToScraped(p: ShopifyProduct, base: string): ScrapedProduc
     currency: 'INR',
     image_url: p.images[0]?.src ?? null,
     product_url: `${base}/products/${p.handle}`,
-    in_stock: v.inventory_quantity > 0,
+    // in_stock: true if inventory not tracked, or policy is "continue", or qty > 0
+    in_stock: !v.inventory_management || v.inventory_policy === 'continue' || v.inventory_quantity > 0,
   }))
 }
 

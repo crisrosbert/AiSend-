@@ -149,19 +149,30 @@ export default function AiAgentSettingsPage() {
   }
 
   // ── Trigger product sync ──────────────────────────────────────────────────────
+    // ── Trigger product sync ──────────────────────────────────────────────────────
   async function handleSync() {
-    if (!businessId || !storeUrl.trim()) {
+    if (!storeUrl.trim()) {
       setError('Add your store URL before syncing.')
       return
     }
     setSyncing(true)
     setError(null)
 
-    // Save URL first, then kick off scrape
-    await supabase
-      .from('ai_agent_configs')
-      .update({ scrape_status: 'running', embed_status: 'pending', updated_at: new Date().toISOString() })
-      .eq('user_id', businessId)
+    // Ensure config row exists before syncing (upsert with current form values)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setError('Not logged in.'); setSyncing(false); return }
+
+    await supabase.from('ai_agent_configs').upsert({
+      user_id: user.id,
+      store_name: storeName.trim() || 'My Store',
+      store_url: storeUrl.trim(),
+      brand_voice_prompt: brandVoice.trim() || 'Be helpful, friendly and professional.',
+      language,
+      is_enabled: isEnabled,
+      scrape_status: 'running',
+      embed_status: 'pending',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
 
     setConfig((prev) => prev ? { ...prev, scrape_status: 'running', embed_status: 'pending' } : prev)
 
@@ -172,7 +183,8 @@ export default function AiAgentSettingsPage() {
     })
 
     if (!res.ok) {
-      setError('Sync trigger failed. Try again.')
+      const body = await res.json().catch(() => ({}))
+      setError('Sync failed: ' + (body.error ?? res.statusText))
       setSyncing(false)
     }
     // Status updates come via the polling useEffect above

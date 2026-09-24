@@ -120,7 +120,7 @@ export default async function AiAgentPage() {
           </p>
         </div>
         <Link
-          href="/ai-agent/setup"
+          href="/ai-agent/settings"
           className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
         >
           <Zap className="h-4 w-4" />

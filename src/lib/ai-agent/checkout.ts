@@ -139,6 +139,7 @@ export async function processPaymentChoice(
 
   try {
     // Insert order record
+    console.log(`[Checkout] Inserting order: userId=${userId}, phone=${contactPhone}, method=${paymentMethod}, total=${cart.totalAmount}, items=${cart.items.length}`)
     const { data: order, error: orderError } = await supabase
       .from('ai_agent_orders')
       .insert({
@@ -156,7 +157,11 @@ export async function processPaymentChoice(
       .select('id')
       .single()
 
-    if (orderError || !order) throw new Error(orderError?.message ?? 'Order insert failed')
+    if (orderError || !order) {
+      console.error(`[Checkout] Order insert failed:`, orderError?.message, orderError?.code, orderError?.details)
+      throw new Error(orderError?.message ?? 'Order insert failed')
+    }
+    console.log(`[Checkout] Order created: ${order.id}`)
 
     const orderId = order.id as string
     let message: string

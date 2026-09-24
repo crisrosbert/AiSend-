@@ -141,47 +141,26 @@ export async function processPaymentChoice(
     // Insert order record
     console.log(`[Checkout] Inserting order: userId=${userId}, phone=${contactPhone}, method=${paymentMethod}, total=${cart.totalAmount}, items=${cart.items.length}`)
 
-    // Full order payload with all columns
-    const orderPayload: Record<string, unknown> = {
+    // Order payload — column names match actual ai_agent_orders table schema:
+    //   total (not total_amount), order_status (not payment_status),
+    //   razorpay_payment_id (not razorpay_link_id), no currency column
+    const orderPayload = {
       user_id: userId,
       contact_phone: contactPhone,
       contact_name: contactName,
       delivery_address: cart.deliveryAddress?.fullAddress || '',
       items: cart.items,
-      total_amount: cart.totalAmount,
-      currency: cart.currency,
+      total: cart.totalAmount,
       payment_method: paymentMethod,
-      payment_status: paymentMethod === 'COD' ? 'confirmed' : 'pending_payment',
-      razorpay_link_id: null,
+      order_status: paymentMethod === 'COD' ? 'confirmed' : 'pending_payment',
+      razorpay_payment_id: null,
     }
 
-    let { data: order, error: orderError } = await supabase
+    const { data: order, error: orderError } = await supabase
       .from('ai_agent_orders')
       .insert(orderPayload)
       .select('id')
       .single()
-
-    // If insert fails due to missing column (PostgREST schema cache stale),
-    // retry with only the core columns that definitely exist
-    if (orderError && orderError.message?.includes('Could not find')) {
-      console.warn(`[Checkout] Column missing (schema cache stale?): ${orderError.message}`)
-      console.warn(`[Checkout] Retrying with core columns only...`)
-      const corePayload: Record<string, unknown> = {
-        user_id: userId,
-        contact_phone: contactPhone,
-        items: cart.items,
-        total_amount: cart.totalAmount,
-        payment_method: paymentMethod,
-        payment_status: paymentMethod === 'COD' ? 'confirmed' : 'pending_payment',
-      }
-      const retry = await supabase
-        .from('ai_agent_orders')
-        .insert(corePayload)
-        .select('id')
-        .single()
-      order = retry.data
-      orderError = retry.error
-    }
 
     if (orderError || !order) {
       console.error(`[Checkout] Order insert failed:`, orderError?.message, orderError?.code, orderError?.details)
@@ -199,7 +178,7 @@ export async function processPaymentChoice(
 
       // Save payment link to order
       await supabase.from('ai_agent_orders')
-        .update({ razorpay_link_id: paymentLink })
+        .update({ razorpay_payment_id: paymentLink })
         .eq('id', orderId)
 
       // Send payment link as CTA button card
@@ -308,11 +287,10 @@ export async function processCheckout(input: CheckoutInput): Promise<CheckoutRes
         user_id: userId,
         contact_phone: contactPhone,
         items: cart.items,
-        total_amount: cart.totalAmount,
-        currency: cart.currency,
+        total: cart.totalAmount,
         payment_method: paymentMethod,
-        payment_status: paymentMethod === 'COD' ? 'confirmed' : 'pending_payment',
-        razorpay_link_id: null,
+        order_status: paymentMethod === 'COD' ? 'confirmed' : 'pending_payment',
+        razorpay_payment_id: null,
       })
       .select('id')
       .single()
@@ -325,7 +303,7 @@ export async function processCheckout(input: CheckoutInput): Promise<CheckoutRes
 
     if (paymentMethod === 'ONLINE') {
       paymentLink = await createRazorpayLink(cart, contactPhone, contactName, orderId)
-      await supabase.from('ai_agent_orders').update({ razorpay_link_id: paymentLink }).eq('id', orderId)
+      await supabase.from('ai_agent_orders').update({ razorpay_payment_id: paymentLink }).eq('id', orderId)
       message = `🎉 Order ready! Total: ${total}\n\nPay securely here:\n${paymentLink}\n\nLink expires in 24 hours.`
     } else {
       message = `✅ Order confirmed (Cash on Delivery)!\n\nTotal: ${total}\nPlease keep cash ready. We'll notify you when it ships!`

@@ -621,7 +621,7 @@ async function processMessage(
   // Only activates if merchant has an active ai_agent_configs row.
   if (!agentReplied) {
     try {
-      void handleAiAgentMessage({
+      await handleAiAgentMessage({
         userId,
         contactPhone: senderPhone,
         inboundMessage: inboundText,

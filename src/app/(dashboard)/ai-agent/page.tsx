@@ -6,7 +6,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Bot, Package, ShoppingCart, Users, Zap, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Bot, Package, ShoppingCart, Users, Zap, AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,9 +51,9 @@ async function getAgentStats(userId: string, supabase: Awaited<ReturnType<typeof
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function StatCard({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+function StatCard({ icon: Icon, label, value, href }: { icon: React.ElementType; label: string; value: string; href?: string }) {
+  const inner = (
+    <div className="flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className="rounded-lg bg-indigo-50 p-2 dark:bg-indigo-900/30">
           <Icon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
@@ -63,6 +63,19 @@ function StatCard({ icon: Icon, label, value }: { icon: React.ElementType; label
           <p className="text-xl font-semibold text-gray-900 dark:text-white">{value}</p>
         </div>
       </div>
+      {href && <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-indigo-500" />}
+    </div>
+  )
+  if (href) {
+    return (
+      <Link href={href} className="group rounded-xl border border-gray-200 bg-white p-5 transition hover:border-indigo-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-700">
+        {inner}
+      </Link>
+    )
+  }
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+      {inner}
     </div>
   )
 }
@@ -186,35 +199,41 @@ export default async function AiAgentPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard icon={Package}      label="Products"         value={stats.totalProducts.toLocaleString()} />
-        <StatCard icon={Users}        label="Conversations"    value={stats.totalSessions.toLocaleString()} />
-        <StatCard icon={ShoppingCart} label="Orders Confirmed" value={stats.totalOrders.toLocaleString()} />
+        <StatCard icon={Package}      label="Products"         value={stats.totalProducts.toLocaleString()} href="/ai-agent/products" />
+        <StatCard icon={Users}        label="Conversations"    value={stats.totalSessions.toLocaleString()} href="/ai-agent/conversations" />
+        <StatCard icon={ShoppingCart} label="Orders Confirmed" value={stats.totalOrders.toLocaleString()}   href="/ai-agent/orders" />
         <StatCard icon={Zap}          label="Revenue"          value={`${sym}${stats.totalRevenue.toLocaleString()}`} />
       </div>
 
       {/* Quick links */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Link
-          href="/ai-agent/settings"
-          className="group rounded-xl border border-gray-200 bg-white p-5 hover:border-indigo-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-700"
-        >
-          <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
-            Agent Settings
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Brand voice, language, enable/disable, product sync
-          </p>
+        <Link href="/ai-agent/settings" className="group rounded-xl border border-gray-200 bg-white p-5 hover:border-indigo-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-700">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">Agent Settings</h3>
+            <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-indigo-500" />
+          </div>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Brand voice, language, enable/disable, product sync</p>
         </Link>
-        <Link
-          href="/ai-agent/orders"
-          className="group rounded-xl border border-gray-200 bg-white p-5 hover:border-indigo-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-700"
-        >
-          <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
-            Orders
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            View all orders placed through the AI agent
-          </p>
+        <Link href="/ai-agent/products" className="group rounded-xl border border-gray-200 bg-white p-5 hover:border-indigo-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-700">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">Product Catalog</h3>
+            <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-indigo-500" />
+          </div>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">View all {stats.totalProducts} synced products</p>
+        </Link>
+        <Link href="/ai-agent/orders" className="group rounded-xl border border-gray-200 bg-white p-5 hover:border-indigo-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-700">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">Orders</h3>
+            <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-indigo-500" />
+          </div>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">View all orders placed through the AI agent</p>
+        </Link>
+        <Link href="/ai-agent/conversations" className="group rounded-xl border border-gray-200 bg-white p-5 hover:border-indigo-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-700">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">Conversations</h3>
+            <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-indigo-500" />
+          </div>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">View customer chats handled by the AI agent</p>
         </Link>
       </div>
     </div>

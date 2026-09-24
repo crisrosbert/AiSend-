@@ -38,8 +38,10 @@ export interface RetrievedProduct {
   name: string            // Product name (with variant if applicable)
   description: string | null
   price: number
+  compare_at_price: number | null  // Original MRP (for discount % display)
   currency: string        // e.g. "INR"
   image_url: string | null     // First image URL (backward compat)
+  image_urls: string[] | null  // ALL image URLs (for carousel)
   product_url: string | null   // Link to product on Shopify store
   in_stock: boolean
   similarity: number      // 0.0–1.0 (higher = better match)
@@ -125,7 +127,7 @@ async function fetchPopularProducts(
   // Try in-stock products first
   const { data, error } = await supabase
     .from('ai_agent_products')
-    .select('id, external_id, name, description, price, currency, image_url, product_url, in_stock')
+    .select('id, external_id, name, description, price, compare_at_price, currency, image_url, image_urls, product_url, in_stock')
     .eq('user_id', userId)
     .eq('in_stock', true)
     .order('updated_at', { ascending: false })
@@ -138,7 +140,7 @@ async function fetchPopularProducts(
   // No in-stock products? Show any products
   const { data: anyProducts } = await supabase
     .from('ai_agent_products')
-    .select('id, external_id, name, description, price, currency, image_url, product_url, in_stock')
+    .select('id, external_id, name, description, price, compare_at_price, currency, image_url, image_urls, product_url, in_stock')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false })
     .limit(limit)

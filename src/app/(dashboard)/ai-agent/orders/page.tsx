@@ -14,11 +14,10 @@ interface AgentOrder {
   id: string
   contact_phone: string
   items: OrderItem[]
-  total_amount: number
-  currency: string
+  total: number
   payment_method: string
-  payment_status: string
-  razorpay_link_id: string | null
+  order_status: string
+  razorpay_payment_id: string | null
   created_at: string
   updated_at: string
 }
@@ -85,11 +84,11 @@ export default async function AiAgentOrdersPage() {
   }
 
   const typedOrders = (orders ?? []) as AgentOrder[]
-  const sym = typedOrders[0] ? currencySymbol(typedOrders[0].currency) : '₹'
+  const sym = '₹'
 
   const totalRevenue = typedOrders
-    .filter(o => o.payment_status === 'confirmed')
-    .reduce((sum, o) => sum + Number(o.total_amount), 0)
+    .filter(o => o.order_status === 'confirmed')
+    .reduce((sum, o) => sum + Number(o.total), 0)
 
   return (
     <div className="space-y-6 p-6">
@@ -119,7 +118,7 @@ export default async function AiAgentOrdersPage() {
           <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
             <p className="text-sm text-gray-500 dark:text-gray-400">Confirmed</p>
             <p className="mt-1 text-2xl font-semibold text-green-600 dark:text-green-400">
-              {typedOrders.filter(o => o.payment_status === 'confirmed').length}
+              {typedOrders.filter(o => o.order_status === 'confirmed').length}
             </p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 col-span-2 sm:col-span-1">
@@ -164,7 +163,7 @@ export default async function AiAgentOrdersPage() {
                     <p className="font-medium text-gray-900 dark:text-white">{order.contact_phone}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(order.created_at)}</p>
                   </div>
-                  <StatusBadge status={order.payment_status} />
+                  <StatusBadge status={order.order_status} />
                 </div>
                 <div className="space-y-1">
                   {(order.items as OrderItem[]).map((item, i) => (
@@ -177,7 +176,7 @@ export default async function AiAgentOrdersPage() {
                 <div className="flex justify-between border-t border-gray-100 pt-2 dark:border-gray-700">
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total</span>
                   <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                    {sym}{Number(order.total_amount).toLocaleString('en-IN')}
+                    {sym}{Number(order.total).toLocaleString('en-IN')}
                   </span>
                 </div>
               </div>
@@ -220,13 +219,13 @@ export default async function AiAgentOrdersPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
-                    {sym}{Number(order.total_amount).toLocaleString('en-IN')}
+                    {sym}{Number(order.total).toLocaleString('en-IN')}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 capitalize">
                     {order.payment_method.replace(/_/g, ' ')}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={order.payment_status} />
+                    <StatusBadge status={order.order_status} />
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
                     {formatDate(order.created_at)}

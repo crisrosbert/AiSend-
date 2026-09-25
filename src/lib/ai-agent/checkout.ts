@@ -17,6 +17,7 @@ import {
   setCheckoutStep, setDeliveryAddress, setPendingOrderId,
   type CartState, type DeliveryAddress,
 } from './cart'
+import { notifyMerchantNewOrder } from './notifications'
 import {
   sendPaymentLinkCard, sendInteractiveButtons,
   type WhatsAppCredentials,
@@ -190,6 +191,10 @@ export async function processPaymentChoice(
       await persistCartToSession(userId, contactPhone, updatedCart, supabase)
 
       message = '' // Message sent via CTA card above
+
+      // Notify merchant (fire-and-forget)
+      void notifyMerchantNewOrder(orderId, userId, cart.totalAmount, contactPhone, 'ONLINE', supabase)
+
       return { success: true, orderId, paymentLink, message, updatedCart }
 
     } else {
@@ -207,6 +212,9 @@ export async function processPaymentChoice(
         event_type: 'order_placed',
         event_data: { orderId, totalAmount: cart.totalAmount, paymentMethod: 'COD' },
       })
+
+      // Notify merchant (fire-and-forget)
+      void notifyMerchantNewOrder(orderId, userId, cart.totalAmount, contactPhone, 'COD', supabase)
 
       return { success: true, orderId, message, updatedCart: clearedCart }
     }
@@ -317,6 +325,9 @@ export async function processCheckout(input: CheckoutInput): Promise<CheckoutRes
       event_type: 'order_placed',
       event_data: { orderId, totalAmount: cart.totalAmount, paymentMethod },
     })
+
+    // Notify merchant (fire-and-forget)
+    void notifyMerchantNewOrder(orderId, userId, cart.totalAmount, contactPhone, paymentMethod, supabase)
 
     return { success: true, orderId, paymentLink, message }
   } catch (err) {

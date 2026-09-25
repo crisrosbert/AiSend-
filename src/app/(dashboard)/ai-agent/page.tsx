@@ -6,7 +6,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Bot, Package, ShoppingCart, Users, Zap, AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react'
+import { Bot, Package, ShoppingCart, Users, Zap, AlertCircle, CheckCircle2, ChevronRight, BarChart3 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -234,6 +234,13 @@ export default async function AiAgentPage() {
             <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-indigo-500" />
           </div>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">View customer chats handled by the AI agent</p>
+        </Link>
+        <Link href="/ai-agent/analytics" className="group rounded-xl border border-gray-200 bg-white p-5 hover:border-indigo-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-700">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">Analytics</h3>
+            <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-indigo-500" />
+          </div>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Revenue, orders, conversion rates, and product insights</p>
         </Link>
       </div>
     </div>

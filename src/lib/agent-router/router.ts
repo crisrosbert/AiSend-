@@ -114,17 +114,32 @@ async function loadRoutingConfig(tenantId: string): Promise<RoutingConfig> {
 
 // ── Sticky session check ─────────────────────────────────────────────────
 
+// A sticky routing decision that's more than this old is treated as stale
+// and re-evaluated from scratch. Without an expiry, one misrouted message
+// (e.g. an LLM guessing "marketing" for a bare product name) would lock a
+// customer's conversation to the wrong agent forever, since every later
+// message short-circuits straight to the sticky system before keyword
+// match, product-catalog match, or the LLM ever runs again.
+const STICKY_SESSION_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
+
 async function checkStickySession(
   conversationId: string,
 ): Promise<{ system: AgentSystem; agentId: string | null } | null> {
   const { data } = await db()
     .from('conversations')
-    .select('routed_agent_type, routed_agent_id, status')
+    .select('routed_agent_type, routed_agent_id, status, routed_at')
     .eq('id', conversationId)
     .maybeSingle()
 
   // No routing yet, or conversation was handed to a human
   if (!data?.routed_agent_type || data.status === 'pending') return null
+
+  // Stale — let the message be re-routed (keyword/product/LLM) instead of
+  // permanently repeating whatever agent answered hours/days ago.
+  if (data.routed_at) {
+    const age = Date.now() - new Date(data.routed_at).getTime()
+    if (age > STICKY_SESSION_TTL_MS) return null
+  }
 
   return {
     system: data.routed_agent_type as AgentSystem,
@@ -138,12 +153,28 @@ async function checkBroadcastReply(
   tenantId: string,
   contactPhone: string,
 ): Promise<AgentSystem | null> {
+  // This previously queried tables that don't exist in the schema
+  // ("broadcast_contacts", "broadcast_histories") — see 001_initial_schema.sql,
+  // where broadcast sends live in "broadcasts" and recipients in
+  // "broadcast_recipients" (keyed by contact_id, not phone). Every call
+  // silently returned null, so broadcast-reply routing has never actually
+  // fired. Resolve the contact first, since that's what broadcast_recipients
+  // is keyed on.
+  const { data: contact } = await db()
+    .from('contacts')
+    .select('id')
+    .eq('user_id', tenantId)
+    .eq('phone', contactPhone)
+    .maybeSingle()
+
+  if (!contact?.id) return null
+
   // Check if this contact received a broadcast recently (within 24h window)
   // and the broadcast had an agent_type tag.
   const { data } = await db()
-    .from('broadcast_contacts')
+    .from('broadcast_recipients')
     .select('broadcast_id')
-    .eq('phone', contactPhone)
+    .eq('contact_id', contact.id)
     .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
     .order('created_at', { ascending: false })
     .limit(1)
@@ -153,7 +184,7 @@ async function checkBroadcastReply(
 
   // Check if the broadcast had an agent_type
   const { data: broadcast } = await db()
-    .from('broadcast_histories')
+    .from('broadcasts')
     .select('agent_type, user_id')
     .eq('id', data.broadcast_id)
     .eq('user_id', tenantId)

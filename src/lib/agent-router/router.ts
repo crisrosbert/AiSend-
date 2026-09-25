@@ -198,6 +198,50 @@ function matchKeywords(
   return null
 }
 
+// ── Product catalog match ────────────────────────────────────────────────
+//
+// A bare product name ("Green tea", "Organic ragi") has none of the
+// generic buy/price/shop words above, so it falls through to the LLM —
+// which, with no purchase-intent cue in the text, can easily guess
+// "marketing" or "sales" instead of "ecommerce". If the tenant has
+// actually synced a product with (or containing) that name, the message
+// is unambiguous: route straight to ecommerce, no LLM call, no risk of
+// misclassification.
+async function matchProductCatalog(
+  tenantId: string,
+  text: string,
+): Promise<boolean> {
+  const lower = text.toLowerCase().trim()
+  if (!lower) return false
+
+  const { data: products, error } = await db()
+    .from('ai_agent_products')
+    .select('name')
+    .eq('user_id', tenantId)
+    .limit(1000)
+
+  if (error || !products?.length) return false
+
+  for (const p of products as { name: string | null }[]) {
+    const name = String(p.name || '').toLowerCase().trim()
+    if (!name) continue
+
+    // Whole product name appears in the message verbatim
+    // ("I need green tea" contains "green tea").
+    if (lower.includes(name)) return true
+
+    // Or every significant word of the product name appears somewhere
+    // in the message, in any order (tolerates punctuation/word-order
+    // differences like "ragi organic" vs "Organic Ragi").
+    const nameWords = name.split(/\s+/).filter((w) => w.length > 2)
+    if (nameWords.length > 0 && nameWords.every((w) => lower.includes(w))) {
+      return true
+    }
+  }
+
+  return false
+}
+
 // ── LLM intent classification ────────────────────────────────────────────
 
 interface IntentResult {
@@ -489,6 +533,26 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
     await persistRouting(conversationId, decision)
     await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
     return decision
+  }
+
+  // ── 4.5 PRODUCT CATALOG MATCH ─────────────────────────────────────
+  // Deterministic and cheap — checked before the LLM so a plain product
+  // name never gets misclassified as "marketing"/"sales" for lack of a
+  // generic buy/price keyword.
+  if (config.active_agent_types.includes('ecommerce')) {
+    const productMatch = await matchProductCatalog(tenantId, inboundText)
+    if (productMatch) {
+      const decision: RoutingDecision = {
+        system: 'ecommerce',
+        agentId: null,
+        method: 'keyword',
+        intentLabel: 'product_catalog_match',
+        latencyMs: Date.now() - start,
+      }
+      await persistRouting(conversationId, decision)
+      await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
+      return decision
+    }
   }
 
   // ── 5. LLM INTENT CLASSIFICATION ─────────────────────────────────

@@ -21,7 +21,6 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _db: any = null
@@ -33,14 +32,6 @@ function db() {
     )
   }
   return _db
-}
-
-let _openai: OpenAI | null = null
-function openai(): OpenAI {
-  if (!_openai) {
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
-  }
-  return _openai
 }
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -236,23 +227,46 @@ async function classifyIntent(
     .join('\n')
 
   try {
-    const response = await openai().chat.completions.create({
-      model: 'gpt-4o-mini',
-      temperature: 0,
-      max_tokens: 60,
-      messages: [
-        {
-          role: 'system',
-          content: `You are an intent classifier for a WhatsApp business. Classify the customer's message into exactly ONE of these agent types:\n${activeDescriptions}\n\nRespond with JSON: {"type": "<agent_type>", "confidence": 0.0-1.0}\nIf unsure, pick the closest match with lower confidence. Only use types from the list above.`,
-        },
-        {
-          role: 'user',
-          content: text,
-        },
-      ],
+    const openaiApiKey = process.env.OPENAI_API_KEY
+    if (!openaiApiKey) {
+      console.error('[agent-router] OPENAI_API_KEY not set — skipping LLM classification')
+      const fallbackType = activeTypes[0] || 'support'
+      return {
+        system: fallbackType === 'ecommerce' ? 'ecommerce' : `general:${fallbackType}`,
+        label: fallbackType,
+        confidence: 0.1,
+      }
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0,
+        max_tokens: 60,
+        messages: [
+          {
+            role: 'system',
+            content: `You are an intent classifier for a WhatsApp business. Classify the customer's message into exactly ONE of these agent types:\n${activeDescriptions}\n\nRespond with JSON: {"type": "<agent_type>", "confidence": 0.0-1.0}\nIf unsure, pick the closest match with lower confidence. Only use types from the list above.`,
+          },
+          {
+            role: 'user',
+            content: text,
+          },
+        ],
+      }),
     })
 
-    const raw = response.choices[0]?.message?.content?.trim() ?? ''
+    if (!response.ok) {
+      throw new Error(`OpenAI API ${response.status}: ${await response.text()}`)
+    }
+
+    const data = await response.json()
+    const raw = data.choices?.[0]?.message?.content?.trim() ?? ''
     // Parse JSON from the response (handle markdown code blocks)
     const jsonStr = raw.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
     const parsed = JSON.parse(jsonStr)

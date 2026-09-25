@@ -6,8 +6,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { ArrowLeft, Package, RefreshCw, CheckCircle2, XCircle } from 'lucide-react'
+import { ProductThumbnail } from '@/components/media/product-thumbnail'
 
 export default async function AiAgentProductsPage() {
   const supabase = await createClient()
@@ -16,7 +16,7 @@ export default async function AiAgentProductsPage() {
 
   const { data: products, error } = await supabase
     .from('ai_agent_products')
-    .select('id, name, description, price, currency, image_url, product_url, in_stock, updated_at')
+    .select('id, name, description, price, currency, image_url, image_urls, product_url, in_stock, updated_at')
     .eq('user_id', user.id)
     .order('name', { ascending: true })
 
@@ -87,22 +87,17 @@ export default async function AiAgentProductsPage() {
               key={product.id}
               className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
             >
-              {/* Product image */}
-              <div className="relative aspect-square bg-gray-100 dark:bg-gray-700">
-                {product.image_url ? (
-                  <Image
-                    src={product.image_url}
-                    alt={product.name}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <Package className="h-12 w-12 text-gray-300 dark:text-gray-600" />
-                  </div>
-                )}
+              {/* Product image — tap to open full-screen gallery */}
+              <ProductThumbnail
+                images={
+                  Array.isArray(product.image_urls) && product.image_urls.length > 0
+                    ? product.image_urls
+                    : product.image_url
+                      ? [product.image_url]
+                      : []
+                }
+                alt={product.name}
+              >
                 {/* Stock badge */}
                 <div className="absolute right-2 top-2">
                   {product.in_stock ? (
@@ -115,7 +110,7 @@ export default async function AiAgentProductsPage() {
                     </span>
                   )}
                 </div>
-              </div>
+              </ProductThumbnail>
 
               {/* Product info */}
               <div className="p-3 space-y-1">

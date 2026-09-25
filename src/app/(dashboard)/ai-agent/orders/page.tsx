@@ -16,6 +16,7 @@ import {
   IndianRupee, PackageCheck, PackageX, Filter,
 } from 'lucide-react'
 import { OrderStatusForm } from './status-form'
+import { ExportOrdersButton } from './export-button'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,10 @@ interface AgentOrder {
   payment_method: string
   order_status: string
   razorpay_payment_id: string | null
+  tracking_number: string | null
+  tracking_url: string | null
+  shipped_at: string | null
+  delivered_at: string | null
   created_at: string
   updated_at: string
 }
@@ -167,6 +172,15 @@ export default async function AiAgentOrdersPage({
               Manage orders, track deliveries, view customer details
             </p>
           </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/ai-agent/analytics"
+            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Analytics
+          </Link>
+          <ExportOrdersButton currentFilter={statusFilter} />
         </div>
       </div>
 
@@ -382,7 +396,12 @@ function OrderCard({ order }: { order: AgentOrder }) {
         {/* Actions / Status Update */}
         <div className="p-4 space-y-3">
           <p className="text-xs font-medium uppercase tracking-wider text-gray-400">Update Status</p>
-          <OrderStatusForm orderId={order.id} currentStatus={order.order_status} />
+          <OrderStatusForm
+            orderId={order.id}
+            currentStatus={order.order_status}
+            currentTracking={order.tracking_number}
+            currentTrackingUrl={order.tracking_url}
+          />
 
           {order.razorpay_payment_id && (
             <div className="mt-2 rounded-lg bg-gray-50 p-2 dark:bg-gray-900/50">

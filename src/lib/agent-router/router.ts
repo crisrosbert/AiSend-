@@ -391,6 +391,27 @@ async function resolveAgentId(
   return data?.id ?? null
 }
 
+// If routing picks a general:<type> agent but no active agent of that
+// type exists for this tenant (e.g. the merchant only ever set up the
+// ecommerce/product agent, never a dedicated Sales/Support bot),
+// resolveAgentId returns null. The webhook only calls the general-agent
+// handler when agentId is truthy (routing.system.startsWith('general:')
+// && routing.agentId) — so a null agentId here silently drops the reply
+// entirely, with no error and no fallback, which is why messages that
+// get classified as "sales"/"support"/etc. sometimes get NO WhatsApp
+// reply at all. Fall back to the ecommerce agent (if active) instead of
+// leaving the customer unanswered.
+function withAgentFallback(
+  system: AgentSystem,
+  agentId: string | null,
+  config: RoutingConfig,
+): { system: AgentSystem; agentId: string | null } {
+  if (system.startsWith('general:') && !agentId && config.active_agent_types.includes('ecommerce')) {
+    return { system: 'ecommerce', agentId: null }
+  }
+  return { system, agentId }
+}
+
 // ── Persist routing decision ─────────────────────────────────────────────
 
 async function persistRouting(
@@ -551,13 +572,14 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
     const agentType = keywordMatch === 'ecommerce'
       ? 'ecommerce'
       : keywordMatch.replace('general:', '')
-    const agentId = keywordMatch === 'ecommerce'
+    const rawAgentId = keywordMatch === 'ecommerce'
       ? null
       : await resolveAgentId(tenantId, agentType, config)
+    const resolved = withAgentFallback(keywordMatch, rawAgentId, config)
 
     const decision: RoutingDecision = {
-      system: keywordMatch,
-      agentId,
+      system: resolved.system,
+      agentId: resolved.agentId,
       method: 'keyword',
       latencyMs: Date.now() - start,
     }
@@ -592,13 +614,14 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
     const agentType = intent.system === 'ecommerce'
       ? 'ecommerce'
       : intent.system.replace('general:', '')
-    const agentId = intent.system === 'ecommerce'
+    const rawAgentId = intent.system === 'ecommerce'
       ? null
       : await resolveAgentId(tenantId, agentType, config)
+    const resolved = withAgentFallback(intent.system, rawAgentId, config)
 
     const decision: RoutingDecision = {
-      system: intent.system,
-      agentId,
+      system: resolved.system,
+      agentId: resolved.agentId,
       method: 'intent',
       intentLabel: intent.label,
       confidence: intent.confidence,
@@ -615,13 +638,14 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
   const fallbackSystem: AgentSystem = fallbackType === 'ecommerce'
     ? 'ecommerce'
     : `general:${fallbackType}`
-  const fallbackAgentId = fallbackType === 'ecommerce'
+  const rawFallbackAgentId = fallbackType === 'ecommerce'
     ? null
     : await resolveAgentId(tenantId, fallbackType, config)
+  const resolvedFallback = withAgentFallback(fallbackSystem, rawFallbackAgentId, config)
 
   const decision: RoutingDecision = {
-    system: fallbackSystem,
-    agentId: fallbackAgentId,
+    system: resolvedFallback.system,
+    agentId: resolvedFallback.agentId,
     method: 'fallback',
     latencyMs: Date.now() - start,
   }

@@ -10,6 +10,7 @@ import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
 import { handleWhatsAppMessage } from '@/lib/whatsapp-agent/handler'
 import { handleAiAgentMessage } from '@/lib/ai-agent/engine'
 import { handleInboundConsent } from '@/lib/optin/manager'
+import { routeMessage, type RoutingDecision } from '@/lib/agent-router/router'
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _adminClient: any = null
@@ -551,29 +552,8 @@ async function processMessage(
     inboundText,
   })
   if (consentHandled) return
-  // ── ADS AI MODULE (separate, sellable, gated per client) ──
-  // If this client bought the ads agent AND this is an ad lead, the AI
-  // module handles it and we SKIP the normal journey/automation path.
-  const referral = message.referral ?? null
-  const isAdLead = !!(referral && (referral.source_id || referral.source_type === 'ad'))
-  if (adsAgentEnabled && adsAgentId && isAdLead) {
-    const handled = await handleAdLead({
-      tenantId: userId,
-      agentId: adsAgentId,
-      conversationId: conversation.id,
-      contactId: contactRecord.id,
-      customerPhone: senderPhone,
-      contactName,
-      inboundText,
-      phoneNumberId,
-      accessToken,
-      referral: referral as MetaReferral,
-    })
-    if (handled) return
-  }
-  // ── JOURNEY FIRST ──
-  // Journeys answer first. If one did, automations must not ALSO reply —
-  // otherwise the customer gets two different answers to one question.
+  // ── JOURNEYS FIRST (deterministic, always) ──
+  // Journeys answer first. If one did, skip AI agents entirely.
   // Their non-messaging steps (tag, assign, create deal, update field)
   // still run, because a merchant is relying on those regardless of who
   // spoke.
@@ -592,44 +572,92 @@ async function processMessage(
   } catch (err) {
     console.error('[journeys] dispatch failed:', err)
   }
-  // ── AI AGENT THIRD ──
-  // Whatever the deterministic layers did not answer. This is the layer
-  // that finally makes an agent work on WhatsApp — and the one that
-  // answers broadcast replies, which previously reached nobody unless a
-  // keyword happened to match.
-  let agentReplied = false
-  if (!journeyReplied && whatsappAgentId) {
-    try {
-      agentReplied = await handleWhatsAppMessage({
-        tenantId: userId,
-        agentId: whatsappAgentId,
-        conversationId: conversation.id,
-        contactId: contactRecord.id,
-        customerPhone: senderPhone,
-        contactName,
-        inboundText,
-        phoneNumberId,
-        accessToken,
-      })
-    } catch (err) {
-      console.error('[whatsapp-agent] dispatch failed:', err)
-    }
-  }
 
-    // ── AI ECOMMERCE AGENT ──
-  // Runs after WhatsApp agent. Completely separate — own tables, own config.
-  // Only activates if merchant has an active ai_agent_configs row.
-  if (!agentReplied) {
+  // ── AGENT ROUTER ──
+  // Replaces the old sequential chain. The router picks exactly ONE
+  // agent system for each message: sticky session → ads → broadcast →
+  // keyword → LLM intent → fallback. No more double-replies.
+  const referral = message.referral ?? null
+  const isAdLead = !!(referral && (referral.source_id || referral.source_type === 'ad'))
+
+  let agentReplied = false
+  if (!journeyReplied) {
+    let routing: RoutingDecision | null = null
     try {
-      console.log(`[ai-agent] Dispatching: type=${message.type}, inboundText="${inboundText}", from=${senderPhone}`)
-      await handleAiAgentMessage({
-        userId,
+      routing = await routeMessage({
+        tenantId: userId,
+        conversationId: conversation.id,
         contactPhone: senderPhone,
-        inboundMessage: inboundText,
-        supabase: supabaseAdmin(),
+        inboundText,
+        isAdLead,
+        adsAgentId,
+        adsAgentEnabled,
       })
     } catch (err) {
-      console.error('[ai-ecommerce-agent] dispatch failed:', err)
+      console.error('[agent-router] routing failed:', err)
+    }
+
+    if (routing) {
+      console.log(`[agent-router] → ${routing.system} via ${routing.method}${routing.intentLabel ? ` (intent: ${routing.intentLabel})` : ''} [${routing.latencyMs}ms]`)
+
+      // ── ADS AGENT (special handler, separate flow) ──
+      if (routing.method === 'ads' && adsAgentId && isAdLead) {
+        try {
+          agentReplied = await handleAdLead({
+            tenantId: userId,
+            agentId: adsAgentId,
+            conversationId: conversation.id,
+            contactId: contactRecord.id,
+            customerPhone: senderPhone,
+            contactName,
+            inboundText,
+            phoneNumberId,
+            accessToken,
+            referral: referral as MetaReferral,
+          })
+        } catch (err) {
+          console.error('[ads-agent] dispatch failed:', err)
+        }
+        if (agentReplied) {
+          // Skip automations sends — ads agent already replied
+          return
+        }
+      }
+
+      // ── ECOMMERCE AGENT (own tables, own sessions) ──
+      if (routing.system === 'ecommerce') {
+        try {
+          console.log(`[ai-agent] Dispatching: type=${message.type}, inboundText="${inboundText}", from=${senderPhone}`)
+          await handleAiAgentMessage({
+            userId,
+            contactPhone: senderPhone,
+            inboundMessage: inboundText,
+            supabase: supabaseAdmin(),
+          })
+          agentReplied = true
+        } catch (err) {
+          console.error('[ai-ecommerce-agent] dispatch failed:', err)
+        }
+      }
+
+      // ── GENERAL AGENT (sales, support, realestate, etc.) ──
+      if (!agentReplied && routing.system.startsWith('general:') && routing.agentId) {
+        try {
+          agentReplied = await handleWhatsAppMessage({
+            tenantId: userId,
+            agentId: routing.agentId,
+            conversationId: conversation.id,
+            contactId: contactRecord.id,
+            customerPhone: senderPhone,
+            contactName,
+            inboundText,
+            phoneNumberId,
+            accessToken,
+          })
+        } catch (err) {
+          console.error('[whatsapp-agent] dispatch failed:', err)
+        }
+      }
     }
   }
 

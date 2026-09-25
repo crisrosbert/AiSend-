@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { OrderStatusForm } from './status-form'
 import { ExportOrdersButton } from './export-button'
+import { OrderItemThumbnail } from '@/components/media/order-item-thumbnail'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -366,17 +367,10 @@ function OrderCard({ order }: { order: AgentOrder }) {
           <div className="space-y-2">
             {items.map((item, i) => (
               <div key={i} className="flex items-center gap-3">
-                {item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.productName}
-                    className="h-10 w-10 rounded-lg border border-gray-200 object-cover dark:border-gray-600"
-                  />
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700">
-                    <Package className="h-5 w-5 text-gray-400" />
-                  </div>
-                )}
+                <OrderItemThumbnail
+                  imageUrl={item.imageUrl}
+                  alt={item.productName || 'Product'}
+                />
                 <div className="flex-1 min-w-0">
                   <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
                     {item.productName || 'Unknown Product'}

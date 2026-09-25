@@ -33,12 +33,12 @@ async function getAgentStats(userId: string, supabase: Awaited<ReturnType<typeof
   const [products, sessions, orders] = await Promise.all([
     supabase.from('ai_agent_products').select('id', { count: 'exact', head: true }).eq('user_id', userId),
     supabase.from('ai_agent_sessions').select('id', { count: 'exact', head: true }).eq('user_id', userId),
-    supabase.from('ai_agent_orders').select('total_amount, currency').eq('user_id', userId).eq('payment_status', 'confirmed'),
+    supabase.from('ai_agent_orders').select('total, order_status').eq('user_id', userId).eq('order_status', 'confirmed'),
   ])
 
   const confirmedOrders = orders.data ?? []
-  const totalRevenue = confirmedOrders.reduce((sum, o) => sum + Number(o.total_amount), 0)
-  const currency = confirmedOrders[0]?.currency ?? 'INR'
+  const totalRevenue = confirmedOrders.reduce((sum, o) => sum + Number(o.total), 0)
+  const currency = 'INR'
 
   return {
     totalProducts: products.count ?? 0,

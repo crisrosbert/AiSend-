@@ -149,10 +149,21 @@ async function checkStickySession(
 
 // ── Broadcast reply detection ────────────────────────────────────────────
 
+interface BroadcastReplyTarget {
+  system: AgentSystem
+  /**
+   * The exact agent chosen in the broadcast wizard (broadcasts.agent_id,
+   * migration 033), when the merchant picked one. Null means "no specific
+   * agent was pinned to this campaign" — the caller falls back to
+   * resolving one by type, same as before this column existed.
+   */
+  agentId: string | null
+}
+
 async function checkBroadcastReply(
   tenantId: string,
   contactPhone: string,
-): Promise<AgentSystem | null> {
+): Promise<BroadcastReplyTarget | null> {
   // This previously queried tables that don't exist in the schema
   // ("broadcast_contacts", "broadcast_histories") — see 001_initial_schema.sql,
   // where broadcast sends live in "broadcasts" and recipients in
@@ -182,10 +193,11 @@ async function checkBroadcastReply(
 
   if (!data?.broadcast_id) return null
 
-  // Check if the broadcast had an agent_type
+  // Check if the broadcast had an agent_type (and, since migration 033,
+  // a specific agent_id the merchant picked for this campaign)
   const { data: broadcast } = await db()
     .from('broadcasts')
-    .select('agent_type, user_id')
+    .select('agent_type, agent_id, user_id')
     .eq('id', data.broadcast_id)
     .eq('user_id', tenantId)
     .maybeSingle()
@@ -193,8 +205,13 @@ async function checkBroadcastReply(
   if (!broadcast?.agent_type) return null
 
   // Map broadcast agent_type to system
-  if (broadcast.agent_type === 'ecommerce') return 'ecommerce'
-  return `general:${broadcast.agent_type}` as AgentSystem
+  const system: AgentSystem =
+    broadcast.agent_type === 'ecommerce' ? 'ecommerce' : (`general:${broadcast.agent_type}` as AgentSystem)
+
+  return {
+    system,
+    agentId: system === 'ecommerce' ? null : (broadcast.agent_id ?? null),
+  }
 }
 
 // ── Keyword matching ─────────────────────────────────────────────────────
@@ -326,7 +343,7 @@ async function classifyIntent(
         messages: [
           {
             role: 'system',
-            content: `You are an intent classifier for a WhatsApp business. Classify the customer's message into exactly ONE of these agent types:\n${activeDescriptions}\n\nRespond with JSON: {"type": "<agent_type>", "confidence": 0.0-1.0}\nIf unsure, pick the closest match with lower confidence. Only use types from the list above.`,
+            content: `You are an intent classifier for a WhatsApp business. Classify the customer's message into exactly ONE of these agent types:\n${activeDescriptions}\n\nIMPORTANT: if "ecommerce" is one of the listed types, strongly prefer it for anything that could plausibly be a customer trying to buy, browse, or ask about a product — including a bare product name, a product category (e.g. "biscuit", "snacks", "tea"), quantities, or short messages with little context. Only choose a different type when the message is CLEARLY about something else — e.g. asking about a marketing campaign or promotion content (marketing), negotiating a bulk/business deal or asking for a sales quote (sales), reporting a problem or complaint (support). When in doubt between ecommerce and another type, choose ecommerce.\n\nRespond with JSON: {"type": "<agent_type>", "confidence": 0.0-1.0}\nOnly use types from the list above.`,
           },
           {
             role: 'user',
@@ -544,18 +561,24 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
   }
 
   // ── 3. BROADCAST REPLY ────────────────────────────────────────────
-  const broadcastSystem = await checkBroadcastReply(tenantId, contactPhone)
-  if (broadcastSystem) {
-    const agentType = broadcastSystem === 'ecommerce'
+  const broadcastTarget = await checkBroadcastReply(tenantId, contactPhone)
+  if (broadcastTarget) {
+    // If the merchant pinned a specific agent to this campaign
+    // (broadcasts.agent_id, migration 033), use exactly that agent —
+    // don't re-resolve by type, which could pick a different agent of
+    // the same type. Only fall back to type-based resolution for older
+    // broadcasts that predate that column.
+    const agentType = broadcastTarget.system === 'ecommerce'
       ? 'ecommerce'
-      : broadcastSystem.replace('general:', '')
-    const agentId = broadcastSystem === 'ecommerce'
+      : broadcastTarget.system.replace('general:', '')
+    const agentId = broadcastTarget.system === 'ecommerce'
       ? null
-      : await resolveAgentId(tenantId, agentType, config)
+      : broadcastTarget.agentId ?? await resolveAgentId(tenantId, agentType, config)
+    const resolved = withAgentFallback(broadcastTarget.system, agentId, config)
 
     const decision: RoutingDecision = {
-      system: broadcastSystem,
-      agentId,
+      system: resolved.system,
+      agentId: resolved.agentId,
       method: 'broadcast',
       latencyMs: Date.now() - start,
     }
@@ -610,7 +633,17 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
 
   // ── 5. LLM INTENT CLASSIFICATION ─────────────────────────────────
   if (config.llm_routing_enabled && config.active_agent_types.length > 1) {
-    const intent = await classifyIntent(inboundText, config.active_agent_types)
+    const rawIntent = await classifyIntent(inboundText, config.active_agent_types)
+    // Second line of defense on top of the prompt bias: a low-confidence
+    // guess for anything other than ecommerce (e.g. gpt-4o-mini unsure
+    // whether "Biscuit" means marketing or ecommerce) defaults to
+    // ecommerce when it's active, instead of risking a wrong agent.
+    const intent: IntentResult =
+      config.active_agent_types.includes('ecommerce') &&
+      rawIntent.system !== 'ecommerce' &&
+      rawIntent.confidence < 0.75
+        ? { system: 'ecommerce', label: `${rawIntent.label}_low_confidence`, confidence: rawIntent.confidence }
+        : rawIntent
     const agentType = intent.system === 'ecommerce'
       ? 'ecommerce'
       : intent.system.replace('general:', '')

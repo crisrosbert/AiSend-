@@ -533,12 +533,23 @@ export async function createTemplate(
 /**
  * Create a carousel message template on Meta.
  *
- * Carousel templates show swipeable cards in WhatsApp — each card has an
- * image header, body text (with {{1}} placeholder for per-card value),
- * and two buttons: a quick-reply "Add to Cart" and a URL "View Product".
+ * Follows Meta's official format exactly:
+ * https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/media-card-carousel-templates
  *
- * Once Meta approves the template, sendCarouselTemplate() can fill in
- * the actual images and text at send time.
+ * Structure:
+ *   components: [
+ *     { type: "body", text: "..." },           ← outer message body
+ *     { type: "carousel", cards: [
+ *       { components: [
+ *         { type: "header", format: "image", example: { header_handle: [...] } },
+ *         { type: "buttons", buttons: [ { type: "quick_reply", text: "..." } ] }
+ *       ]}
+ *     ]}
+ *   ]
+ *
+ * IMPORTANT: Cards contain ONLY header + buttons. No body inside cards.
+ * Meta's docs show this exact structure — adding body to cards causes
+ * "Invalid parameter" errors.
  */
 export interface CreateCarouselTemplateArgs {
   wabaId: string
@@ -547,7 +558,7 @@ export interface CreateCarouselTemplateArgs {
   language?: string
   /** Body text for the outer message (above the carousel). Supports {{n}} placeholders. */
   bodyText?: string
-  /** How many cards the template supports (1–10). Default 2 for the sample. */
+  /** How many cards the template supports (2–10). Default 2. */
   sampleCardCount?: number
   /** Sample image handle (from uploadProfilePhoto) for the card headers. */
   sampleImageHandle: string
@@ -561,32 +572,29 @@ export async function createCarouselTemplate(
     accessToken,
     name,
     language = 'en_US',
-    bodyText = 'Check out our products {{1}}',
+    bodyText = 'Check out our latest products!',
     sampleCardCount = 2,
     sampleImageHandle,
   } = args
 
   const url = `${META_API_BASE}/${wabaId}/message_templates`
 
-  // Build each card — IMAGE header + body + quick reply button
-  // Each card is a deep copy so Meta sees independent objects.
-  const cardCount = Math.max(2, Math.min(sampleCardCount, 10)) // Meta needs min 2
-  const cards = Array.from({ length: cardCount }, (_, i) => ({
+  // Meta requires min 2, max 10 cards. All cards must have identical structures.
+  const cardCount = Math.max(2, Math.min(sampleCardCount, 10))
+
+  // Each card: image header + quick_reply button only (NO body in cards)
+  // This matches Meta's official example exactly.
+  const cards = Array.from({ length: cardCount }, () => ({
     components: [
       {
-        type: 'HEADER',
-        format: 'IMAGE',
+        type: 'header',
+        format: 'image',
         example: { header_handle: [sampleImageHandle] },
       },
       {
-        type: 'BODY',
-        text: '{{1}}',
-        example: { body_text: [[`Product ${i + 1}`]] },
-      },
-      {
-        type: 'BUTTONS',
+        type: 'buttons',
         buttons: [
-          { type: 'QUICK_REPLY', text: 'Add to Cart' },
+          { type: 'quick_reply', text: 'Add to Cart' },
         ],
       },
     ],
@@ -594,7 +602,7 @@ export async function createCarouselTemplate(
 
   // Outer body component (shown above the carousel)
   const bodyComponent: Record<string, unknown> = {
-    type: 'BODY',
+    type: 'body',
     text: bodyText,
   }
   const placeholderCount = maxPlaceholder(bodyText)
@@ -608,11 +616,11 @@ export async function createCarouselTemplate(
 
   const payload = {
     name: name.trim().toLowerCase().replace(/\s+/g, '_'),
-    category: 'MARKETING',
+    category: 'marketing',
     language,
     components: [
       bodyComponent,
-      { type: 'CAROUSEL', cards },
+      { type: 'carousel', cards },
     ],
   }
 
@@ -646,17 +654,26 @@ export async function createCarouselTemplate(
 /**
  * Send a carousel template message to a WhatsApp number.
  *
- * Each card in the carousel gets its own image, body text, and button
- * parameters. The template must already be APPROVED by Meta.
+ * Follows Meta's official send format exactly:
+ * https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/media-card-carousel-templates
+ *
+ * Key format differences from template creation:
+ *   - Uses `card_index` (integer) per card
+ *   - Uses `type: "button"` (singular, not "buttons")
+ *   - Uses `sub_type` for button classification
+ *   - `index` is a STRING ("0", "1"), not a number
+ *   - Header image can be `{ id: "..." }` (uploaded media) or `{ link: "..." }` (URL)
+ *
+ * The template must already be APPROVED by Meta.
  */
 export interface CarouselCard {
-  /** URL of the image for this card's header. */
-  imageUrl: string
-  /** Body text parameters (values for {{1}}, {{2}}, … in the card body). */
-  bodyParams?: string[]
-  /** Quick-reply button payload (index 0). */
+  /** URL of the image for this card's header (used with `link`). */
+  imageUrl?: string
+  /** Uploaded media ID for this card's header (used with `id`). */
+  imageMediaId?: string
+  /** Quick-reply button payload (index "0"). */
   quickReplyPayload?: string
-  /** URL button suffix/variable (index 1). */
+  /** URL button suffix/variable (index "1"). */
   urlButtonParam?: string
 }
 
@@ -689,7 +706,7 @@ export async function sendCarouselTemplate(
 
   const components: Record<string, unknown>[] = []
 
-  // Outer body parameters
+  // Outer body parameters (for variables in the message text above the carousel)
   if (bodyParams && bodyParams.length > 0) {
     components.push({
       type: 'body',
@@ -697,42 +714,38 @@ export async function sendCarouselTemplate(
     })
   }
 
-  // Carousel cards
+  // Carousel cards — match Meta's exact send format
   const carouselCards = cards.slice(0, 10).map((card, idx) => {
     const cardComponents: Record<string, unknown>[] = []
 
-    // Header — image
+    // Header — image (via uploaded media ID or public URL)
+    const imageParam: Record<string, unknown> = { type: 'image' }
+    if (card.imageMediaId) {
+      imageParam.image = { id: card.imageMediaId }
+    } else if (card.imageUrl) {
+      imageParam.image = { link: card.imageUrl }
+    }
     cardComponents.push({
       type: 'header',
-      parameters: [
-        { type: 'image', image: { link: card.imageUrl } },
-      ],
+      parameters: [imageParam],
     })
 
-    // Body parameters
-    if (card.bodyParams && card.bodyParams.length > 0) {
-      cardComponents.push({
-        type: 'body',
-        parameters: card.bodyParams.map((p) => ({ type: 'text', text: p })),
-      })
-    }
-
-    // Button 0 — quick reply
-    if (card.quickReplyPayload) {
+    // Button 0 — quick reply (index as STRING per Meta docs)
+    if (card.quickReplyPayload !== undefined) {
       cardComponents.push({
         type: 'button',
         sub_type: 'quick_reply',
-        index: 0,
+        index: '0',
         parameters: [{ type: 'payload', payload: card.quickReplyPayload }],
       })
     }
 
-    // Button 1 — URL variable
-    if (card.urlButtonParam) {
+    // Button 1 — URL variable (index as STRING per Meta docs)
+    if (card.urlButtonParam !== undefined) {
       cardComponents.push({
         type: 'button',
         sub_type: 'url',
-        index: 1,
+        index: '1',
         parameters: [{ type: 'text', text: card.urlButtonParam }],
       })
     }

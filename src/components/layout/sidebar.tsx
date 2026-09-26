@@ -25,6 +25,7 @@ import {
   Workflow,
   BarChart3,
   ShoppingCart,
+  FlaskConical,
 } from "lucide-react";
 import {
   Avatar,
@@ -50,6 +51,7 @@ const navItems = [
   { path: "pipelines",   label: "Pipelines",        icon: GitBranch },
   { path: "broadcasts",  label: "Campaigns",        icon: Radio },
   { path: "journeys",    label: "Chat Flows",       icon: Workflow },
+  { path: "flows-lab",   label: "Flows Lab",        icon: FlaskConical, beta: true },
   { path: "automations", label: "Automation Rules", icon: Zap },
   { path: "bookings",    label: "Bookings",         icon: CalendarCheck },
   { path: "leads",       label: "Website Leads",    icon: Globe },
@@ -161,6 +163,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             {navItems.map((item) => {
               const active = isActive(item.path);
               const showBadge = item.path === "inbox" && totalUnread > 0;
+              const isBeta = (item as { beta?: boolean }).beta === true;
               return (
                 <li key={item.path} className="w-full">
                   <Link
@@ -194,6 +197,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                           {totalUnread > 99 ? "99+" : totalUnread}
                         </span>
                       )}
+                      {isBeta && (
+                        <span className="absolute -right-2 -top-1.5 flex h-3.5 items-center justify-center rounded-md bg-amber-500 px-1 text-[7.5px] font-bold text-white">
+                          β
+                        </span>
+                      )}
                     </div>
 
                     <span
@@ -209,6 +217,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
                     <span className="ml-3 flex-1 text-sm font-medium lg:hidden">
                       {item.label}
+                      {isBeta && (
+                        <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-400">
+                          BETA
+                        </span>
+                      )}
                     </span>
                   </Link>
                 </li>

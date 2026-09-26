@@ -64,7 +64,7 @@ function CreateFlowContent() {
 
     saveFlow(flow);
     toast.success(templateKey ? "Flow created from template" : "Blank flow created");
-    router.replace(`/${profile.slug ?? ""}/flows-lab/${flow.id}/builder`);
+    router.replace(`/flows-lab/${flow.id}/builder`);
   }, [profile, params, router]);
 
   return (

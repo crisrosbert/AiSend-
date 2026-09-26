@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { id, name, template, audience, variables, current_step } = body
+    const { id, name, template, audience, variables, current_step, agent_type, agent_id } = body
 
     if (!name?.trim()) {
       return NextResponse.json({ error: 'name is required' }, { status: 400 })
@@ -45,6 +45,9 @@ export async function POST(request: Request) {
         _template: template ?? null,
         _current_step: current_step ?? 0,
       },
+      // Persisted so resuming a draft restores the "who replies?" pick too.
+      agent_type: agent_type ?? null,
+      agent_id: agent_type === 'ecommerce' ? null : (agent_id ?? null),
       status: 'draft',
       total_recipients: 0,
       sent_count: 0,

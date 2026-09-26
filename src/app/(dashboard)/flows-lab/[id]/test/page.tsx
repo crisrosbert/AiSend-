@@ -23,7 +23,6 @@ import {
   ArrowLeft, RotateCcw, ChevronRight, ChevronDown,
   Check, X, ArrowLeftRight, Copy, AlertCircle,
 } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { PhonePreview } from "@/components/flows-lab/phone-preview";
 import type { FlowDefinition, FlowResponse, FlowComponent } from "@/lib/flows-lab/types";
@@ -35,8 +34,9 @@ import {
 export default function FlowTestPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { profile } = useAuth();
-  const slug = profile?.slug ?? "";
+  // All Flows Lab routes are served slug-free at /flows-lab/... — the
+  // [slug]/flows-lab/ shim redirects tenant links here, so no prefix
+  // is needed (or wanted) on internal navigation.
 
   const [flow, setFlow] = useState<FlowDefinition | null>(null);
   const [runResponse, setRunResponse] = useState<FlowResponse | null>(null);
@@ -52,7 +52,7 @@ export default function FlowTestPage() {
     const loaded = getFlow(id);
     if (!loaded) {
       toast.error("Flow not found");
-      router.replace(`/${slug}/flows-lab`);
+      router.replace(`/flows-lab`);
       return;
     }
     setFlow(loaded);
@@ -187,7 +187,7 @@ export default function FlowTestPage() {
       <div className="mb-6 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <Link
-            href={`/${slug}/flows-lab/${flow.id}/builder`}
+            href={`/flows-lab/${flow.id}/builder`}
             className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -206,7 +206,7 @@ export default function FlowTestPage() {
             Restart
           </Button>
           <Link
-            href={`/${slug}/flows-lab/${flow.id}/builder`}
+            href={`/flows-lab/${flow.id}/builder`}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             Edit flow

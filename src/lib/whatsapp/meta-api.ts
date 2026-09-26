@@ -561,15 +561,17 @@ export async function createCarouselTemplate(
     accessToken,
     name,
     language = 'en_US',
-    bodyText = 'Here are the product images for *{{1}}*',
+    bodyText = 'Check out our products {{1}}',
     sampleCardCount = 2,
     sampleImageHandle,
   } = args
 
   const url = `${META_API_BASE}/${wabaId}/message_templates`
 
-  // Build the card template — each card has: IMAGE header + body + 2 buttons
-  const cardTemplate = {
+  // Build each card — IMAGE header + body + quick reply button
+  // Each card is a deep copy so Meta sees independent objects.
+  const cardCount = Math.max(2, Math.min(sampleCardCount, 10)) // Meta needs min 2
+  const cards = Array.from({ length: cardCount }, (_, i) => ({
     components: [
       {
         type: 'HEADER',
@@ -579,28 +581,18 @@ export async function createCarouselTemplate(
       {
         type: 'BODY',
         text: '{{1}}',
-        example: { body_text: [['Product details']] },
+        example: { body_text: [[`Product ${i + 1}`]] },
       },
       {
         type: 'BUTTONS',
         buttons: [
           { type: 'QUICK_REPLY', text: 'Add to Cart' },
-          {
-            type: 'URL',
-            text: 'View Product',
-            url: 'https://shop.example.com/{{1}}',
-            example: ['product-123'],
-          },
         ],
       },
     ],
-  }
-
-  // Repeat the card template for each sample card
-  const cards = Array.from({ length: Math.min(sampleCardCount, 10) }, () => ({
-    ...cardTemplate,
   }))
 
+  // Outer body component (shown above the carousel)
   const bodyComponent: Record<string, unknown> = {
     type: 'BODY',
     text: bodyText,
@@ -634,7 +626,13 @@ export async function createCarouselTemplate(
   })
 
   if (!response.ok) {
-    await throwMetaError(response, `Meta API error: ${response.status}`)
+    // Return the full Meta error for debugging
+    let errorDetail = `Meta API error: ${response.status}`
+    try {
+      const errBody = await response.json()
+      errorDetail = errBody?.error?.message || JSON.stringify(errBody?.error || errBody)
+    } catch { /* keep fallback */ }
+    throw new Error(errorDetail)
   }
 
   const data = await response.json()

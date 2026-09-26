@@ -32,7 +32,6 @@ import {
   ArrowLeft, Play, Plus, Trash2, GripVertical,
   AlertTriangle, Check, LayoutGrid, Sparkles,
 } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,12 +66,15 @@ const COMPONENT_MENU: { type: ComponentType; label: string; group: string }[] = 
 export default function FlowBuilderPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { profile } = useAuth();
   const [flow, setFlow] = useState<FlowDefinition | null>(null);
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null);
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
 
-  const slug = profile?.slug ?? "";
+  // Every route in Flows Lab is served from /flows-lab/... regardless
+  // of the caller's tenant slug — the [slug]/flows-lab/ shim sends
+  // sidebar links here (and /admin/flows-lab/ has its own shim). So
+  // internal links stay slug-free and work across tenants, including
+  // the reserved "admin" one.
 
   // ── Load flow on mount ───────────────────────────────────────────
   // localStorage is an external store, so hydrating client-only state
@@ -83,12 +85,12 @@ export default function FlowBuilderPage() {
     const loaded = getFlow(id);
     if (!loaded) {
       toast.error("Flow not found");
-      router.replace(`/${slug}/flows-lab`);
+      router.replace(`/flows-lab`);
       return;
     }
     setFlow(loaded);
     setSelectedScreenId(loaded.startScreenId);
-  }, [id, router, slug]);
+  }, [id, router]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const selectedScreen = useMemo(
@@ -207,7 +209,7 @@ export default function FlowBuilderPage() {
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
-            href={`/${slug}/flows-lab`}
+            href={`/flows-lab`}
             className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -241,7 +243,7 @@ export default function FlowBuilderPage() {
             </div>
           )}
           <Link
-            href={`/${slug}/flows-lab/${flow.id}/test`}
+            href={`/flows-lab/${flow.id}/test`}
             className="flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
           >
             <Play className="h-3.5 w-3.5" />

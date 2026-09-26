@@ -95,7 +95,9 @@ export async function POST(request: Request) {
           { status: 400 },
         )
       }
-      const contentType = imageRes.headers.get('content-type') || 'image/jpeg'
+      // Meta requires clean MIME type — strip charset and other params
+      const rawCt = imageRes.headers.get('content-type') || 'image/jpeg'
+      const contentType = rawCt.split(';')[0].trim()
       const fileBytes = await imageRes.arrayBuffer()
 
       sampleImageHandle = await uploadProfilePhoto({

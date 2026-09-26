@@ -103,7 +103,7 @@ export async function POST(request: Request) {
     } else {
       // Generate a minimal valid PNG in-memory (no external fetch needed)
       const png = generatePlaceholderPng()
-      fileBytes = png.buffer
+      fileBytes = png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer
       mimeType = 'image/png'
     }
 

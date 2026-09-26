@@ -37,7 +37,11 @@ export default function FlowsLabPage() {
   const [flows, setFlows] = useState<FlowDefinition[]>([]);
   const [ready, setReady] = useState(false);
 
-  const slug = profile?.slug ?? "";
+  // Links stay slug-free — the (dashboard) route group serves them
+  // at /flows-lab/..., and the [slug]/flows-lab/ shim redirects
+  // sidebar entries here. Admin users hit /admin/flows-lab/ via a
+  // separate shim; either way, once inside these pages every
+  // navigation uses /flows-lab/... without a tenant prefix.
   const userId = profile?.id ?? "";
 
   // Hydrate from localStorage on mount. localStorage is an external
@@ -56,7 +60,7 @@ export default function FlowsLabPage() {
   }
 
   function handleNew() {
-    router.push(`/${slug}/flows-lab/new`);
+    router.push(`/flows-lab/new`);
   }
 
   function handleDuplicate(id: string) {
@@ -144,7 +148,7 @@ export default function FlowsLabPage() {
               return (
                 <Link
                   key={key}
-                  href={`/${slug}/flows-lab/new?template=${key}`}
+                  href={`/flows-lab/new?template=${key}`}
                   className="group rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all hover:border-emerald-300 hover:bg-emerald-50/50 hover:shadow-sm"
                 >
                   <div className="mb-2 flex items-center gap-2">
@@ -171,7 +175,6 @@ export default function FlowsLabPage() {
             <FlowCard
               key={flow.id}
               flow={flow}
-              slug={slug}
               onDuplicate={() => handleDuplicate(flow.id)}
               onDelete={() => handleDelete(flow.id)}
             />
@@ -226,10 +229,9 @@ function StatTile({
 }
 
 function FlowCard({
-  flow, slug, onDuplicate, onDelete,
+  flow, onDuplicate, onDelete,
 }: {
   flow: FlowDefinition;
-  slug: string;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
@@ -264,7 +266,7 @@ function FlowCard({
       </div>
 
       {/* Header */}
-      <Link href={`/${slug}/flows-lab/${flow.id}/builder`} className="mb-3 flex items-start gap-2">
+      <Link href={`/flows-lab/${flow.id}/builder`} className="mb-3 flex items-start gap-2">
         <span className="text-2xl">{cat?.emoji}</span>
         <div className="min-w-0 flex-1 pr-6">
           <h3 className="truncate text-sm font-bold text-slate-900">{flow.name}</h3>
@@ -294,13 +296,13 @@ function FlowCard({
       {/* Actions */}
       <div className="mt-auto flex gap-2 pt-2">
         <Link
-          href={`/${slug}/flows-lab/${flow.id}/builder`}
+          href={`/flows-lab/${flow.id}/builder`}
           className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-center text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
           Edit
         </Link>
         <Link
-          href={`/${slug}/flows-lab/${flow.id}/test`}
+          href={`/flows-lab/${flow.id}/test`}
           className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-emerald-600 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
         >
           <Play className="h-3 w-3" />

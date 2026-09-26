@@ -1,10 +1,11 @@
 'use client';
-import { ResendUnreadButton } from '@/components/broadcasts/resend-unread-button';
-import { ResumeBroadcastButton } from '@/components/broadcasts/resume-broadcast-button';
-import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Broadcast, BroadcastRecipient, RecipientStatus } from '@/types';
+import { toast } from 'sonner';
+import { Broadcast } from '@/types';
+import { getBroadcastStatus } from '@/lib/broadcast-status';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -14,519 +15,280 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  ArrowLeft,
-  Loader2,
-  Users,
-  Send,
-  CheckCheck,
-  Eye,
-  AlertCircle,
-  MessageCircle,
-  Filter,
-  Download,
-  ChevronDown,
-  Trash2,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import {
-  getBroadcastStatus,
-  getRecipientStatus,
-} from '@/lib/broadcast-status';
+import { FileEdit, Plus, Radio, Trash2, Play } from 'lucide-react';
+import { useBusiness } from '@/hooks/use-business';
 
-interface StatCardProps {
-  label: string;
+function RateCell({
+  value,
+  total,
+  color,
+}: {
   value: number;
   total: number;
-  icon: React.ReactNode;
   color: string;
-}
-
-function StatCard({ label, value, total, icon, color }: StatCardProps) {
+}) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <div className="flex items-center justify-between">
-        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${color}`}>
-          {icon}
-        </div>
-        <span className="text-xs text-slate-500">{pct}%</span>
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#e7ece9]">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-3 text-2xl font-bold text-white">{value.toLocaleString()}</p>
-      <p className="text-xs text-slate-400">{label}</p>
+      <span className="text-xs tabular-nums text-slate-500">{pct}%</span>
     </div>
   );
 }
 
-interface FunnelStep {
-  label: string;
-  value: number;
-  color: string;
-}
-
-/**
- * Pure-CSS funnel chart: decreasing-width rounded bars.
- * Width is relative to the largest step (typically Sent) so we
- * always render a full bar at the top and proportional tails.
- */
-function FunnelChart({ steps }: { steps: FunnelStep[] }) {
-  const max = Math.max(...steps.map((s) => s.value), 1);
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <h3 className="mb-4 text-sm font-medium text-white">Funnel</h3>
-      <div className="space-y-2">
-        {steps.map((step) => {
-          const pctOfMax = Math.max(5, Math.round((step.value / max) * 100));
-          const pctOfSent =
-            steps[0].value > 0
-              ? Math.round((step.value / steps[0].value) * 100)
-              : 0;
-          return (
-            <div key={step.label} className="flex items-center gap-3">
-              <span className="w-20 shrink-0 text-xs text-slate-400">
-                {step.label}
-              </span>
-              <div className="relative h-7 flex-1 rounded-full bg-slate-800">
-                <div
-                  className={`h-7 rounded-full ${step.color} transition-[width] duration-500`}
-                  style={{ width: `${pctOfMax}%` }}
-                />
-                <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-white">
-                  {step.value.toLocaleString()}
-                  <span className="ml-2 text-slate-300/80">
-                    ({pctOfSent}%)
-                  </span>
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const RECIPIENT_STATUSES: readonly RecipientStatus[] = [
-  'pending',
-  'sent',
-  'delivered',
-  'read',
-  'replied',
-  'failed',
-];
-
-/**
- * CSV export helper — RFC 4180 quoting. Quote every field so
- * commas/newlines/quotes round-trip cleanly.
- */
-function toCsv(rows: string[][]): string {
-  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
-  return rows.map((r) => r.map(escape).join(',')).join('\n');
-}
-
-function downloadBlob(filename: string, content: string) {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-export default function BroadcastDetailPage() {
-  const params = useParams();
+export default function BroadcastsPage() {
   const router = useRouter();
-  const broadcastId = params.id as string;
+  const supabase = createClient();
 
-  const [broadcast, setBroadcast] = useState<Broadcast | null>(null);
-  const [recipients, setRecipients] = useState<BroadcastRecipient[]>([]);
+  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
+  const [drafts, setDrafts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<RecipientStatus | 'all'>(
-    'all',
-  );
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const { businessId, loading: businessLoading } = useBusiness();
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const supabase = createClient();
+  const fetchBroadcasts = useCallback(async () => {
+    setLoading(true);
+    try {
+      if (businessLoading) return;
+      if (!businessId) { setDrafts([]); setBroadcasts([]); setLoading(false); return; }
 
-        const { data: bc, error: bcError } = await supabase
-          .from('broadcasts')
-          .select('*')
-          .eq('id', broadcastId)
-          .single();
+      const { data, error } = await supabase
+        .from('broadcasts')
+        .select('*')
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const all = data ?? [];
+      setDrafts(all.filter((b) => b.status === 'draft'));
+      setBroadcasts(all.filter((b) => b.status !== 'draft'));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load broadcasts');
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase, businessId, businessLoading]);
 
-        if (bcError) throw bcError;
-        setBroadcast(bc);
+  useEffect(() => { fetchBroadcasts(); }, [fetchBroadcasts]);
 
-        const { data: recs, error: recsError } = await supabase
-          .from('broadcast_recipients')
-          .select('*, contact:contacts(*)')
-          .eq('broadcast_id', broadcastId)
-          .order('created_at', { ascending: false });
-
-        if (recsError) throw recsError;
-        setRecipients(recs ?? []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load broadcast');
-      } finally {
-        setLoading(false);
+  async function deleteDraft(id: string) {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/broadcasts/draft?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error ?? 'Delete failed');
       }
+      toast.success('Draft deleted');
+      fetchBroadcasts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete draft');
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
     }
-
-    fetchData();
-  }, [broadcastId]);
-
-  const filteredRecipients = useMemo(
-    () =>
-      statusFilter === 'all'
-        ? recipients
-        : recipients.filter((r) => r.status === statusFilter),
-    [recipients, statusFilter],
-  );
-
-  function handleExport() {
-    if (!broadcast) return;
-    const header = [
-      'Contact',
-      'Phone',
-      'Status',
-      'Sent At',
-      'Delivered At',
-      'Read At',
-      'Replied At',
-      'Error',
-    ];
-    const rows = recipients.map((r) => [
-      r.contact?.name ?? '',
-      r.contact?.phone ?? '',
-      r.status,
-      r.sent_at ?? '',
-      r.delivered_at ?? '',
-      r.read_at ?? '',
-      r.replied_at ?? '',
-      r.error_message ?? '',
-    ]);
-    const csv = toCsv([header, ...rows]);
-    const safeName = broadcast.name.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase();
-    downloadBlob(`broadcast-${safeName}-${broadcastId.slice(0, 8)}.csv`, csv);
   }
 
-  async function handleDelete() {
-    setDeleting(true);
-    const supabase = createClient();
-    // broadcast_recipients cascades on broadcasts.id (migration 001), so a
-    // single delete is sufficient — the aggregate trigger in migration 003
-    // is defined on broadcast_recipients but fires only on its own row
-    // changes, not on a cascaded drop of the parent row.
-    const { error: delErr } = await supabase
-      .from('broadcasts')
-      .delete()
-      .eq('id', broadcastId);
-    setDeleting(false);
-    if (delErr) {
-      toast.error(`Failed to delete: ${delErr.message}`);
-      return;
-    }
-    toast.success('Broadcast deleted');
-    router.push('/broadcasts');
-  }
-
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
-      </div>
-    );
-  }
-
-  if (error || !broadcast) {
-    return (
-      <div className="flex h-64 flex-col items-center justify-center gap-2">
-        <p className="text-sm text-red-400">{error ?? 'Broadcast not found'}</p>
-        <Button variant="outline" onClick={() => router.push('/broadcasts')}>
-          Back to Broadcasts
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-[#0c1f17]" style={{ fontFamily: 'var(--font-display)' }}>
+            Campaigns
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Send bulk messages to your contacts using approved templates.
+          </p>
+        </div>
+        <Button
+          onClick={() => router.push('/broadcasts/new')}
+          className="bg-emerald-500 text-white hover:bg-emerald-600"
+        >
+          <Plus className="h-4 w-4" />
+          New Broadcast
         </Button>
       </div>
-    );
-  }
 
-  const status = getBroadcastStatus(broadcast.status);
-
-  const funnelSteps: FunnelStep[] = [
-    { label: 'Sent', value: broadcast.sent_count, color: 'bg-violet-500' },
-    { label: 'Delivered', value: broadcast.delivered_count, color: 'bg-teal-500' },
-    { label: 'Read', value: broadcast.read_count, color: 'bg-blue-500' },
-    { label: 'Replied', value: broadcast.replied_count, color: 'bg-indigo-500' },
-  ];
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => router.push('/broadcasts')}
-            className="border-slate-700"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-white">{broadcast.name}</h1>
-              <span
-                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}
-              >
-                {status.label}
-              </span>
-            </div>
-            <div className="mt-1 flex items-center gap-3 text-sm text-slate-400">
-              <span>Template: {broadcast.template_name}</span>
-              <span>-</span>
-              <span>
-                Created {new Date(broadcast.created_at).toLocaleDateString()}
-              </span>
-            </div>
-          </div>
-        </div>
-{/* Shows itself only when recipients were never attempted — a
-    campaign whose browser tab closed mid-send. Renders nothing at
-    all on one that completed normally. */}
-<ResumeBroadcastButton
-  broadcastId={broadcast.id}
-  onFinished={() => window.location.reload()}
-/>
-{broadcast.status === 'sent' && (
-  <ResendUnreadButton
-    broadcast={broadcast}
-    unreadCount={Math.max(0, broadcast.sent_count - broadcast.read_count)}
-  />
-)}
-        {/* Delete — inline-confirm pattern matches the pipeline-settings
-            "Delete Pipeline" flow. Mid-send broadcasts can't be deleted
-            because orphaning in-flight Meta messages would leave the
-            funnel inconsistent. */}
-        {confirmDelete ? (
-          <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-sm">
-            <span className="text-red-300">Delete this broadcast?</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmDelete(false)}
-              disabled={deleting}
-              className="h-7 border-slate-700 bg-transparent text-slate-300 hover:bg-slate-800"
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="h-7 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              {deleting ? 'Deleting…' : 'Confirm'}
-            </Button>
-          </div>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={broadcast.status === 'sending'}
-            onClick={() => setConfirmDelete(true)}
-            title={
-              broadcast.status === 'sending'
-                ? 'Cannot delete while a broadcast is actively sending'
-                : 'Delete this broadcast'
-            }
-            className="border-red-500/30 bg-transparent text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
-          </Button>
-        )}
-      </div>
-
-      {/* Stats — 6 cards: Total / Sent / Delivered / Read / Replied / Failed */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard
-          label="Total Recipients"
-          value={broadcast.total_recipients}
-          total={broadcast.total_recipients}
-          icon={<Users className="h-4 w-4" />}
-          color="bg-slate-800 text-slate-300"
-        />
-        <StatCard
-          label="Sent"
-          value={broadcast.sent_count}
-          total={broadcast.total_recipients}
-          icon={<Send className="h-4 w-4" />}
-          color="bg-violet-500/10 text-violet-400"
-        />
-        <StatCard
-          label="Delivered"
-          value={broadcast.delivered_count}
-          total={broadcast.total_recipients}
-          icon={<CheckCheck className="h-4 w-4" />}
-          color="bg-teal-500/10 text-teal-400"
-        />
-        <StatCard
-          label="Read"
-          value={broadcast.read_count}
-          total={broadcast.total_recipients}
-          icon={<Eye className="h-4 w-4" />}
-          color="bg-blue-500/10 text-blue-400"
-        />
-        <StatCard
-          label="Replied"
-          value={broadcast.replied_count}
-          total={broadcast.total_recipients}
-          icon={<MessageCircle className="h-4 w-4" />}
-          color="bg-indigo-500/10 text-indigo-400"
-        />
-        <StatCard
-          label="Failed"
-          value={broadcast.failed_count}
-          total={broadcast.total_recipients}
-          icon={<AlertCircle className="h-4 w-4" />}
-          color="bg-red-500/10 text-red-400"
-        />
-      </div>
-
-      <FunnelChart steps={funnelSteps} />
-
-      {/* Recipients Table */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
-          <h2 className="text-sm font-medium text-white">
-            Recipients ({filteredRecipients.length}
-            {statusFilter !== 'all' ? ` of ${recipients.length}` : ''})
-          </h2>
+      {/* Drafts section */}
+      {drafts.length > 0 && (
+        <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-slate-700 text-slate-300 hover:bg-slate-800"
-                  />
-                }
-              >
-                <Filter className="h-3.5 w-3.5" />
-                {statusFilter === 'all'
-                  ? 'All statuses'
-                  : getRecipientStatus(statusFilter).label}
-                <ChevronDown className="h-3 w-3" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="border-slate-700 bg-slate-900">
-                <DropdownMenuItem
-                  onClick={() => setStatusFilter('all')}
-                  className={
-                    statusFilter === 'all' ? 'text-violet-400' : 'text-slate-300'
-                  }
-                >
-                  All statuses
-                </DropdownMenuItem>
-                {RECIPIENT_STATUSES.map((s) => (
-                  <DropdownMenuItem
-                    key={s}
-                    onClick={() => setStatusFilter(s)}
-                    className={
-                      statusFilter === s
-                        ? 'text-violet-400'
-                        : 'text-slate-300'
-                    }
-                  >
-                    {getRecipientStatus(s).label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <FileEdit className="h-4 w-4 text-slate-400" />
+            <h2 className="text-sm font-bold text-[#0c1f17]">
+              Saved drafts ({drafts.length})
+            </h2>
+          </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              disabled={recipients.length === 0}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export CSV
-            </Button>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {drafts.map((draft) => {
+              const af = (draft.audience_filter as Record<string, unknown>) ?? {};
+              const audienceType = (af.type as string) ?? 'all';
+              const step = typeof af._current_step === 'number' ? af._current_step : 0;
+              const stepLabels = ['Template', 'Audience', 'Personalise', 'Review'];
+              const isDeleting = deletingId === draft.id;
+              const isConfirming = confirmDeleteId === draft.id;
+
+              return (
+                <div
+                  key={draft.id}
+                  className="flex flex-col justify-between rounded-2xl border border-[#e7ece9] bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <div className="mb-3 space-y-1">
+                    <p className="font-semibold text-[#0c1f17]">{draft.name}</p>
+                    {draft.template_name && (
+                      <p className="text-xs text-slate-500">
+                        Template: <span className="font-medium text-slate-700">{draft.template_name}</span>
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-500">
+                      Audience: <span className="font-medium capitalize text-slate-700">{audienceType}</span>
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Last step:{' '}
+                      <span className="font-medium text-emerald-600">{stepLabels[step] ?? 'Template'}</span>
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {new Date(draft.created_at).toLocaleDateString(undefined, {
+                        day: 'numeric', month: 'short', year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => router.push(`/broadcasts/new?draft=${draft.id}`)}
+                      className="flex-1 bg-emerald-500 text-white hover:bg-emerald-600"
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                      Resume
+                    </Button>
+
+                    {/* Inline confirm — same pattern as broadcasts/[id]/page.tsx */}
+                    {isConfirming ? (
+                      <div className="flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1">
+                        <span className="text-xs text-red-600">Sure?</span>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-1 text-xs text-slate-400 hover:text-slate-700"
+                        >
+                          No
+                        </button>
+                        <button
+                          onClick={() => deleteDraft(draft.id)}
+                          disabled={isDeleting}
+                          className="px-1 text-xs text-red-600 hover:text-red-700 disabled:opacity-50"
+                        >
+                          {isDeleting ? '…' : 'Yes'}
+                        </button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setConfirmDeleteId(draft.id)}
+                        className="border-[#e7ece9] bg-white text-slate-400 hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        {filteredRecipients.length === 0 ? (
+      {/* Sent broadcasts */}
+      <div className="space-y-3">
+        {drafts.length > 0 && broadcasts.length > 0 && (
+          <h2 className="text-sm font-bold text-[#0c1f17]">Sent campaigns</h2>
+        )}
+
+        {loading ? (
           <div className="flex h-32 items-center justify-center">
+            <span className="text-sm text-slate-400">Loading…</span>
+          </div>
+        ) : broadcasts.length === 0 && drafts.length === 0 ? (
+          <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-[#e7ece9] bg-white shadow-sm">
+            <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-500">
+              <Radio className="h-7 w-7" />
+            </div>
+            <p className="text-sm font-semibold text-[#0c1f17]">No broadcasts yet</p>
+            <p className="mt-1 text-xs text-slate-400">
+              Create your first broadcast to reach your contacts at scale.
+            </p>
+            <Button
+              onClick={() => router.push('/broadcasts/new')}
+              className="mt-4 bg-emerald-500 text-white hover:bg-emerald-600"
+            >
+              <Plus className="h-4 w-4" />
+              New Broadcast
+            </Button>
+          </div>
+        ) : broadcasts.length === 0 ? (
+          <div className="flex h-32 flex-col items-center justify-center rounded-2xl border border-[#e7ece9] bg-white shadow-sm">
             <p className="text-sm text-slate-400">
-              {recipients.length === 0
-                ? 'No recipients found.'
-                : 'No recipients match this filter.'}
+              No sent campaigns yet — finish a draft to send your first broadcast.
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-2xl border border-[#e7ece9] bg-white shadow-sm">
             <Table>
               <TableHeader>
-                <TableRow className="border-slate-800 hover:bg-transparent">
-                  <TableHead className="text-slate-400">Contact</TableHead>
-                  <TableHead className="text-slate-400">Phone</TableHead>
+                <TableRow className="border-[#e7ece9] hover:bg-transparent">
+                  <TableHead className="text-slate-400">Name</TableHead>
+                  <TableHead className="hidden text-slate-400 md:table-cell">Template</TableHead>
+                  <TableHead className="hidden text-right text-slate-400 sm:table-cell">Recipients</TableHead>
+                  <TableHead className="hidden text-slate-400 lg:table-cell">Delivery</TableHead>
+                  <TableHead className="hidden text-slate-400 lg:table-cell">Read</TableHead>
                   <TableHead className="text-slate-400">Status</TableHead>
-                  <TableHead className="text-slate-400">Sent</TableHead>
-                  <TableHead className="text-slate-400">Delivered</TableHead>
-                  <TableHead className="text-slate-400">Read</TableHead>
-                  <TableHead className="text-slate-400">Error</TableHead>
+                  <TableHead className="hidden text-slate-400 sm:table-cell">Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRecipients.map((recipient) => {
-                  const rStatus = getRecipientStatus(recipient.status);
+                {broadcasts.map((broadcast) => {
+                  const status = getBroadcastStatus(broadcast.status);
                   return (
-                    <TableRow key={recipient.id} className="border-slate-800">
-                      <TableCell className="font-medium text-white">
-                        {recipient.contact?.name ?? 'Unknown'}
+                    <TableRow
+                      key={broadcast.id}
+                      className="cursor-pointer border-[#e7ece9] hover:bg-[#f8faf9]"
+                      onClick={() => router.push(`/broadcasts/${broadcast.id}`)}
+                    >
+                      <TableCell className="font-semibold text-[#0c1f17]">{broadcast.name}</TableCell>
+                      <TableCell className="hidden text-slate-600 md:table-cell">{broadcast.template_name}</TableCell>
+                      <TableCell className="hidden text-right text-slate-600 tabular-nums sm:table-cell">{broadcast.total_recipients}</TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <RateCell value={broadcast.delivered_count} total={broadcast.total_recipients} color="bg-emerald-500" />
                       </TableCell>
-                      <TableCell className="text-slate-300">
-                        {recipient.contact?.phone ?? '-'}
+                      <TableCell className="hidden lg:table-cell">
+                        <RateCell value={broadcast.read_count} total={broadcast.total_recipients} color="bg-blue-500" />
                       </TableCell>
                       <TableCell>
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${rStatus.classes}`}
-                        >
-                          {rStatus.label}
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}>
+                          {status.pulse && (
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+                              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yellow-400" />
+                            </span>
+                          )}
+                          {status.label}
                         </span>
                       </TableCell>
-                      <TableCell className="text-slate-400">
-                        {recipient.sent_at
-                          ? new Date(recipient.sent_at).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell className="text-slate-400">
-                        {recipient.delivered_at
-                          ? new Date(recipient.delivered_at).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell className="text-slate-400">
-                        {recipient.read_at
-                          ? new Date(recipient.read_at).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate text-xs text-red-400">
-                        {recipient.error_message ?? '-'}
+                      <TableCell className="hidden text-slate-400 sm:table-cell">
+                        {broadcast.status === 'scheduled' && broadcast.scheduled_at ? (
+                          <span className="text-blue-400">
+                            {new Date(broadcast.scheduled_at).toLocaleDateString([], {
+                              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                            })}
+                          </span>
+                        ) : (
+                          new Date(broadcast.created_at).toLocaleDateString()
+                        )}
                       </TableCell>
                     </TableRow>
                   );

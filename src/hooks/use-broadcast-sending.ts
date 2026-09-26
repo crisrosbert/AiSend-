@@ -31,6 +31,10 @@ interface BroadcastPayload {
   template: MessageTemplate;
   audience: AudienceConfig;
   variables: Record<string, VariableMapping>;
+  /** Which AI agent replies to this campaign — null means none picked. */
+  agentType?: string | null;
+  /** Specific agents.id, when agentType isn't 'ecommerce'. */
+  agentId?: string | null;
 }
 
 interface UseBroadcastSendingReturn {
@@ -322,6 +326,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             customField: payload.audience.customField,
             excludeTagIds: payload.audience.excludeTagIds,
           },
+          // Which agent answers replies to this campaign (broadcast
+          // wizard's "Who replies to this campaign?" picker). Read back
+          // by checkBroadcastReply() in the agent router.
+          agent_type: payload.agentType ?? null,
+          agent_id: payload.agentType === 'ecommerce' ? null : (payload.agentId ?? null),
           status: 'sending',
           total_recipients: contacts.length,
           sent_count: 0,

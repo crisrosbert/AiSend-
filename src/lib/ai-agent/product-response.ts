@@ -42,12 +42,25 @@
  */
 
 import type { RetrievedProduct } from './retriever'
+import { sendCarouselTemplate, type CarouselCard } from '@/lib/whatsapp/meta-api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface WhatsAppCredentials {
   phoneNumberId: string
   accessToken: string
+}
+
+/**
+ * Optional carousel config — when present, products with multiple images
+ * are sent as a proper WhatsApp carousel template instead of individual
+ * image messages.
+ */
+export interface CarouselConfig {
+  /** Name of the approved carousel template on Meta. */
+  templateName: string
+  /** Language code (e.g. 'en_US'). */
+  language?: string
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -276,6 +289,9 @@ async function sendAddToCartButton(
  * Send additional product images (for carousel effect).
  * These are plain image messages — sent after the main CTA card to
  * create a gallery/carousel feel in WhatsApp.
+ *
+ * DEPRECATED: Use sendProductImageCarousel() when a carousel template
+ * is configured. This remains as fallback.
  */
 async function sendAdditionalImage(
   phone: string,
@@ -286,6 +302,68 @@ async function sendAdditionalImage(
     type: 'image',
     image: { link: imageUrl },
   }, creds)
+}
+
+// ─── Carousel Template Sender ───────────────────────────────────────────────
+
+/**
+ * Send all product images as a proper WhatsApp carousel template.
+ *
+ * Each image becomes a swipeable card with:
+ *   - Image header
+ *   - Product name + price as body
+ *   - "Add to Cart" quick-reply button
+ *   - "View Product" URL button
+ *
+ * This replaces the old one-by-one image approach and gives a much
+ * better user experience — customers see all images in a single
+ * swipeable carousel instead of separate messages flooding the chat.
+ *
+ * Returns true if the carousel was sent, false if it failed (caller
+ * should fall back to the old approach).
+ */
+async function sendProductImageCarousel(
+  phone: string,
+  product: RetrievedProduct,
+  images: string[],
+  creds: WhatsAppCredentials,
+  carouselConfig: CarouselConfig,
+): Promise<boolean> {
+  if (images.length === 0) return false
+
+  const sym = currencySymbol(product.currency)
+  const discount = discountPercent(product.price, product.compare_at_price)
+  const priceText = discount && product.compare_at_price
+    ? `${sym}${product.price.toFixed(0)} (${discount}% OFF)`
+    : `${sym}${product.price.toFixed(0)}`
+
+  const cards: CarouselCard[] = images.slice(0, MAX_IMAGES_PER_PRODUCT).map((imgUrl, idx) => ({
+    imageUrl: imgUrl,
+    bodyParams: [
+      idx === 0
+        ? `${product.name}\n${priceText}${product.in_stock ? '\n✅ In Stock' : '\n❌ Out of Stock'}`
+        : `${product.name} — Image ${idx + 1}`,
+    ],
+    quickReplyPayload: `add_cart_${product.external_id}`,
+    urlButtonParam: product.external_id || product.id,
+  }))
+
+  try {
+    await sendCarouselTemplate({
+      phoneNumberId: creds.phoneNumberId,
+      accessToken: creds.accessToken,
+      to: phone,
+      templateName: carouselConfig.templateName,
+      language: carouselConfig.language ?? 'en_US',
+      bodyParams: [product.name],
+      cards,
+    })
+    console.log(`[ProductResponse] Carousel sent for "${product.name}" (${cards.length} cards)`)
+    return true
+  } catch (err) {
+    console.error(`[ProductResponse] Carousel template failed, falling back:`, err)
+    return false
+  }
 }
 
 /**
@@ -320,26 +398,30 @@ async function sendFallbackImageCard(
  * sendProductCardsToCustomer
  * Main entry point — sends rich product cards to customer on WhatsApp.
  *
- * For each product:
- *   1. Sends main CTA URL card (first image + rich info + View button)
- *   2. If product has multiple images → sends remaining images as carousel
- *   3. Sends "Add to Cart" / "Buy Now" quick reply buttons
+ * ── CAROUSEL MODE (preferred) ──────────────────────────────────
+ * When `carouselConfig` is provided and the product has 2+ images,
+ * all images are sent as a single WhatsApp carousel template message.
+ * This gives a swipeable, professional gallery feel — one message
+ * instead of 3-5 separate ones.
  *
- * Image carousel strategy:
- *   - First image: Shown in the main CTA card header
- *   - Images 2-4: Sent as plain image messages (swipeable gallery)
- *   - Max 4 images per product to avoid WhatsApp spam detection
+ * ── FALLBACK MODE (legacy) ─────────────────────────────────────
+ * Without carousel config, or if the carousel template fails:
+ *   1. CTA URL card (first image + rich info + View button)
+ *   2. Remaining images as individual messages
+ *   3. "Add to Cart" / "Buy Now" quick reply buttons
  *
  * @param recipientPhone  - Customer's WhatsApp number
  * @param products        - Retrieved products to show (max MAX_PRODUCTS)
  * @param creds           - WhatsApp API credentials
- * @param productImageMap - Optional map of product ID → all image URLs (deprecated, use image_urls)
+ * @param productImageMap - Optional map of product ID → all image URLs
+ * @param carouselConfig  - Optional carousel template config (enables carousel mode)
  */
 export async function sendProductCardsToCustomer(
   recipientPhone: string,
   products: RetrievedProduct[],
   creds: WhatsAppCredentials,
-  productImageMap?: Map<string, string[]>
+  productImageMap?: Map<string, string[]>,
+  carouselConfig?: CarouselConfig | null,
 ): Promise<void> {
   if (products.length === 0) return
 
@@ -351,6 +433,26 @@ export async function sendProductCardsToCustomer(
       ?? productImageMap?.get(product.id)
       ?? (product.image_url ? [product.image_url] : [])
 
+    // ── CAROUSEL MODE: send all images as a swipeable carousel ──
+    if (carouselConfig && allImages.length >= 2) {
+      const carouselSent = await sendProductImageCarousel(
+        recipientPhone,
+        product,
+        allImages,
+        creds,
+        carouselConfig,
+      )
+      if (carouselSent) {
+        // Carousel already has Add to Cart buttons on each card —
+        // no need for a separate button message.
+        continue
+      }
+      // Carousel failed → fall through to legacy approach
+      console.warn(`[ProductResponse] Carousel failed for "${product.name}", using legacy approach`)
+    }
+
+    // ── LEGACY MODE: CTA card + individual images + buttons ──
+
     // Card 1: Main CTA card with first image + rich product info
     const mainImage = allImages[0] ?? product.image_url
     try {
@@ -360,14 +462,13 @@ export async function sendProductCardsToCustomer(
       continue  // Skip carousel + buttons if main card failed
     }
 
-    // Cards 2-4: Additional images (carousel effect — swipeable in WhatsApp)
+    // Cards 2-4: Additional images (legacy one-by-one)
     const extraImages = allImages.slice(1, MAX_IMAGES_PER_PRODUCT)
     for (const imgUrl of extraImages) {
       try {
         await sendAdditionalImage(recipientPhone, imgUrl, creds)
       } catch (err) {
         console.error(`[ProductResponse] Extra image failed:`, err)
-        // Don't break — try remaining images
       }
     }
 
@@ -376,7 +477,6 @@ export async function sendProductCardsToCustomer(
       await sendAddToCartButton(recipientPhone, product, creds)
     } catch (err) {
       console.error(`[ProductResponse] Add to cart button failed:`, err)
-      // Non-critical — product card already sent
     }
   }
 }

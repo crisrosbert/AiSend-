@@ -48,8 +48,10 @@ export async function GET(request: Request) {
 
   const startTime = Date.now()
 
+  const admin = supabaseAdmin()
+
   // Find all broadcasts due to fire
-  const { data: dueBroadcasts, error: fetchError } = await supabaseAdmin
+  const { data: dueBroadcasts, error: fetchError } = await admin
     .from('broadcasts')
     .select(
       'id, user_id, name, template_name, template_language, template_variables, audience_filter, agent_type, agent_id, scheduled_at',
@@ -81,7 +83,7 @@ export async function GET(request: Request) {
 
     // Mark as 'sending' immediately to prevent double-firing if this cron
     // runs again before the send completes
-    const { error: lockError } = await supabaseAdmin
+    const { error: lockError } = await admin
       .from('broadcasts')
       .update({ status: 'sending', updated_at: new Date().toISOString() })
       .eq('id', broadcast.id)
@@ -140,7 +142,7 @@ export async function GET(request: Request) {
         } catch { /* ignore */ }
 
         // Revert status to 'scheduled' so it can be retried
-        await supabaseAdmin
+        await admin
           .from('broadcasts')
           .update({ status: 'scheduled', updated_at: new Date().toISOString() })
           .eq('id', broadcast.id)
@@ -154,7 +156,7 @@ export async function GET(request: Request) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       // Revert status so it will be retried
-      await supabaseAdmin
+      await admin
         .from('broadcasts')
         .update({ status: 'scheduled', updated_at: new Date().toISOString() })
         .eq('id', broadcast.id)

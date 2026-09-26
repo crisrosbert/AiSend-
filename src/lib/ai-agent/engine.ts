@@ -60,7 +60,7 @@ import { retrieveProductsForQuery } from './retriever'
 import { generateAgentReply, generateGreetingReply, type AgentResponderConfig } from './responder'
 import {
   sendProductCardsToCustomer, sendTextMessage, sendInteractiveButtons,
-  type WhatsAppCredentials,
+  type WhatsAppCredentials, type CarouselConfig,
 } from './product-response'
 import {
   getCartFromSession, addProductToCart, removeProductFromCart,
@@ -97,7 +97,7 @@ function msg(role: 'user' | 'assistant', content: string): ConversationMessage {
 async function loadAgentConfig(userId: string, supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from('ai_agent_configs')
-    .select('id, store_name, brand_voice_prompt, language, is_enabled')
+    .select('id, store_name, brand_voice_prompt, language, is_enabled, carousel_template_name')
     .eq('user_id', userId)
     .eq('is_enabled', true)
     .single()
@@ -501,7 +501,13 @@ export async function handleAiAgentMessage(input: AiAgentInput): Promise<boolean
         // Load all images for matched products (for multi-image carousel)
         const productIds = products.map((p) => p.id)
         const imageMap = await loadProductImages(userId, productIds, supabase)
-        await sendProductCardsToCustomer(contactPhone, products, waCreds, imageMap)
+
+        // Build carousel config if merchant has an approved carousel template
+        const carouselCfg: CarouselConfig | null = config.carousel_template_name
+          ? { templateName: config.carousel_template_name, language: config.language ?? 'en_US' }
+          : null
+
+        await sendProductCardsToCustomer(contactPhone, products, waCreds, imageMap, carouselCfg)
       }
 
       // Save to conversation history

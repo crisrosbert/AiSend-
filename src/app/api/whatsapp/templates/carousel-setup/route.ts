@@ -139,8 +139,8 @@ export async function POST(request: Request) {
         accessToken,
         name: normalizedName,
         language,
-        bodyText: 'Check out *{{1}}*',
-        sampleCardCount: 4,
+        bodyText: 'Check out our latest products!',
+        sampleCardCount: 2,
         sampleImageHandle,
       })
     } catch (err) {
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
         language,
         header_type: null,
         header_content: null,
-        body_text: 'Check out *{{1}}*',
+        body_text: 'Check out our latest products!',
         footer_text: null,
         buttons: null,
         status: metaResult.status === 'APPROVED' ? 'Approved' : 'Pending',

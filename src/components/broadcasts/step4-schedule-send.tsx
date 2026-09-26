@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
 import { useBusiness } from '@/hooks/use-business';
+import { AgentPicker, type AgentSelection } from '@/components/broadcasts/agent-picker';
 
 interface AudienceConfig {
   type: string;
@@ -28,6 +29,8 @@ interface Step4Props {
   onNameChange: (name: string) => void;
   template: MessageTemplate;
   audience: AudienceConfig;
+  agentSelection: AgentSelection;
+  onAgentSelectionChange: (next: AgentSelection) => void;
   onSend: () => void;
   onSaveDraft?: () => void;
   onBack: () => void;
@@ -40,6 +43,8 @@ export function Step4ScheduleSend({
   onNameChange,
   template,
   audience,
+  agentSelection,
+  onAgentSelectionChange,
   onSend,
   onSaveDraft,
   onBack,
@@ -148,6 +153,9 @@ export function Step4ScheduleSend({
           </div>
         </div>
       </div>
+
+      {/* Which AI agent handles replies to this campaign */}
+      <AgentPicker value={agentSelection} onChange={onAgentSelectionChange} />
 
       {/* Processing overlay */}
       {isProcessing && (

@@ -9,6 +9,7 @@ import { Step1ChooseTemplate } from '@/components/broadcasts/step1-choose-templa
 import { Step2SelectAudience } from '@/components/broadcasts/step2-select-audience';
 import { Step3Personalize } from '@/components/broadcasts/step3-personalize';
 import { Step4ScheduleSend } from '@/components/broadcasts/step4-schedule-send';
+import { AgentSelection } from '@/components/broadcasts/agent-picker';
 import { useBroadcastSending } from '@/hooks/use-broadcast-sending';
 import { Check, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ function NewBroadcastWizard() {
   const [audience, setAudience] = useState<AudienceState>({ type: 'all' });
   const [variables, setVariables] = useState<VariableState>({});
   const [name, setName] = useState('');
+  const [agentSelection, setAgentSelection] = useState<AgentSelection>({ agentType: null, agentId: null });
 
   const [draftId, setDraftId] = useState<string | null>(null);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -99,6 +101,10 @@ function NewBroadcastWizard() {
         });
         setVariables((data.template_variables as VariableState) ?? {});
         setCurrentStep(storedStep);
+        setAgentSelection({
+          agentType: (data.agent_type as string | null) ?? null,
+          agentId: (data.agent_id as string | null) ?? null,
+        });
 
         toast.success('Draft resumed', {
           description: `"${data.name}" — pick up where you left off.`,
@@ -123,6 +129,8 @@ function NewBroadcastWizard() {
             audience,
             variables,
             current_step: currentStep,
+            agent_type: agentSelection.agentType,
+            agent_id: agentSelection.agentId,
           }),
         });
         const data = await res.json();
@@ -145,7 +153,7 @@ function NewBroadcastWizard() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draftId, name, template, audience, variables, currentStep],
+    [draftId, name, template, audience, variables, currentStep, agentSelection],
   );
 
   // Auto-save on state change
@@ -155,7 +163,7 @@ function NewBroadcastWizard() {
     autoSaveTimer.current = setTimeout(() => { saveDraft(); }, AUTO_SAVE_DELAY);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, template, audience, variables, currentStep]);
+  }, [name, template, audience, variables, currentStep, agentSelection]);
 
   async function goToStep(next: number) {
     if (name.trim()) await saveDraft();
@@ -176,6 +184,8 @@ function NewBroadcastWizard() {
           excludeTagIds: audience.excludeTagIds,
         },
         variables,
+        agentType: agentSelection.agentType,
+        agentId: agentSelection.agentId,
       });
       if (draftId) {
         await fetch(`/api/broadcasts/draft?id=${draftId}`, { method: 'DELETE' });
@@ -317,6 +327,8 @@ function NewBroadcastWizard() {
             onNameChange={setName}
             template={template}
             audience={audience}
+            agentSelection={agentSelection}
+            onAgentSelectionChange={setAgentSelection}
             onSend={handleSend}
             onSaveDraft={handleSaveAndExit}
             onBack={() => goToStep(2)}

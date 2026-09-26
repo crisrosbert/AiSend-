@@ -72,6 +72,19 @@ interface StalledBroadcast {
   template_language: string | null
 }
 
+interface ScheduledBroadcast {
+  id: string
+  user_id: string
+  name: string
+  template_name: string
+  template_language: string | null
+  template_variables: Record<string, unknown>
+  audience_filter: Record<string, unknown>
+  agent_type: string | null
+  agent_id: string | null
+  scheduled_at: string
+}
+
 export async function GET(request: Request) {
   const startedAt = Date.now()
 
@@ -81,11 +94,95 @@ export async function GET(request: Request) {
   }
 
   const admin = supabaseAdmin()
+  const origin = originFor(request)
+  const secret = cronSecret()!
+
+  // ── PHASE 1: Fire scheduled broadcasts whose time has come ───────────
+  // This runs before the stall-sweep so a freshly-scheduled broadcast
+  // is promoted to 'sending' immediately rather than waiting a full day.
+  const { data: dueBroadcasts } = await admin
+    .from('broadcasts')
+    .select(
+      'id, user_id, name, template_name, template_language, template_variables, audience_filter, agent_type, agent_id, scheduled_at',
+    )
+    .eq('status', 'scheduled')
+    .lte('scheduled_at', new Date().toISOString())
+    .order('scheduled_at', { ascending: true })
+    .limit(5)
+    .returns<ScheduledBroadcast[]>()
+
+  let scheduledFired = 0
+  let scheduledErrors = 0
+
+  for (const bc of dueBroadcasts ?? []) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS) break
+
+    // Optimistic lock — only proceed if still 'scheduled'
+    const { error: lockErr } = await admin
+      .from('broadcasts')
+      .update({ status: 'sending', updated_at: new Date().toISOString() })
+      .eq('id', bc.id)
+      .eq('status', 'scheduled')
+
+    if (lockErr) {
+      scheduledErrors++
+      continue
+    }
+
+    // Reconstruct the audience (strip wizard-only meta keys)
+    const { _template: storedTemplate, _current_step: _step, ...audience } = bc.audience_filter ?? {}
+    const template = (storedTemplate as Record<string, unknown>) ?? {
+      name: bc.template_name,
+      language: bc.template_language ?? 'en_US',
+    }
+
+    try {
+      const res = await fetch(`${origin}/api/broadcasts/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          authorization: `Bearer ${secret}`,
+          'x-user-id': bc.user_id,
+        },
+        body: JSON.stringify({
+          broadcastId: bc.id,
+          userId: bc.user_id,
+          template,
+          audience,
+          variables: bc.template_variables ?? {},
+          agentType: bc.agent_type,
+          agentId: bc.agent_id,
+        }),
+      })
+
+      if (!res.ok) {
+        let errMsg = `HTTP ${res.status}`
+        try { const b = await res.json(); errMsg = b.error ?? errMsg } catch { /* noop */ }
+        console.error(`[sweep/scheduled] Fire failed for ${bc.id}: ${errMsg}`)
+        // Revert so next sweep retries
+        await admin
+          .from('broadcasts')
+          .update({ status: 'scheduled', updated_at: new Date().toISOString() })
+          .eq('id', bc.id)
+        scheduledErrors++
+      } else {
+        console.log(`[sweep/scheduled] Fired ${bc.id} (${bc.name})`)
+        scheduledFired++
+      }
+    } catch (err) {
+      console.error(`[sweep/scheduled] Exception firing ${bc.id}:`, err)
+      await admin
+        .from('broadcasts')
+        .update({ status: 'scheduled', updated_at: new Date().toISOString() })
+        .eq('id', bc.id)
+      scheduledErrors++
+    }
+  }
+
+  // ── PHASE 2: Resume stalled sending broadcasts ────────────────────────
   const stalledBefore = new Date(Date.now() - STALL_MINUTES * 60_000).toISOString()
 
-  // Campaigns that say they are sending but have not been touched
-  // recently. Ordered oldest first so a backlog drains in the order
-  // people were promised their messages.
+  // Campaigns that say they are sending but have not been touched recently.
   const { data: broadcasts, error } = await admin
     .from('broadcasts')
     .select('id, user_id, template_name, template_language')
@@ -101,11 +198,8 @@ export async function GET(request: Request) {
   }
 
   if (!broadcasts || broadcasts.length === 0) {
-    return NextResponse.json({ swept: 0, sent: 0, failed: 0, note: 'nothing stalled' })
+    return NextResponse.json({ swept: 0, sent: 0, failed: 0, scheduled_fired: scheduledFired, note: 'nothing stalled' })
   }
-
-  const origin = originFor(request)
-  const secret = cronSecret()!
 
   let sent = 0
   let failed = 0
@@ -204,8 +298,8 @@ export async function GET(request: Request) {
     }
   }
 
-  console.log(`[sweep] ${swept} campaign(s), ${sent} sent, ${failed} failed`)
-  return NextResponse.json({ swept, sent, failed })
+  console.log(`[sweep] ${swept} campaign(s), ${sent} sent, ${failed} failed, ${scheduledFired} scheduled fired`)
+  return NextResponse.json({ swept, sent, failed, scheduled_fired: scheduledFired, scheduled_errors: scheduledErrors })
 }
 
 /** Recount from the recipient rows — they are the record, not a tally. */

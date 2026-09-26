@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     // Step 1: Upload a sample image for Meta's template review
     const imageUrl =
       sample_image_url ||
-      'https://placehold.co/600x400/7c3aed/white?text=Product+Image'
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png'
 
     let sampleImageHandle: string
     try {
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Upload failed'
       return NextResponse.json(
-        { error: `Sample image upload failed: ${msg}` },
+        { error: `Sample image upload failed: ${msg}`, step: 'image_upload', contentType },
         { status: 422 },
       )
     }
@@ -134,7 +134,10 @@ export async function POST(request: Request) {
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Meta rejected the template'
-      return NextResponse.json({ error: msg }, { status: 422 })
+      return NextResponse.json(
+        { error: msg, step: 'create_template', imageHandle: sampleImageHandle },
+        { status: 422 },
+      )
     }
 
     // Step 3: Save the template name in ai_agent_configs

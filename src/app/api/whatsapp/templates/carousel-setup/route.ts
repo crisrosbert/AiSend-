@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Upload failed'
       return NextResponse.json(
-        { error: `Sample image upload failed: ${msg}`, step: 'image_upload', contentType },
+        { error: `Sample image upload failed: ${msg}`, step: 'image_upload' },
         { status: 422 },
       )
     }

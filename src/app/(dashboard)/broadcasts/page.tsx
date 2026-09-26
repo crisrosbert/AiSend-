@@ -280,7 +280,15 @@ export default function BroadcastsPage() {
                         </span>
                       </TableCell>
                       <TableCell className="hidden text-slate-400 sm:table-cell">
-                        {new Date(broadcast.created_at).toLocaleDateString()}
+                        {broadcast.status === 'scheduled' && broadcast.scheduled_at ? (
+                          <span className="text-blue-400">
+                            {new Date(broadcast.scheduled_at).toLocaleDateString([], {
+                              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                            })}
+                          </span>
+                        ) : (
+                          new Date(broadcast.created_at).toLocaleDateString()
+                        )}
                       </TableCell>
                     </TableRow>
                   );

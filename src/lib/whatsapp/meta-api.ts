@@ -527,6 +527,257 @@ export async function createTemplate(
 }
 
 // ============================================================
+// Carousel template — create & send
+// ============================================================
+
+/**
+ * Create a carousel message template on Meta.
+ *
+ * Carousel templates show swipeable cards in WhatsApp — each card has an
+ * image header, body text (with {{1}} placeholder for per-card value),
+ * and two buttons: a quick-reply "Add to Cart" and a URL "View Product".
+ *
+ * Once Meta approves the template, sendCarouselTemplate() can fill in
+ * the actual images and text at send time.
+ */
+export interface CreateCarouselTemplateArgs {
+  wabaId: string
+  accessToken: string
+  name: string
+  language?: string
+  /** Body text for the outer message (above the carousel). Supports {{n}} placeholders. */
+  bodyText?: string
+  /** How many cards the template supports (1–10). Default 2 for the sample. */
+  sampleCardCount?: number
+  /** Sample image handle (from uploadProfilePhoto) for the card headers. */
+  sampleImageHandle: string
+}
+
+export async function createCarouselTemplate(
+  args: CreateCarouselTemplateArgs,
+): Promise<CreateTemplateResult> {
+  const {
+    wabaId,
+    accessToken,
+    name,
+    language = 'en_US',
+    bodyText = 'Here are the product images for *{{1}}*',
+    sampleCardCount = 2,
+    sampleImageHandle,
+  } = args
+
+  const url = `${META_API_BASE}/${wabaId}/message_templates`
+
+  // Build the card template — each card has: IMAGE header + body + 2 buttons
+  const cardTemplate = {
+    components: [
+      {
+        type: 'HEADER',
+        format: 'IMAGE',
+        example: { header_handle: [sampleImageHandle] },
+      },
+      {
+        type: 'BODY',
+        text: '{{1}}',
+        example: { body_text: [['Product details']] },
+      },
+      {
+        type: 'BUTTONS',
+        buttons: [
+          { type: 'QUICK_REPLY', text: 'Add to Cart' },
+          {
+            type: 'URL',
+            text: 'View Product',
+            url: 'https://shop.example.com/{{1}}',
+            example: ['product-123'],
+          },
+        ],
+      },
+    ],
+  }
+
+  // Repeat the card template for each sample card
+  const cards = Array.from({ length: Math.min(sampleCardCount, 10) }, () => ({
+    ...cardTemplate,
+  }))
+
+  const bodyComponent: Record<string, unknown> = {
+    type: 'BODY',
+    text: bodyText,
+  }
+  const placeholderCount = maxPlaceholder(bodyText)
+  if (placeholderCount > 0) {
+    bodyComponent.example = {
+      body_text: [
+        Array.from({ length: placeholderCount }, (_, i) => `Sample${i + 1}`),
+      ],
+    }
+  }
+
+  const payload = {
+    name: name.trim().toLowerCase().replace(/\s+/g, '_'),
+    category: 'MARKETING',
+    language,
+    components: [
+      bodyComponent,
+      { type: 'CAROUSEL', cards },
+    ],
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  return {
+    id: data.id,
+    status: data.status ?? 'PENDING',
+    category: data.category ?? 'MARKETING',
+  }
+}
+
+/**
+ * Send a carousel template message to a WhatsApp number.
+ *
+ * Each card in the carousel gets its own image, body text, and button
+ * parameters. The template must already be APPROVED by Meta.
+ */
+export interface CarouselCard {
+  /** URL of the image for this card's header. */
+  imageUrl: string
+  /** Body text parameters (values for {{1}}, {{2}}, … in the card body). */
+  bodyParams?: string[]
+  /** Quick-reply button payload (index 0). */
+  quickReplyPayload?: string
+  /** URL button suffix/variable (index 1). */
+  urlButtonParam?: string
+}
+
+export interface SendCarouselTemplateArgs {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  templateName: string
+  language?: string
+  /** Body parameters for the outer message (above the carousel). */
+  bodyParams?: string[]
+  /** One entry per carousel card, in display order. Max 10. */
+  cards: CarouselCard[]
+}
+
+export async function sendCarouselTemplate(
+  args: SendCarouselTemplateArgs,
+): Promise<MetaSendResult> {
+  const {
+    phoneNumberId,
+    accessToken,
+    to,
+    templateName,
+    language = 'en_US',
+    bodyParams,
+    cards,
+  } = args
+
+  const url = `${META_API_BASE}/${phoneNumberId}/messages`
+
+  const components: Record<string, unknown>[] = []
+
+  // Outer body parameters
+  if (bodyParams && bodyParams.length > 0) {
+    components.push({
+      type: 'body',
+      parameters: bodyParams.map((p) => ({ type: 'text', text: p })),
+    })
+  }
+
+  // Carousel cards
+  const carouselCards = cards.slice(0, 10).map((card, idx) => {
+    const cardComponents: Record<string, unknown>[] = []
+
+    // Header — image
+    cardComponents.push({
+      type: 'header',
+      parameters: [
+        { type: 'image', image: { link: card.imageUrl } },
+      ],
+    })
+
+    // Body parameters
+    if (card.bodyParams && card.bodyParams.length > 0) {
+      cardComponents.push({
+        type: 'body',
+        parameters: card.bodyParams.map((p) => ({ type: 'text', text: p })),
+      })
+    }
+
+    // Button 0 — quick reply
+    if (card.quickReplyPayload) {
+      cardComponents.push({
+        type: 'button',
+        sub_type: 'quick_reply',
+        index: 0,
+        parameters: [{ type: 'payload', payload: card.quickReplyPayload }],
+      })
+    }
+
+    // Button 1 — URL variable
+    if (card.urlButtonParam) {
+      cardComponents.push({
+        type: 'button',
+        sub_type: 'url',
+        index: 1,
+        parameters: [{ type: 'text', text: card.urlButtonParam }],
+      })
+    }
+
+    return { card_index: idx, components: cardComponents }
+  })
+
+  components.push({ type: 'carousel', cards: carouselCards })
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'template',
+    template: {
+      name: templateName,
+      language: { code: language },
+      components,
+    },
+  }
+
+  const response = await metaFetchWithRetry(
+    url,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    },
+    `carousel ${templateName}`,
+  )
+
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  return { messageId: data.messages[0].id }
+}
+
+// ============================================================
 // Business profile — read / update (logo, about, website, etc.)
 // ============================================================
 

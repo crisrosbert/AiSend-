@@ -337,15 +337,9 @@ async function sendProductImageCarousel(
     ? `${sym}${product.price.toFixed(0)} (${discount}% OFF)`
     : `${sym}${product.price.toFixed(0)}`
 
-  const cards: CarouselCard[] = images.slice(0, MAX_IMAGES_PER_PRODUCT).map((imgUrl, idx) => ({
+  const cards: CarouselCard[] = images.slice(0, MAX_IMAGES_PER_PRODUCT).map((imgUrl) => ({
     imageUrl: imgUrl,
-    bodyParams: [
-      idx === 0
-        ? `${product.name}\n${priceText}${product.in_stock ? '\n✅ In Stock' : '\n❌ Out of Stock'}`
-        : `${product.name} — Image ${idx + 1}`,
-    ],
     quickReplyPayload: `add_cart_${product.external_id}`,
-    urlButtonParam: product.external_id || product.id,
   }))
 
   try {

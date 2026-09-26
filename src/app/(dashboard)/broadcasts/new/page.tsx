@@ -170,27 +170,57 @@ function NewBroadcastWizard() {
     setCurrentStep(next);
   }
 
-  async function handleSend() {
+  async function handleSend(scheduledAt?: Date) {
     if (!template) return;
     try {
-      const broadcastId = await createAndSendBroadcast({
-        name,
-        template,
-        audience: {
-          type: audience.type,
-          tagIds: audience.tagIds,
-          customField: audience.customField,
-          csvContacts: audience.csvContacts,
-          excludeTagIds: audience.excludeTagIds,
-        },
-        variables,
-        agentType: agentSelection.agentType,
-        agentId: agentSelection.agentId,
-      });
-      if (draftId) {
-        await fetch(`/api/broadcasts/draft?id=${draftId}`, { method: 'DELETE' });
+      if (scheduledAt) {
+        // Save as 'scheduled' status with a scheduled_at timestamp
+        const res = await fetch('/api/broadcasts/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: draftId ?? undefined,
+            name,
+            template,
+            audience: {
+              type: audience.type,
+              tagIds: audience.tagIds,
+              customField: audience.customField,
+              csvContacts: audience.csvContacts,
+              excludeTagIds: audience.excludeTagIds,
+            },
+            variables,
+            agentType: agentSelection.agentType,
+            agentId: agentSelection.agentId,
+            scheduledAt: scheduledAt.toISOString(),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Failed to schedule broadcast');
+        toast.success('Broadcast scheduled!', {
+          description: `Will send on ${scheduledAt.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+        });
+        router.push('/broadcasts');
+      } else {
+        const broadcastId = await createAndSendBroadcast({
+          name,
+          template,
+          audience: {
+            type: audience.type,
+            tagIds: audience.tagIds,
+            customField: audience.customField,
+            csvContacts: audience.csvContacts,
+            excludeTagIds: audience.excludeTagIds,
+          },
+          variables,
+          agentType: agentSelection.agentType,
+          agentId: agentSelection.agentId,
+        });
+        if (draftId) {
+          await fetch(`/api/broadcasts/draft?id=${draftId}`, { method: 'DELETE' });
+        }
+        router.push(`/broadcasts/${broadcastId}`);
       }
-      router.push(`/broadcasts/${broadcastId}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Broadcast failed';
       console.error('Broadcast failed:', err);
@@ -329,7 +359,7 @@ function NewBroadcastWizard() {
             audience={audience}
             agentSelection={agentSelection}
             onAgentSelectionChange={setAgentSelection}
-            onSend={handleSend}
+            onSend={(scheduledAt) => handleSend(scheduledAt)}
             onSaveDraft={handleSaveAndExit}
             onBack={() => goToStep(2)}
             isProcessing={isProcessing}

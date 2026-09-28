@@ -217,6 +217,34 @@ export function newComponent(type: ComponentType): FlowComponent {
   }
 }
 
+// Quick blocks — a named bundle of components a user adds in one
+// click instead of assembling field by field. Each entry returns an
+// ordered array; the builder inserts them together, right before the
+// screen's Footer.
+export type QuickBlockKey = "lead_form" | "contact_form";
+
+export const QUICK_BLOCKS: { key: QuickBlockKey; label: string; description: string }[] = [
+  { key: "lead_form",    label: "Lead form",    description: "Name, phone, email" },
+  { key: "contact_form", label: "Contact form",  description: "Name, email, message" },
+];
+
+export function newQuickBlock(key: QuickBlockKey): FlowComponent[] {
+  switch (key) {
+    case "lead_form":
+      return [
+        { ...newComponent("TextInput"), label: "Full name", name: "full_name", inputType: "text", required: true, placeholder: "Priya Sharma" },
+        { ...newComponent("TextInput"), label: "Phone number", name: "phone", inputType: "phone", required: true, placeholder: "+91 98765 43210" },
+        { ...newComponent("TextInput"), label: "Email", name: "email", inputType: "email", required: false, placeholder: "you@example.com" },
+      ];
+    case "contact_form":
+      return [
+        { ...newComponent("TextInput"), label: "Full name", name: "full_name", inputType: "text", required: true },
+        { ...newComponent("TextInput"), label: "Email", name: "email", inputType: "email", required: true },
+        { ...newComponent("TextArea"), label: "Message", name: "message", required: true, maxChars: 500 },
+      ];
+  }
+}
+
 export function newScreen(title = "New Screen"): FlowScreen {
   const id = `s_${Math.random().toString(36).slice(2, 9)}`;
   return {

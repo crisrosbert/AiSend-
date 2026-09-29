@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import ReactFlow, {
   Background, BackgroundVariant, Controls, MiniMap, ReactFlowProvider,
-  addEdge, useEdgesState, useNodesState, Handle, Position,
+  addEdge, useEdgesState, useNodesState, useReactFlow, Handle, Position,
   type Connection, type Edge, type Node, type NodeProps, type NodeTypes,
 } from "reactflow";
 import "reactflow/dist/style.css";
@@ -148,6 +148,10 @@ function CanvasInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const idCounter = useRef(0);
+  // Lets addNodeOfType pan the viewport to a newly-added node — without
+  // this, a node zoomed/panned out of view looks like it never got
+  // added at all (see addNodeOfType below).
+  const { setCenter, getZoom } = useReactFlow();
 
   useEffect(() => {
     async function load() {
@@ -201,19 +205,31 @@ function CanvasInner() {
   function addNodeOfType(t: NodeType) {
     idCounter.current += 1;
     const id = `n_${Date.now()}_${idCounter.current}`;
+    const position = { x: 250, y: 150 + (nodes.length * 80) };
     setNodes((prev) => [
       ...prev,
-      {
-        id, type: "step",
-        position: { x: 250, y: 150 + (prev.length * 80) },
-        data: { nodeType: t },
-      },
+      { id, type: "step", position, data: { nodeType: t } },
     ]);
+    // Bring the new node into view immediately. New nodes always spawn
+    // at this fixed canvas coordinate — if the user had panned or
+    // zoomed out elsewhere on a busy flow, it landed off-screen and
+    // looked like nothing happened. A brief, gentle re-center fixes
+    // that without yanking the whole view around.
+    setCenter(position.x + 100, position.y + 40, { zoom: Math.max(getZoom(), 0.75), duration: 350 });
   }
 
   const updateNodeData = useCallback((nodeId: string, newData: Record<string, unknown>) => {
     setNodes((prev) => prev.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...newData } } : n)));
   }, [setNodes]);
+
+  // Removes a node and any edges touching it. The trigger node is
+  // created with deletable: false so it can never be targeted here.
+  const deleteNode = useCallback((nodeId: string) => {
+    setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+    setEdges((prev) => prev.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    setSelectedNode(null);
+    toast.success("Step deleted");
+  }, [setNodes, setEdges]);
 
   function updateTrigger(newTrigger: Trigger) {
     if (!journey) return;
@@ -495,6 +511,8 @@ function CanvasInner() {
             onNodeClick={onNodeClick}
             nodeTypes={nodeTypes}
             fitView
+            minZoom={0.4}
+            maxZoom={1.5}
             proOptions={{ hideAttribution: true }}
             defaultEdgeOptions={{ animated: true, style: { stroke: "#cbd5d1", strokeWidth: 2 } }}
           >
@@ -625,7 +643,7 @@ function CanvasInner() {
       {/* Node Configuration Drawer — per-node-type form (media URL, list
           sections, catalog/product IDs, condition operators, etc.) rather
           than a single generic text box for every step type. */}
-      <NodeConfigDrawer node={selectedNode} open={!!selectedNode} onClose={() => setSelectedNode(null)} onSave={updateNodeData} />
+      <NodeConfigDrawer node={selectedNode} open={!!selectedNode} onClose={() => setSelectedNode(null)} onSave={updateNodeData} onDelete={deleteNode} />
 
       {triggerOpen && (
         <TriggerConfigDrawer open={triggerOpen} trigger={journey.trigger} onClose={() => setTriggerOpen(false)} onSave={(t) => { updateTrigger(t); setTriggerOpen(false); }} />

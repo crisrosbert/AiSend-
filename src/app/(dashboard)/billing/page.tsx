@@ -32,6 +32,7 @@ import { MESSAGE_PRICE_INR, type MessageCategory } from "@/lib/billing/credits";
 import {
   averageCostPerMessage, buildUsageSeries, categorizeLedgerEntry, estimateRunway,
   formatCount, formatINR, formatLimit, isDebit, ledgerToCsv, meterPercent,
+  meterState,
   percentChange, spendBetween, summarizeUsage, USAGE_CATEGORIES,
   type LedgerEntry, type UsageCategory, type UsageDay,
 } from "@/lib/billing/usage";
@@ -814,15 +815,25 @@ function Meter({ icon, label, used, limit }: {
 }) {
   const percent = meterPercent(used, limit);
   const unlimited = limit < 0;
+  // `percent` is clamped to 100 so the bar never visually overflows its
+  // track — but that alone can't tell "9/10, almost there" apart from
+  // "12/2, already 6x over," and both used to render as an identical full
+  // bar. `state` carries that distinction separately so the color (and the
+  // "Over limit" flag below) reflect reality even though the bar's width
+  // stays capped.
+  const state = meterState(used, limit);
   return (
     <div className="bl-meter">
       <div className="bl-meter-top">
         <span>{icon} {label}</span>
-        <strong>{formatCount(used)}{unlimited ? "" : ` / ${formatLimit(limit)}`}</strong>
+        <span className="bl-meter-value">
+          <strong>{formatCount(used)}{unlimited ? "" : ` / ${formatLimit(limit)}`}</strong>
+          {state === "over" && <span className="bl-meter-over">Over limit</span>}
+        </span>
       </div>
       <div className="bl-meter-track">
         <div
-          className={`bl-meter-fill ${percent >= 90 ? "hot" : ""}`}
+          className={`bl-meter-fill ${state !== "ok" ? state : ""}`}
           style={{ width: unlimited ? "100%" : `${percent}%`, opacity: unlimited ? 0.35 : 1 }}
         />
       </div>
@@ -1151,7 +1162,10 @@ const css = `
 .bl-meter-top strong{font-family:"Sora",sans-serif;font-size:11.5px}
 .bl-meter-track{height:5px;border-radius:99px;background:rgba(255,255,255,.22);overflow:hidden}
 .bl-meter-fill{height:100%;border-radius:99px;background:#86efac;transition:width .4s cubic-bezier(.2,.7,.3,1)}
-.bl-meter-fill.hot{background:#fbbf24}
+.bl-meter-fill.near{background:#fbbf24}
+.bl-meter-fill.over{background:#f87171}
+.bl-meter-value{display:flex;align-items:center;gap:6px}
+.bl-meter-over{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#fecaca;background:rgba(239,68,68,.35);border-radius:99px;padding:1px 7px}
 .bl-planhero .bl-btn-white{margin-top:auto}
 
 /* wallet */

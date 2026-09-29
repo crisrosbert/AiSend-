@@ -146,6 +146,34 @@ export async function loadMetrics(
   }
 }
 
+// --- 1b. Rolling 24h messaging quota usage -----------------------------
+
+export interface MessagingQuotaUsage {
+  /** Distinct conversations messaged (agent/bot) in the trailing 24h — a
+   *  proxy for Meta's "unique recipients" count, which the Cloud API
+   *  doesn't expose directly. One conversation per contact in normal
+   *  use, so this tracks closely without needing a second join. */
+  uniqueRecipients24h: number
+}
+
+export async function loadMessagingQuotaUsage(
+  db: DB,
+  businessId?: string | null,
+): Promise<MessagingQuotaUsage> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { data, error } = await scoped(
+    db
+      .from('messages')
+      .select('conversation_id')
+      .in('sender_type', ['agent', 'bot'])
+      .gte('created_at', since),
+    businessId,
+  )
+  if (error) throw error
+  const unique = new Set((data ?? []).map((r: { conversation_id: string }) => r.conversation_id))
+  return { uniqueRecipients24h: unique.size }
+}
+
 // --- 2. Conversations over time ---------------------------------------
 
 export async function loadConversationsSeries(

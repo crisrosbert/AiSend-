@@ -122,8 +122,64 @@ async function loadRoutingConfig(tenantId: string): Promise<RoutingConfig> {
 // match, product-catalog match, or the LLM ever runs again.
 const STICKY_SESSION_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
 
+/**
+ * Resolve a phone number to this tenant's contact row. Shared by the
+ * sticky-override check below and checkBroadcastReply(), both of which
+ * need to go from "who texted" to "what did we send them" via
+ * broadcast_recipients, which is keyed on contact_id, not phone.
+ */
+async function resolveContactId(
+  tenantId: string,
+  contactPhone: string,
+): Promise<string | null> {
+  const { data } = await db()
+    .from('contacts')
+    .select('id')
+    .eq('user_id', tenantId)
+    .eq('phone', contactPhone)
+    .maybeSingle()
+  return data?.id ?? null
+}
+
+/**
+ * Was this contact sent a broadcast AFTER `sinceIso`?
+ *
+ * Sticky session exists so a mid-conversation reply doesn't get
+ * re-classified by keyword/LLM every message. But it was blindly
+ * winning over a broadcast's own agent pick too: a merchant selects
+ * "Kalosa Aesthetics (sales)" for a fresh campaign, the recipient
+ * already has a sticky routing from an earlier, unrelated chat (e.g.
+ * "Welcome back!" from the ecommerce agent) less than 6h old, and every
+ * reply to the NEW campaign kept going to the OLD agent — silently, with
+ * no error, which is exactly why the reply "looked random" rather than
+ * wrong: it was answering as if the campaign had never been sent.
+ *
+ * A broadcast sent after the sticky routing was set is the merchant's
+ * explicit, fresh choice of agent for this contact and should win.
+ */
+async function hasNewerBroadcast(
+  tenantId: string,
+  contactPhone: string,
+  sinceIso: string,
+): Promise<boolean> {
+  const contactId = await resolveContactId(tenantId, contactPhone)
+  if (!contactId) return false
+
+  const { data } = await db()
+    .from('broadcast_recipients')
+    .select('id')
+    .eq('contact_id', contactId)
+    .gt('created_at', sinceIso)
+    .limit(1)
+    .maybeSingle()
+
+  return !!data
+}
+
 async function checkStickySession(
   conversationId: string,
+  tenantId: string,
+  contactPhone: string,
 ): Promise<{ system: AgentSystem; agentId: string | null } | null> {
   const { data } = await db()
     .from('conversations')
@@ -139,6 +195,14 @@ async function checkStickySession(
   if (data.routed_at) {
     const age = Date.now() - new Date(data.routed_at).getTime()
     if (age > STICKY_SESSION_TTL_MS) return null
+
+    // A campaign sent to this contact more recently than this sticky
+    // routing was set overrides it — step aside so the normal
+    // broadcast-reply check (step 3 below) picks the campaign's agent
+    // instead of silently repeating whatever answered before it.
+    if (await hasNewerBroadcast(tenantId, contactPhone, data.routed_at)) {
+      return null
+    }
   }
 
   return {
@@ -171,21 +235,15 @@ async function checkBroadcastReply(
   // silently returned null, so broadcast-reply routing has never actually
   // fired. Resolve the contact first, since that's what broadcast_recipients
   // is keyed on.
-  const { data: contact } = await db()
-    .from('contacts')
-    .select('id')
-    .eq('user_id', tenantId)
-    .eq('phone', contactPhone)
-    .maybeSingle()
-
-  if (!contact?.id) return null
+  const contactId = await resolveContactId(tenantId, contactPhone)
+  if (!contactId) return null
 
   // Check if this contact received a broadcast recently (within 24h window)
   // and the broadcast had an agent_type tag.
   const { data } = await db()
     .from('broadcast_recipients')
     .select('broadcast_id')
-    .eq('contact_id', contact.id)
+    .eq('contact_id', contactId)
     .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
     .order('created_at', { ascending: false })
     .limit(1)
@@ -490,8 +548,10 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
   } = input
 
   // ── 1. STICKY SESSION ─────────────────────────────────────────────
-  // If this conversation was already routed, keep it there.
-  const sticky = await checkStickySession(conversationId)
+  // If this conversation was already routed, keep it there — unless a
+  // broadcast sent to this contact after that routing overrides it (see
+  // checkStickySession's hasNewerBroadcast check above).
+  const sticky = await checkStickySession(conversationId, tenantId, contactPhone)
   if (sticky) {
     const decision: RoutingDecision = {
       system: sticky.system,

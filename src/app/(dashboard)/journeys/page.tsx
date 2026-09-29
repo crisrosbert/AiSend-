@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   Plus, Search, MoreHorizontal, Copy, Edit2, Trash2, Loader2,
   Sparkles, Workflow, FlaskConical, Phone, BarChart3,
-  CheckCircle2, AlertCircle, Power, PowerOff,
+  AlertCircle, Power, PowerOff,
   ShoppingBag, Send, Smartphone, UserPlus, Bot, PlugZap,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -41,6 +41,12 @@ export default function JourneysPage() {
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  // Naming a journey up front (instead of always creating "Untitled
+  // Journey" and letting the user rename it later, which almost nobody
+  // did) is what stops the list from filling up with indistinguishable
+  // drafts — the audit found ~4 of these with no way to tell them apart.
+  const [namePromptOpen, setNamePromptOpen] = useState(false);
+  const [pendingName, setPendingName] = useState("");
   const [usage, setUsage] = useState({
     journey_slots_used: 0,
     journey_slots_limit: 5,
@@ -80,8 +86,9 @@ export default function JourneysPage() {
 
   useEffect(() => { fetchJourneys(); }, [fetchJourneys]);
 
-  // Create a new draft journey and route to its canvas
-  async function handleNewJourney() {
+  // "New Journey" opens the name prompt below; this is what it calls
+  // once a name has actually been entered, and routes to the canvas.
+  async function handleNewJourney(name: string) {
     setCreating(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -90,7 +97,7 @@ export default function JourneysPage() {
       const newJourney = {
         user_id: user.id,
         business_id: businessId,
-        name: "Untitled Journey",
+        name,
         status: "draft" as JourneyStatus,
         trigger: DEFAULT_TRIGGER,
         nodes: [],
@@ -115,7 +122,20 @@ export default function JourneysPage() {
       router.push(`/journeys/${data.id}/canvas`);
     } finally {
       setCreating(false);
+      setNamePromptOpen(false);
+      setPendingName("");
     }
+  }
+
+  function openNamePrompt() {
+    setPendingName("");
+    setNamePromptOpen(true);
+  }
+
+  function confirmNamePrompt() {
+    const trimmed = pendingName.trim();
+    if (!trimmed) return; // Create button is disabled in this case anyway
+    handleNewJourney(trimmed);
   }
 
   async function toggleStatus(journey: Journey) {
@@ -195,7 +215,7 @@ export default function JourneysPage() {
           </p>
         </div>
         <button
-          onClick={handleNewJourney}
+          onClick={openNamePrompt}
           disabled={creating}
           className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-white transition-all hover:-translate-y-0.5 disabled:opacity-60"
           style={{
@@ -312,8 +332,60 @@ export default function JourneysPage() {
           onToggle={toggleStatus}
           onDuplicate={duplicateJourney}
           onDelete={deleteJourney}
-          onNew={handleNewJourney}
+          onNew={openNamePrompt}
         />
+      )}
+
+      {/* Name-first creation: replaces the old flow of silently inserting
+          "Untitled Journey" and letting the user rename it later inside
+          the canvas — which is exactly why the list filled up with
+          several indistinguishable "Untitled Journey" drafts. */}
+      {namePromptOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !creating && setNamePromptOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-[#e7ece9] bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-[#0c1f17]" style={{ fontFamily: "var(--font-display)" }}>
+              Name your journey
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Pick something you&rsquo;ll recognize in the list later — you can rename it anytime.
+            </p>
+            <input
+              autoFocus
+              value={pendingName}
+              onChange={(e) => setPendingName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && pendingName.trim() && !creating) confirmNamePrompt();
+                if (e.key === "Escape") setNamePromptOpen(false);
+              }}
+              placeholder="e.g. Order confirmation flow"
+              maxLength={120}
+              className="mt-3 w-full rounded-lg border border-[#e7ece9] px-3 py-2 text-sm text-[#0c1f17] placeholder:text-slate-400 focus-visible:border-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/20"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setNamePromptOpen(false)}
+                disabled={creating}
+                className="rounded-lg px-3.5 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmNamePrompt}
+                disabled={creating || !pendingName.trim()}
+                className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:opacity-50"
+              >
+                {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {tab === "blueprints" && <StubPanel title="Blueprints" subtitle="Pre-built journeys by industry — coming in Phase 4." icon={<Sparkles className="size-7" />} />}
       {tab === "routing" && <AIRoutingPanel journeys={journeys} businessId={businessId} />}

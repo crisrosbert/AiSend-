@@ -1176,7 +1176,11 @@ const css = `
 .bl-runway-label{color:var(--muted);flex:1}
 .bl-runway-value{font-family:"Sora",sans-serif;font-weight:700;font-size:11.5px}
 .bl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.bl-topups{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+/* 2 columns by default (phones), 4 once there's room — previously this
+   was always 4 fixed columns, which squeezed "+₹1,000 / +₹50 free"-style
+   labels uncomfortably tight on a ~375px screen. */
+.bl-topups{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:12px}
+@media(min-width:420px){.bl-topups{grid-template-columns:repeat(4,1fr)}}
 .bl-topup{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:8px 4px;cursor:pointer;
   font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:1px;transition:.15s}
 .bl-topup span{font-size:11.5px;font-weight:800;color:var(--ink)}

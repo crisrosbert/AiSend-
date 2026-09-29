@@ -10,19 +10,35 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, X, Save } from "lucide-react";
+import {
+  Plus, X, Save, Trash2,
+  MessageSquare, Image as ImageIcon, List as ListIcon, BookOpen,
+  Package, Boxes, FileText, UserCheck, TrendingUp, GitBranch, Webhook, Tag,
+  type LucideIcon,
+} from "lucide-react";
 import type { Node } from "reactflow";
 import type { NodeType } from "@/types/journey";
 import { NODE_CATALOG } from "@/types/journey";
+
+// Same icon set the canvas nodes use (src/types/journey.ts NODE_CATALOG
+// names each node's icon by this string), so the drawer header always
+// matches the node you clicked instead of a generic gear glyph.
+const NODE_ICONS: Record<string, LucideIcon> = {
+  MessageSquare, Image: ImageIcon, List: ListIcon, BookOpen, Package, Boxes, FileText,
+  UserCheck, TrendingUp, GitBranch, Webhook, Tag,
+};
 
 interface NodeConfigDrawerProps {
   node: Node | null;
   open: boolean;
   onClose: () => void;
   onSave: (nodeId: string, data: Record<string, unknown>) => void;
+  /** Removes the node entirely (and any edges touching it). Optional so
+   *  the drawer still works if a caller doesn't wire deletion up yet. */
+  onDelete?: (nodeId: string) => void;
 }
 
-export function NodeConfigDrawer({ node, open, onClose, onSave }: NodeConfigDrawerProps) {
+export function NodeConfigDrawer({ node, open, onClose, onSave, onDelete }: NodeConfigDrawerProps) {
   const [draft, setDraft] = useState<Record<string, any>>({});
   // Reset the draft when a different node is selected. Adjusting state
   // during render (instead of in an effect) avoids an extra re-render
@@ -37,10 +53,18 @@ export function NodeConfigDrawer({ node, open, onClose, onSave }: NodeConfigDraw
 
   const nodeType = (node.data?.nodeType ?? node.type) as NodeType;
   const meta = NODE_CATALOG.find((m) => m.type === nodeType);
+  const HeaderIcon = NODE_ICONS[meta?.icon ?? ""] ?? MessageSquare;
+  const accent = meta?.accent ?? "#10b981";
 
   function save() {
     onSave(node!.id, draft);
     onClose();
+  }
+
+  function remove() {
+    if (!node) return;
+    if (!confirm(`Delete this "${meta?.label ?? "step"}" node? This can't be undone.`)) return;
+    onDelete?.(node.id);
   }
 
   return (
@@ -49,15 +73,12 @@ export function NodeConfigDrawer({ node, open, onClose, onSave }: NodeConfigDraw
         <SheetHeader className="border-b border-[#e7ece9] pb-4">
           <div className="flex items-center gap-3">
             <div
-              className="flex size-10 items-center justify-center rounded-xl text-white"
-              style={{
-                background: `linear-gradient(135deg,${meta?.accent ?? "#10b981"},${meta?.accent ?? "#10b981"}dd)`,
-                boxShadow: `0 6px 14px ${meta?.accent ?? "#10b981"}55`,
-              }}
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white"
+              style={{ background: accent, boxShadow: `0 4px 10px ${accent}40` }}
             >
-              <span className="text-lg">⚙</span>
+              <HeaderIcon className="size-4.5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <SheetTitle className="text-base font-bold text-[#0c1f17]" style={{ fontFamily: "var(--font-display)" }}>
                 Configure {meta?.label ?? "Node"}
               </SheetTitle>
@@ -72,23 +93,33 @@ export function NodeConfigDrawer({ node, open, onClose, onSave }: NodeConfigDraw
           <NodeFormBody nodeType={nodeType} draft={draft} setDraft={setDraft} />
         </div>
 
-        <div className="sticky bottom-0 -mx-6 border-t border-[#e7ece9] bg-white px-6 py-3 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={save}
-            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white"
-            style={{
-              background: "linear-gradient(135deg,#10b981,#059669)",
-              boxShadow: "0 4px 12px rgba(16,185,129,.3)",
-            }}
-          >
-            <Save className="size-3.5" /> Save Node
-          </button>
+        <div className="sticky bottom-0 -mx-6 border-t border-[#e7ece9] bg-white px-6 py-3 flex items-center justify-between gap-2">
+          {onDelete ? (
+            <button
+              onClick={remove}
+              className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50"
+            >
+              <Trash2 className="size-3.5" /> Delete
+            </button>
+          ) : <span />}
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={save}
+              className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white"
+              style={{
+                background: "linear-gradient(135deg,#10b981,#059669)",
+                boxShadow: "0 4px 12px rgba(16,185,129,.3)",
+              }}
+            >
+              <Save className="size-3.5" /> Save Node
+            </button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

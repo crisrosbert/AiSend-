@@ -2,7 +2,7 @@
 import { TemplateLibrary } from './template-library';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, Loader2, RefreshCw, Link2, Upload, Phone, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Loader2, RefreshCw, Link2, Upload, Phone, ExternalLink, MessageSquareReply } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,7 @@ const statusColors: Record<string, string> = {
 };
 
 interface TemplateButtonForm {
-  type: 'url' | 'phone';
+  type: 'url' | 'phone' | 'quick_reply';
   text: string;
   value: string;
 }
@@ -50,16 +50,34 @@ interface TemplateFormData {
   header_content: string;
   footer_text: string;
   buttons: TemplateButtonForm[];
+  /** One sample value per {{n}} placeholder in body_text, index-aligned. */
+  sampleValues: string[];
 }
 
 const emptyForm: TemplateFormData = {
   name: '', category: 'Marketing', language: 'en_US',
   body_text: '', header_type: '', header_content: '', footer_text: '',
-  buttons: [],
+  buttons: [], sampleValues: [],
 };
 
 const URL_BUTTON_LIMIT = 2;
 const PHONE_BUTTON_LIMIT = 1;
+// Meta's API accepts up to 10 Quick Reply buttons, but past 3 they stop
+// laying out well as tap targets on a phone screen, so entry is capped
+// here rather than at Meta's real ceiling.
+const QUICK_REPLY_LIMIT = 3;
+
+/** Highest {{n}} placeholder index used in a template body, e.g. 2 for "Hi {{1}}, {{2}} starts soon." */
+function maxPlaceholder(text: string): number {
+  let max = 0;
+  const re = /\{\{\s*(\d+)\s*\}\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (n > max) max = n;
+  }
+  return max;
+}
 
 const COMMON_LANGUAGE_CODES = [
   'en_US', 'en_GB', 'en', 'hi', 'es', 'es_ES', 'es_MX', 'fr', 'fr_FR',
@@ -78,6 +96,9 @@ export function TemplateManager() {
   const [form, setForm] = useState<TemplateFormData>(emptyForm);
   const [mediaMode, setMediaMode] = useState<'link' | 'upload'>('link');
   const [mediaUploading, setMediaUploading] = useState(false);
+  const [buttonMode, setButtonMode] = useState<'none' | 'cta' | 'quick_reply'>('none');
+  const [enableClickTracking, setEnableClickTracking] = useState(false);
+  const [clickCounts, setClickCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (authLoading) return;
@@ -96,12 +117,27 @@ export function TemplateManager() {
         .order('created_at', { ascending: false });
       if (error) throw error;
       setTemplates(data || []);
+      await fetchClickCounts((data || []).map((t) => t.id));
     } catch (err) {
       console.error('Failed to fetch templates:', err);
       toast.error('Failed to load templates');
     } finally {
       setLoading(false);
     }
+  }
+
+  async function fetchClickCounts(templateIds: string[]) {
+    if (templateIds.length === 0) { setClickCounts({}); return; }
+    const { data, error } = await supabase
+      .from('template_link_clicks')
+      .select('template_id')
+      .in('template_id', templateIds);
+    if (error) { console.error('Failed to fetch click counts:', error); return; }
+    const counts: Record<string, number> = {};
+    for (const row of data ?? []) {
+      counts[row.template_id] = (counts[row.template_id] ?? 0) + 1;
+    }
+    setClickCounts(counts);
   }
 
   async function handleMediaUpload(file: File) {
@@ -143,6 +179,10 @@ export function TemplateManager() {
       return;
     }
     for (const btn of form.buttons) {
+      if (btn.type === 'quick_reply') {
+        if (!btn.text.trim()) continue;
+        continue;
+      }
       const value = btn.value.trim();
       if (!btn.text.trim() || !value) continue;
       if (btn.type === 'phone' && !value.startsWith('+')) {
@@ -178,8 +218,10 @@ export function TemplateManager() {
               : undefined,
           footer_text: form.footer_text.trim() || undefined,
           buttons: form.buttons
-            .filter((b) => b.text.trim() && b.value.trim())
+            .filter((b) => b.type === 'quick_reply' ? b.text.trim() : b.text.trim() && b.value.trim())
             .map((b) => ({ type: b.type, text: b.text.trim(), value: b.value.trim() })),
+          sample_values: form.sampleValues,
+          enable_click_tracking: enableClickTracking && form.buttons.some((b) => b.type === 'url'),
         }),
       });
 
@@ -196,6 +238,8 @@ export function TemplateManager() {
       setDialogOpen(false);
       setForm(emptyForm);
       setMediaMode('link');
+      setButtonMode('none');
+      setEnableClickTracking(false);
       await fetchTemplates(user.id);
     } catch (err) {
       console.error('Save error:', err);
@@ -286,7 +330,7 @@ export function TemplateManager() {
             {syncing ? 'Syncing…' : 'Sync from Meta'}
           </Button>
           <Button
-            onClick={() => { setForm(emptyForm); setMediaMode('link'); setDialogOpen(true); }}
+            onClick={() => { setForm(emptyForm); setMediaMode('link'); setButtonMode('none'); setEnableClickTracking(false); setDialogOpen(true); }}
             className="bg-emerald-500 hover:bg-emerald-600 text-white"
           >
             <Plus className="size-4" />
@@ -318,6 +362,12 @@ export function TemplateManager() {
                     </Badge>
                     {template.language && (
                       <span className="text-xs text-slate-400 uppercase">{template.language}</span>
+                    )}
+                    {clickCounts[template.id] > 0 && (
+                      <Badge className="text-xs border bg-sky-50 text-sky-700 border-sky-200">
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        {clickCounts[template.id]} click{clickCounts[template.id] === 1 ? '' : 's'}
+                      </Badge>
                     )}
                   </div>
                   <p className="text-sm text-slate-500 line-clamp-2 whitespace-pre-line">{template.body_text}</p>
@@ -509,6 +559,36 @@ export function TemplateManager() {
               />
             </div>
 
+            {/* Sample Values — a real value per {{n}} placeholder, shown
+                to Meta's reviewers and in the preview below, instead of
+                a generic "Sample1"/"Sample2" filler. */}
+            {maxPlaceholder(form.body_text) > 0 && (
+              <div className="space-y-2">
+                <Label className="text-slate-700">Sample Values</Label>
+                <p className="text-[11px] text-slate-400">
+                  Specify a realistic value for each variable — these are what Meta&apos;s reviewers
+                  (and your own preview) see in place of <code>{'{{1}}'}</code>, <code>{'{{2}}'}</code>…
+                </p>
+                <div className="space-y-2">
+                  {Array.from({ length: maxPlaceholder(form.body_text) }, (_, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="w-10 shrink-0 text-xs font-medium text-slate-500">{`{{${i + 1}}}`}</span>
+                      <Input
+                        placeholder={`e.g. ${i === 0 ? 'Mohit' : '5'}`}
+                        value={form.sampleValues[i] ?? ''}
+                        onChange={(e) => {
+                          const next = [...form.sampleValues];
+                          next[i] = e.target.value;
+                          setForm({ ...form, sampleValues: next });
+                        }}
+                        className="bg-white border-[#e7ece9] text-[#0c1f17] placeholder:text-slate-400"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label className="text-slate-700">Footer Text</Label>
               <Input
@@ -519,76 +599,165 @@ export function TemplateManager() {
               />
             </div>
 
-            {/* Call-to-action buttons — "Visit Website" / "Call Now",
-                the row shown under a template on real WhatsApp business
-                messages. Meta allows at most 2 URL + 1 phone button. */}
-            <div className="space-y-2">
-              <Label className="text-slate-700">Buttons</Label>
-              <div className="space-y-2">
-                {form.buttons.map((btn, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded-lg border border-[#e7ece9] bg-[#f8faf9] p-2">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-white text-emerald-600 border border-[#e7ece9]">
-                      {btn.type === 'url' ? <ExternalLink className="h-3.5 w-3.5" /> : <Phone className="h-3.5 w-3.5" />}
-                    </span>
-                    <Input
-                      placeholder={btn.type === 'url' ? 'Visit Website' : 'Call Now'}
-                      value={btn.text}
-                      maxLength={25}
-                      onChange={(e) => {
-                        const next = [...form.buttons];
-                        next[i] = { ...next[i], text: e.target.value };
-                        setForm({ ...form, buttons: next });
-                      }}
-                      className="w-32 shrink-0 border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400"
+            {/* Buttons — Meta does not allow Call-to-Action (URL/Phone)
+                buttons and Quick Reply buttons on the same template, so
+                this is a mode choice, not a free-for-all list. Switching
+                modes clears whatever was in the other mode. */}
+            <div className="space-y-3">
+              <Label className="text-slate-700">Interactive Actions</Label>
+              <p className="text-[11px] text-slate-400">
+                In addition to your message, you can send actions with it — either buttons that
+                open a link/call, or quick-tap reply chips. Not both on the same template.
+              </p>
+              <div className="flex flex-wrap items-center gap-4">
+                {([
+                  { value: 'none', label: 'None' },
+                  { value: 'cta', label: 'Call to Actions' },
+                  { value: 'quick_reply', label: 'Quick Replies' },
+                ] as const).map((opt) => (
+                  <label key={opt.value} className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="button-mode"
+                      checked={buttonMode === opt.value}
+                      onChange={() => { setButtonMode(opt.value); setForm({ ...form, buttons: [] }); }}
+                      className="accent-emerald-500"
                     />
-                    <Input
-                      placeholder={btn.type === 'url' ? 'https://performancemktg.net' : '+919876543210'}
-                      value={btn.value}
-                      onChange={(e) => {
-                        const next = [...form.buttons];
-                        next[i] = { ...next[i], value: e.target.value };
-                        setForm({ ...form, buttons: next });
-                      }}
-                      className="border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setForm({ ...form, buttons: form.buttons.filter((_, j) => j !== i) })}
-                      className="shrink-0 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                    {opt.label}
+                  </label>
                 ))}
               </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={form.buttons.filter((b) => b.type === 'url').length >= URL_BUTTON_LIMIT}
-                  onClick={() => setForm({ ...form, buttons: [...form.buttons, { type: 'url', text: 'Visit Website', value: '' }] })}
-                  className="border-[#e7ece9] text-slate-600 hover:bg-[#f8faf9]"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" /> Visit Website
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={form.buttons.filter((b) => b.type === 'phone').length >= PHONE_BUTTON_LIMIT}
-                  onClick={() => setForm({ ...form, buttons: [...form.buttons, { type: 'phone', text: 'Call Now', value: '' }] })}
-                  className="border-[#e7ece9] text-slate-600 hover:bg-[#f8faf9]"
-                >
-                  <Phone className="h-3.5 w-3.5" /> Call Now
-                </Button>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Up to {URL_BUTTON_LIMIT} website buttons and {PHONE_BUTTON_LIMIT} call button — Meta&apos;s limit per template.
-                Phone numbers need the country code, e.g. <code>+91…</code>, not just the 10 digits.
-              </p>
+
+              {buttonMode === 'quick_reply' ? (
+                <div className="space-y-2">
+                  {form.buttons.map((btn, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-lg border border-[#e7ece9] bg-[#f8faf9] p-2">
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-white text-emerald-600 border border-[#e7ece9]">
+                        <MessageSquareReply className="h-3.5 w-3.5" />
+                      </span>
+                      <Input
+                        placeholder="e.g. Yes, tell me more"
+                        value={btn.text}
+                        maxLength={25}
+                        onChange={(e) => {
+                          const next = [...form.buttons];
+                          next[i] = { ...next[i], text: e.target.value };
+                          setForm({ ...form, buttons: next });
+                        }}
+                        className="border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setForm({ ...form, buttons: form.buttons.filter((_, j) => j !== i) })}
+                        className="shrink-0 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={form.buttons.length >= QUICK_REPLY_LIMIT}
+                    onClick={() => setForm({ ...form, buttons: [...form.buttons, { type: 'quick_reply', text: '', value: '' }] })}
+                    className="border-[#e7ece9] text-slate-600 hover:bg-[#f8faf9]"
+                  >
+                    <MessageSquareReply className="h-3.5 w-3.5" /> Add Quick Reply
+                  </Button>
+                  <p className="text-[11px] text-slate-400">
+                    Up to {QUICK_REPLY_LIMIT} reply chips, max 25 characters each.
+                  </p>
+                </div>
+              ) : buttonMode === 'cta' ? (
+                <div className="space-y-2">
+                  {form.buttons.map((btn, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-lg border border-[#e7ece9] bg-[#f8faf9] p-2">
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-white text-emerald-600 border border-[#e7ece9]">
+                        {btn.type === 'url' ? <ExternalLink className="h-3.5 w-3.5" /> : <Phone className="h-3.5 w-3.5" />}
+                      </span>
+                      <Input
+                        placeholder={btn.type === 'url' ? 'Visit Website' : 'Call Now'}
+                        value={btn.text}
+                        maxLength={25}
+                        onChange={(e) => {
+                          const next = [...form.buttons];
+                          next[i] = { ...next[i], text: e.target.value };
+                          setForm({ ...form, buttons: next });
+                        }}
+                        className="w-32 shrink-0 border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400"
+                      />
+                      <Input
+                        placeholder={btn.type === 'url' ? 'https://performancemktg.net' : '+919876543210'}
+                        value={btn.value}
+                        onChange={(e) => {
+                          const next = [...form.buttons];
+                          next[i] = { ...next[i], value: e.target.value };
+                          setForm({ ...form, buttons: next });
+                        }}
+                        className="border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setForm({ ...form, buttons: form.buttons.filter((_, j) => j !== i) })}
+                        className="shrink-0 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={form.buttons.filter((b) => b.type === 'url').length >= URL_BUTTON_LIMIT}
+                      onClick={() => setForm({ ...form, buttons: [...form.buttons, { type: 'url', text: 'Visit Website', value: '' }] })}
+                      className="border-[#e7ece9] text-slate-600 hover:bg-[#f8faf9]"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" /> Visit Website
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={form.buttons.filter((b) => b.type === 'phone').length >= PHONE_BUTTON_LIMIT}
+                      onClick={() => setForm({ ...form, buttons: [...form.buttons, { type: 'phone', text: 'Call Now', value: '' }] })}
+                      className="border-[#e7ece9] text-slate-600 hover:bg-[#f8faf9]"
+                    >
+                      <Phone className="h-3.5 w-3.5" /> Call Now
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Up to {URL_BUTTON_LIMIT} website buttons and {PHONE_BUTTON_LIMIT} call button — Meta&apos;s limit per template.
+                    Phone numbers need the country code, e.g. <code>+91…</code>, not just the 10 digits.
+                  </p>
+
+                  {/* Click tracking — free here, unlike AiSensy's Pro-gated
+                      toggle, and backed by an actual count (see the badge
+                      on each template card below), not just a promise. */}
+                  {form.buttons.some((b) => b.type === 'url') && (
+                    <label className="flex items-start gap-2 rounded-lg border border-[#e7ece9] bg-[#f8faf9] p-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enableClickTracking}
+                        onChange={(e) => setEnableClickTracking(e.target.checked)}
+                        className="mt-0.5 accent-emerald-500"
+                      />
+                      <span className="text-xs text-slate-600">
+                        <span className="font-medium text-[#0c1f17]">Enable Click Tracking</span>
+                        <br />
+                        Route the Visit Website button through AiSend first, so taps show up as a real
+                        count on this template — visible to every plan, not just a toggle.
+                      </span>
+                    </label>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             {/* Live WhatsApp-style preview */}
@@ -617,7 +786,12 @@ export function TemplateManager() {
                     />
                   )}
                   <p className="text-sm text-[#0c1f17] whitespace-pre-line">
-                    {form.body_text.trim() || 'Your message body will appear here…'}
+                    {form.body_text.trim()
+                      ? form.body_text.replace(
+                          /\{\{\s*(\d+)\s*\}\}/g,
+                          (_, n) => form.sampleValues[Number(n) - 1]?.trim() || `[{{${n}}}]`,
+                        )
+                      : 'Your message body will appear here…'}
                   </p>
                   {form.footer_text.trim() && (
                     <p className="mt-1 text-xs text-slate-500 whitespace-pre-line">
@@ -628,7 +802,20 @@ export function TemplateManager() {
                     {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                {form.buttons.filter((b) => b.text.trim()).length > 0 && (
+                {buttonMode === 'quick_reply' && form.buttons.filter((b) => b.text.trim()).length > 0 && (
+                  <div className="ml-auto flex max-w-[85%] flex-wrap gap-1.5 pt-1.5">
+                    {form.buttons.filter((b) => b.text.trim()).map((btn, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#e7ece9] bg-white px-2.5 py-1 text-xs font-medium text-[#128C7E] shadow-sm"
+                      >
+                        <MessageSquareReply className="h-3 w-3" />
+                        {btn.text}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {buttonMode === 'cta' && form.buttons.filter((b) => b.text.trim()).length > 0 && (
                   <div className="ml-auto max-w-[85%] overflow-hidden rounded-lg bg-white shadow-sm">
                     {form.buttons.filter((b) => b.text.trim()).map((btn, i) => (
                       <div

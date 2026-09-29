@@ -24,6 +24,10 @@ function CreateFlowContent() {
   useEffect(() => {
     if (!profile?.id) return;
     const templateKey = params.get("template");
+    // Set by the list page's name-first creation modal — falls back to
+    // "Untitled flow" only if this route is hit directly without going
+    // through that modal (e.g. a bookmarked link), not as the normal path.
+    const requestedName = params.get("name")?.trim();
     const now = new Date().toISOString();
 
     // Either seed from a template (deep-cloned so edits don't mutate
@@ -40,6 +44,7 @@ function CreateFlowContent() {
         userId: profile.id,
         version: 1,
         status: "draft",
+        name: requestedName || seed.name,
         createdAt: now,
         updatedAt: now,
         metrics: { started: 0, completed: 0 },
@@ -51,7 +56,7 @@ function CreateFlowContent() {
         userId: profile.id,
         version: 1,
         status: "draft",
-        name: "Untitled flow",
+        name: requestedName || "Untitled flow",
         description: "",
         category: "custom",
         startScreenId: firstScreen.id,

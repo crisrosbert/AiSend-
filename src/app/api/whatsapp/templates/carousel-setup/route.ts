@@ -6,6 +6,9 @@ import {
   uploadProfilePhoto,
 } from '@/lib/whatsapp/meta-api'
 
+const META_API_VERSION = 'v21.0'
+const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
+
 /**
  * POST /api/whatsapp/templates/carousel-setup
  *
@@ -217,31 +220,103 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: config } = await supabase
+    const { data: agentConfig } = await supabase
       .from('ai_agent_configs')
       .select('carousel_template_name')
       .eq('user_id', user.id)
       .single()
 
-    if (!config?.carousel_template_name) {
+    if (!agentConfig?.carousel_template_name) {
       return NextResponse.json({
         configured: false,
         message: 'No carousel template configured. POST to this endpoint to set one up.',
       })
     }
 
+    const templateName = agentConfig.carousel_template_name
+
+    // Fetch live status from Meta so we never show stale "Unknown".
+    // Every branch below records *why* we didn't get a status, in
+    // `debug`, so a failure is diagnosable from the API response alone
+    // instead of needing another round of guessing.
+    const { data: waConfig } = await supabase
+      .from('whatsapp_config')
+      .select('waba_id, access_token')
+      .eq('user_id', user.id)
+      .single()
+
+    let liveStatus: string | null = null
+    let liveQuality: string | null = null
+    const debug: Record<string, unknown> = {}
+
+    if (!waConfig?.waba_id || !waConfig?.access_token) {
+      debug.metaCheck = 'skipped — whatsapp_config missing waba_id or access_token'
+    } else {
+      try {
+        const accessToken = decrypt(waConfig.access_token)
+        const metaRes = await fetch(
+          `${META_API_BASE}/${waConfig.waba_id}/message_templates?name=${encodeURIComponent(templateName)}&fields=name,status,quality_score`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        )
+        if (!metaRes.ok) {
+          const errBody = await metaRes.text().catch(() => '')
+          debug.metaCheck = `Meta API returned HTTP ${metaRes.status}`
+          debug.metaError = errBody.slice(0, 500)
+        } else {
+          const metaBody = await metaRes.json()
+          const list = metaBody.data as Array<{ name: string; status: string; quality_score?: { score?: string } }> | undefined
+          const found = list?.find((t) => t.name === templateName)
+          if (!found) {
+            debug.metaCheck = `Meta returned ${list?.length ?? 0} template(s) but none named "${templateName}"`
+            debug.metaTemplateNames = list?.map((t) => t.name) ?? []
+          } else {
+            liveStatus = found.status // APPROVED | PENDING | REJECTED
+            liveQuality = found.quality_score?.score ?? null
+            debug.metaCheck = 'ok'
+            // Keep local DB in sync
+            const normalized =
+              liveStatus === 'APPROVED' ? 'Approved'
+              : liveStatus === 'REJECTED' ? 'Rejected'
+              : 'Pending'
+            await supabase
+              .from('message_templates')
+              .update({ status: normalized, updated_at: new Date().toISOString() })
+              .eq('user_id', user.id)
+              .eq('name', templateName)
+          }
+        }
+      } catch (err) {
+        debug.metaCheck = 'threw before a response came back'
+        debug.metaError = err instanceof Error ? err.message : String(err)
+      }
+    }
+
+    // Fallback: local DB status
     const { data: template } = await supabase
       .from('message_templates')
       .select('name, status')
       .eq('user_id', user.id)
-      .eq('name', config.carousel_template_name)
+      .eq('name', templateName)
       .single()
+    debug.localDbStatus = template?.status ?? null
+
+    const displayStatus = liveStatus ?? template?.status ?? 'Unknown'
+    const active = displayStatus === 'APPROVED' || displayStatus === 'Approved'
 
     return NextResponse.json({
       configured: true,
-      template_name: config.carousel_template_name,
-      status: template?.status ?? 'Unknown',
-      active: template?.status === 'Approved',
+      template_name: templateName,
+      status: displayStatus,
+      quality_rating: liveQuality,
+      active,
+      message: active
+        ? '✅ Carousel template is approved and active!'
+        : displayStatus === 'PENDING' || displayStatus === 'Pending'
+          ? '⏳ Template is pending Meta review (usually approved within minutes to hours)'
+          : displayStatus === 'REJECTED' || displayStatus === 'Rejected'
+            ? '❌ Template was rejected by Meta. Delete it and create a new one.'
+            : 'Status unknown — Meta API check failed',
+      debug,
     })
   } catch (error) {
     console.error('[CarouselSetup] GET error:', error)

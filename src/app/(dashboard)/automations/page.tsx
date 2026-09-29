@@ -339,7 +339,16 @@ function RuleCard({
               {live ? "Live" : "Paused"}
             </span>
           </div>
-          {automation.description && <p className="ar-card-desc">{automation.description}</p>}
+          {/* Cards with the same name and trigger type (several rules were
+              literally titled "Tech Support Assistant" / "Order Tracking
+              Bot" in the audit) are indistinguishable without a description
+              — fall back to the creation date so every card still has a
+              second line to tell it apart by. */}
+          {automation.description ? (
+            <p className="ar-card-desc">{automation.description}</p>
+          ) : (
+            <p className="ar-card-desc ar-card-desc-muted">Created {formatRelative(automation.created_at)}</p>
+          )}
         </div>
       </div>
 
@@ -495,6 +504,7 @@ const css = `
 .ar-card-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .ar-card h3{font-size:14.5px;font-weight:750;line-height:1.3}
 .ar-card-desc{font-size:12.5px;color:var(--muted);margin:4px 0 0;line-height:1.5}
+.ar-card-desc-muted{font-style:italic;opacity:.75}
 .ar-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;padding:3px 9px;
   border-radius:99px;white-space:nowrap;flex-shrink:0}
 .ar-pill.live{background:var(--brand-50);color:var(--brand-press)}

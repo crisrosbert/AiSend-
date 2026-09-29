@@ -177,14 +177,53 @@ function NodeFormBody({
     );
   }
 
-  // LIST — header + body + sections
+  // LIST — header + body + button text + the selectable rows themselves.
+  // The runner (src/lib/journeys/runner.ts) sends a real WhatsApp list
+  // message only when data.rows (or data.sections) has at least one row
+  // with a title — without rows it silently falls back to plain text,
+  // so this editor is required, not optional.
   if (nodeType === "LIST") {
+    const rows: string[] = draft.rows ?? [];
     return (
       <>
         <Field label="Header"><input value={draft.header ?? ""} onChange={(e) => set("header", e.target.value)} className={inputCls} /></Field>
         <Field label="Body"><textarea value={draft.body ?? ""} onChange={(e) => set("body", e.target.value)} rows={3} className={inputCls} /></Field>
         <Field label="Button text"><input value={draft.buttonText ?? "Select"} onChange={(e) => set("buttonText", e.target.value)} className={inputCls} /></Field>
-        <p className="text-[11px] text-slate-400">List items editor coming soon — for now the body and button text take effect.</p>
+        <Field label={`List options (${rows.length}/10)`}>
+          <div className="space-y-2">
+            {rows.map((row, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  value={row}
+                  onChange={(e) => {
+                    const next = [...rows];
+                    next[i] = e.target.value;
+                    set("rows", next);
+                  }}
+                  placeholder={`Option ${i + 1} text`}
+                  className={`${inputCls} flex-1`}
+                />
+                <button
+                  onClick={() => set("rows", rows.filter((_, idx) => idx !== i))}
+                  className="rounded-lg border border-[#e7ece9] p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ))}
+            {rows.length < 10 && (
+              <button
+                onClick={() => set("rows", [...rows, ""])}
+                className="flex items-center gap-1 rounded-lg border border-dashed border-[#e7ece9] px-3 py-2 text-xs font-semibold text-slate-500 hover:border-emerald-300 hover:text-emerald-700"
+              >
+                <Plus className="size-3" /> Add option
+              </button>
+            )}
+            {rows.length === 0 && (
+              <p className="text-[11px] text-amber-600">Without at least one option, this sends as a plain text message instead of a list.</p>
+            )}
+          </div>
+        </Field>
       </>
     );
   }
@@ -279,19 +318,29 @@ function NodeFormBody({
     );
   }
 
-  // WEBHOOK_CALL
+  // WEBHOOK_CALL — the runner (src/lib/journeys/runner.ts) fires this by
+  // reading data.endpoint + data.method directly off the node, so those
+  // are the fields that actually have to be saved here.
   if (nodeType === "WEBHOOK_CALL") {
     return (
       <>
-        <Field label="Action binding">
-          <select value={draft.actionId ?? ""} onChange={(e) => set("actionId", e.target.value)} className={`${inputCls} bg-white`}>
-            <option value="">Choose an action…</option>
-            <option value="__create_new">+ Create new action (from Actions tab)</option>
+        <Field label="HTTP method">
+          <select value={draft.method ?? "POST"} onChange={(e) => set("method", e.target.value)} className={`${inputCls} bg-white`}>
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
           </select>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Action bindings are defined in the Actions tab. Create one there, then select it here.
-          </p>
         </Field>
+        <Field label="API endpoint URL">
+          <input
+            value={draft.endpoint ?? ""}
+            onChange={(e) => set("endpoint", e.target.value)}
+            placeholder="https://api.yourstore.com/webhook/orders"
+            className={`${inputCls} font-mono text-xs`}
+          />
+        </Field>
+        <p className="text-[11px] text-slate-400">
+          This URL gets called for every contact who reaches this step. Saved action templates from the Actions tab are a future shortcut here — for now, paste the endpoint directly.
+        </p>
       </>
     );
   }

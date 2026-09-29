@@ -1,5 +1,14 @@
 // src/app/api/cron/fire-scheduled-broadcasts/route.ts
 //
+// DEPRECATED — superseded by /api/cron/broadcast-sweep, which does this
+// same "fire due broadcasts" step as its Phase 1 AND also resumes any
+// campaign whose send got interrupted (closed tab, dead laptop, etc.).
+// This route still works (kept rather than deleted, in case anything
+// external is still pointing at it), but point any new pinger at
+// broadcast-sweep instead — it's the one actually documented and
+// intended for production use. Left in place rather than removed so
+// nothing that already calls this URL breaks.
+//
 // Fires broadcasts whose scheduled_at has passed but haven't sent yet.
 //
 // ── WHAT IT DOES ─────────────────────────────────────────────────────

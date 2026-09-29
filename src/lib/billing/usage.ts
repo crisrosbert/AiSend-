@@ -216,11 +216,38 @@ export function formatLimit(limit: number): string {
   return limit < 0 ? 'Unlimited' : formatCount(limit)
 }
 
-/** Clamped 0–100 fill percentage for a usage meter. */
+/** Clamped 0–100 fill percentage for a usage meter (bar width never exceeds 100%). */
 export function meterPercent(used: number, limit: number): number {
   if (limit < 0) return 0 // unlimited — nothing to fill
   if (limit === 0) return 100
   return Math.min(100, Math.max(0, (used / limit) * 100))
+}
+
+/**
+ * Three-way status for a usage meter, kept separate from `meterPercent`
+ * because the bar's fill width is intentionally clamped at 100% (so it
+ * never overflows its track), which on its own can't tell a user who is
+ * genuinely OVER their limit (used > limit, e.g. 12 broadcasts on a 2/mo
+ * plan) apart from someone merely approaching it (e.g. 9/10). Both used
+ * to render as an identical full bar. Callers should color/label the
+ * meter differently per state — see `meterStateColor` for a ready-made
+ * gradient per state.
+ */
+export type MeterState = 'ok' | 'near' | 'over'
+
+export function meterState(used: number, limit: number): MeterState {
+  if (limit < 0) return 'ok' // unlimited plans can't be "near" or "over"
+  if (limit === 0) return used > 0 ? 'over' : 'ok'
+  if (used > limit) return 'over'
+  if (used / limit >= 0.8) return 'near'
+  return 'ok'
+}
+
+/** Matching gradient per `MeterState`, so every usage bar in the app reads the same way. */
+export function meterStateColor(state: MeterState, brandGradient: string): string {
+  if (state === 'over') return 'linear-gradient(90deg,#ef4444,#dc2626)' // red — over the plan limit
+  if (state === 'near') return 'linear-gradient(90deg,#f59e0b,#d97706)' // amber — approaching it
+  return brandGradient // normal — under the caller's own brand color
 }
 
 /**

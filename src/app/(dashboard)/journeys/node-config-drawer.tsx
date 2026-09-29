@@ -3,11 +3,14 @@
  * stores different keys, validated server-side on save. */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
-import { Plus, X, Loader2, Save } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Plus, X, Save } from "lucide-react";
 import type { Node } from "reactflow";
 import type { NodeType } from "@/types/journey";
 import { NODE_CATALOG } from "@/types/journey";
@@ -156,11 +159,11 @@ function NodeFormBody({
     return (
       <>
         <Field label="Media type">
-          <select value={draft.mediaType ?? "image"} onChange={(e) => set("mediaType", e.target.value)} className={`${inputCls} bg-white`}>
-            <option value="image">Image</option>
-            <option value="video">Video</option>
-            <option value="document">Document</option>
-          </select>
+          <Picker value={draft.mediaType ?? "image"} onChange={(v) => set("mediaType", v)} options={[
+            { value: "image", label: "Image" },
+            { value: "video", label: "Video" },
+            { value: "document", label: "Document" },
+          ]} />
         </Field>
         <Field label="Media URL">
           <input
@@ -282,14 +285,14 @@ function NodeFormBody({
     return (
       <>
         <Field label="Event name">
-          <select value={draft.eventName ?? "Purchase"} onChange={(e) => set("eventName", e.target.value)} className={`${inputCls} bg-white`}>
-            <option value="Purchase">Purchase</option>
-            <option value="Lead">Lead</option>
-            <option value="AddToCart">Add To Cart</option>
-            <option value="InitiateCheckout">Initiate Checkout</option>
-            <option value="Subscribe">Subscribe</option>
-            <option value="Contact">Contact</option>
-          </select>
+          <Picker value={draft.eventName ?? "Purchase"} onChange={(v) => set("eventName", v)} options={[
+            { value: "Purchase", label: "Purchase" },
+            { value: "Lead", label: "Lead" },
+            { value: "AddToCart", label: "Add To Cart" },
+            { value: "InitiateCheckout", label: "Initiate Checkout" },
+            { value: "Subscribe", label: "Subscribe" },
+            { value: "Contact", label: "Contact" },
+          ]} />
         </Field>
         <Field label="Value (optional)"><input type="number" value={draft.value ?? ""} onChange={(e) => set("value", e.target.value)} placeholder="500" className={inputCls} /></Field>
         <Field label="Currency"><input value={draft.currency ?? "INR"} onChange={(e) => set("currency", e.target.value)} className={inputCls} /></Field>
@@ -303,14 +306,14 @@ function NodeFormBody({
       <>
         <Field label="Variable to check"><input value={draft.variable ?? ""} onChange={(e) => set("variable", e.target.value)} placeholder="contact.tag or last_message" className={`${inputCls} font-mono text-xs`} /></Field>
         <Field label="Operator">
-          <select value={draft.operator ?? "equals"} onChange={(e) => set("operator", e.target.value)} className={`${inputCls} bg-white`}>
-            <option value="equals">Equals</option>
-            <option value="contains">Contains</option>
-            <option value="starts_with">Starts with</option>
-            <option value="greater_than">Greater than</option>
-            <option value="less_than">Less than</option>
-            <option value="exists">Exists</option>
-          </select>
+          <Picker value={draft.operator ?? "equals"} onChange={(v) => set("operator", v)} options={[
+            { value: "equals", label: "Equals" },
+            { value: "contains", label: "Contains" },
+            { value: "starts_with", label: "Starts with" },
+            { value: "greater_than", label: "Greater than" },
+            { value: "less_than", label: "Less than" },
+            { value: "exists", label: "Exists" },
+          ]} />
         </Field>
         <Field label="Compare value"><input value={draft.value ?? ""} onChange={(e) => set("value", e.target.value)} className={inputCls} /></Field>
         <p className="text-[11px] text-slate-400">This node has two output handles: Yes (right) and No (down). Connect each branch.</p>
@@ -325,10 +328,10 @@ function NodeFormBody({
     return (
       <>
         <Field label="HTTP method">
-          <select value={draft.method ?? "POST"} onChange={(e) => set("method", e.target.value)} className={`${inputCls} bg-white`}>
-            <option value="GET">GET</option>
-            <option value="POST">POST</option>
-          </select>
+          <Picker value={draft.method ?? "POST"} onChange={(v) => set("method", v)} options={[
+            { value: "GET", label: "GET" },
+            { value: "POST", label: "POST" },
+          ]} />
         </Field>
         <Field label="API endpoint URL">
           <input
@@ -350,10 +353,10 @@ function NodeFormBody({
     return (
       <>
         <Field label="Operation">
-          <select value={draft.operation ?? "add"} onChange={(e) => set("operation", e.target.value)} className={`${inputCls} bg-white`}>
-            <option value="add">Add tag</option>
-            <option value="remove">Remove tag</option>
-          </select>
+          <Picker value={draft.operation ?? "add"} onChange={(v) => set("operation", v)} options={[
+            { value: "add", label: "Add tag" },
+            { value: "remove", label: "Remove tag" },
+          ]} />
         </Field>
         <Field label="Tag name"><input value={draft.tagName ?? ""} onChange={(e) => set("tagName", e.target.value)} placeholder="vip-customer" className={inputCls} /></Field>
       </>
@@ -377,5 +380,32 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <label className="text-xs font-bold text-slate-600">{label}</label>
       {children}
     </div>
+  );
+}
+
+/**
+ * Styled dropdown used for every node-config choice field. Replaces the
+ * browser's native <select>, whose menu renders in OS chrome (system
+ * font, default blue highlight) instead of the app's own look — the
+ * clearest "this feels unfinished" signal on the whole canvas.
+ */
+function Picker({
+  value, onChange, options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <Select value={value} onValueChange={(v) => v && onChange(v)}>
+      <SelectTrigger className="w-full rounded-lg border border-[#e7ece9] bg-white p-2.5 h-auto text-sm text-[#0c1f17] focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

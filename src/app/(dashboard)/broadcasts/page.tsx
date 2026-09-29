@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FileEdit, Plus, Radio, Trash2, Play } from 'lucide-react';
+import { FileEdit, Plus, Radio, Trash2, Play, Search } from 'lucide-react';
 import { useBusiness } from '@/hooks/use-business';
 
 function RateCell({
@@ -47,6 +47,7 @@ export default function BroadcastsPage() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [draftSearch, setDraftSearch] = useState('');
   const { businessId, loading: businessLoading } = useBusiness();
 
   const fetchBroadcasts = useCallback(async () => {
@@ -115,15 +116,50 @@ export default function BroadcastsPage() {
       {/* Drafts section */}
       {drafts.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <FileEdit className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-bold text-[#0c1f17]">
-              Saved drafts ({drafts.length})
-            </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <FileEdit className="h-4 w-4 text-slate-400" />
+              <h2 className="text-sm font-bold text-[#0c1f17]">
+                Saved drafts ({drafts.length})
+              </h2>
+            </div>
+            {/* Drafts pile up fast (test names, abandoned attempts) and
+                there was no way to narrow them down — search by name or
+                template once there are enough to matter. */}
+            {drafts.length > 4 && (
+              <div className="relative w-full sm:w-64">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={draftSearch}
+                  onChange={(e) => setDraftSearch(e.target.value)}
+                  placeholder="Search drafts…"
+                  className="w-full rounded-lg border border-[#e7ece9] bg-white py-1.5 pl-8 pr-3 text-xs text-[#0c1f17] placeholder:text-slate-400 focus-visible:border-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/20"
+                />
+              </div>
+            )}
           </div>
 
+          {(() => {
+            const q = draftSearch.trim().toLowerCase();
+            const visibleDrafts = q
+              ? drafts.filter((d) =>
+                  d.name?.toLowerCase().includes(q) ||
+                  d.template_name?.toLowerCase().includes(q)
+                )
+              : drafts;
+
+            if (visibleDrafts.length === 0) {
+              return (
+                <p className="rounded-xl border border-dashed border-[#e7ece9] bg-white/60 px-4 py-6 text-center text-xs text-slate-400">
+                  No drafts match &ldquo;{draftSearch}&rdquo;.
+                </p>
+              );
+            }
+
+            return (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {drafts.map((draft) => {
+            {visibleDrafts.map((draft) => {
               const af = (draft.audience_filter as Record<string, unknown>) ?? {};
               const audienceType = (af.type as string) ?? 'all';
               const step = typeof af._current_step === 'number' ? af._current_step : 0;
@@ -200,6 +236,8 @@ export default function BroadcastsPage() {
               );
             })}
           </div>
+            );
+          })()}
         </div>
       )}
 

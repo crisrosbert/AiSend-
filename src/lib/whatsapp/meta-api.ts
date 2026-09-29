@@ -21,6 +21,13 @@ export interface MetaPhoneInfo {
   display_phone_number: string
   verified_name?: string
   quality_rating?: string
+  /**
+   * Meta's actual messaging tier for this number — TIER_50, TIER_250,
+   * TIER_1K, TIER_10K, TIER_100K, or TIER_UNLIMITED. This is the real
+   * value; previously the dashboard just hardcoded "1K" for every
+   * connected number regardless of their actual tier.
+   */
+  messaging_limit_tier?: string
 }
 
 interface MetaErrorResponse {
@@ -55,7 +62,7 @@ export async function verifyPhoneNumber(
   args: VerifyPhoneNumberArgs
 ): Promise<MetaPhoneInfo> {
   const { phoneNumberId, accessToken } = args
-  const url = `${META_API_BASE}/${phoneNumberId}?fields=id,display_phone_number,verified_name,quality_rating`
+  const url = `${META_API_BASE}/${phoneNumberId}?fields=id,display_phone_number,verified_name,quality_rating,messaging_limit_tier`
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
@@ -384,11 +391,26 @@ export interface CreateTemplateArgs {
   footerText?: string
   /** Call-to-action buttons shown below the message — max 2 URL + 1 phone (Meta's limit). */
   buttons?: TemplateButton[]
+  /**
+   * Sample value per {{n}} placeholder in bodyText, in order — what a
+   * reviewer (and your own live preview) sees in place of {{1}}, {{2}}…
+   * Optional: any placeholder left blank falls back to "SampleN" so
+   * submission never blocks on this, but a real value ("Umar", "June")
+   * reads far better in Meta's approval queue than a generic filler.
+   */
+  sampleValues?: string[]
 }
 
 export type TemplateButton =
   | { type: 'URL'; text: string; url: string }
   | { type: 'PHONE_NUMBER'; text: string; phoneNumber: string }
+  /**
+   * Quick Reply — a tap-to-respond chip with no destination, just a
+   * label (e.g. "Yes please" / "Not now"). Meta does not allow mixing
+   * QUICK_REPLY buttons with URL/PHONE_NUMBER buttons in the same
+   * template — enforced where buttons are assembled below.
+   */
+  | { type: 'QUICK_REPLY'; text: string }
 
 export interface CreateTemplateResult {
   id: string
@@ -435,6 +457,7 @@ export async function createTemplate(
     headerMediaHandle,
     footerText,
     buttons,
+    sampleValues,
   } = args
 
   const url = `${META_API_BASE}/${wabaId}/message_templates`
@@ -466,9 +489,15 @@ export async function createTemplate(
   }
   const placeholderCount = maxPlaceholder(bodyText)
   if (placeholderCount > 0) {
+    // Prefer the caller's real sample per placeholder ("Umar", "June");
+    // fall back to "SampleN" for any slot left blank so this never
+    // blocks submission on its own.
     bodyComponent.example = {
       body_text: [
-        Array.from({ length: placeholderCount }, (_, i) => `Sample${i + 1}`),
+        Array.from({ length: placeholderCount }, (_, i) => {
+          const provided = sampleValues?.[i]?.trim()
+          return provided || `Sample${i + 1}`
+        }),
       ],
     }
   }
@@ -482,19 +511,37 @@ export async function createTemplate(
   }
 
   if (buttons && buttons.length > 0) {
-    // Meta's hard caps: at most 2 URL buttons and 1 phone-number button
-    // per template. Enforced here rather than trusted from the caller,
-    // same as the interactive-message limits above — a caller that
-    // exceeds it gets a working template with the extras dropped,
-    // instead of a 400 from Meta with no indication which button broke it.
-    const urlButtons = buttons.filter((b): b is Extract<TemplateButton, { type: 'URL' }> => b.type === 'URL').slice(0, 2)
-    const phoneButtons = buttons.filter((b): b is Extract<TemplateButton, { type: 'PHONE_NUMBER' }> => b.type === 'PHONE_NUMBER').slice(0, 1)
-    const metaButtons = [
-      ...urlButtons.map((b) => ({ type: 'URL', text: clamp(b.text, 25), url: b.url.trim() })),
-      ...phoneButtons.map((b) => ({ type: 'PHONE_NUMBER', text: clamp(b.text, 25), phone_number: b.phoneNumber.trim() })),
-    ]
-    if (metaButtons.length > 0) {
+    const quickReplies = buttons.filter(
+      (b): b is Extract<TemplateButton, { type: 'QUICK_REPLY' }> => b.type === 'QUICK_REPLY',
+    )
+    // Meta does not allow QUICK_REPLY buttons alongside URL/PHONE_NUMBER
+    // buttons in one BUTTONS component — it's one family or the other.
+    // If a caller somehow sent both (shouldn't happen — the UI enforces
+    // a single mode), quick replies win, since they're the newer/safer
+    // choice and silently dropping call-to-actions is less surprising
+    // than a 400 from Meta that doesn't say why.
+    if (quickReplies.length > 0) {
+      // Meta allows up to 10, but more than ~3 stops rendering well as
+      // tap targets on a phone screen, so the UI caps entry at 3.
+      const metaButtons = quickReplies
+        .slice(0, 10)
+        .map((b) => ({ type: 'QUICK_REPLY', text: clamp(b.text, 25) }))
       components.push({ type: 'BUTTONS', buttons: metaButtons })
+    } else {
+      // Meta's hard caps: at most 2 URL buttons and 1 phone-number button
+      // per template. Enforced here rather than trusted from the caller,
+      // same as the interactive-message limits above — a caller that
+      // exceeds it gets a working template with the extras dropped,
+      // instead of a 400 from Meta with no indication which button broke it.
+      const urlButtons = buttons.filter((b): b is Extract<TemplateButton, { type: 'URL' }> => b.type === 'URL').slice(0, 2)
+      const phoneButtons = buttons.filter((b): b is Extract<TemplateButton, { type: 'PHONE_NUMBER' }> => b.type === 'PHONE_NUMBER').slice(0, 1)
+      const metaButtons = [
+        ...urlButtons.map((b) => ({ type: 'URL', text: clamp(b.text, 25), url: b.url.trim() })),
+        ...phoneButtons.map((b) => ({ type: 'PHONE_NUMBER', text: clamp(b.text, 25), phone_number: b.phoneNumber.trim() })),
+      ]
+      if (metaButtons.length > 0) {
+        components.push({ type: 'BUTTONS', buttons: metaButtons })
+      }
     }
   }
 

@@ -21,6 +21,8 @@ const steps = [
   { label: 'Send', key: 'send' },
 ] as const;
 
+type RecencyFilterState = { preset?: '24h' | '7d' | '30d'; from?: string; to?: string };
+
 type AudienceState = {
   type: 'all' | 'tags' | 'custom_field' | 'csv';
   tagIds?: string[];
@@ -31,6 +33,8 @@ type AudienceState = {
   };
   csvContacts?: { phone: string; name?: string }[];
   excludeTagIds?: string[];
+  createdWithin?: RecencyFilterState;
+  lastSeenWithin?: RecencyFilterState;
 };
 
 type VariableState = Record<string, { type: 'static' | 'field' | 'custom_field'; value: string }>;
@@ -98,6 +102,8 @@ function NewBroadcastWizard() {
           customField: af.customField as AudienceState['customField'],
           csvContacts: af.csvContacts as AudienceState['csvContacts'],
           excludeTagIds: af.excludeTagIds as string[] | undefined,
+          createdWithin: af.createdWithin as AudienceState['createdWithin'],
+          lastSeenWithin: af.lastSeenWithin as AudienceState['lastSeenWithin'],
         });
         setVariables((data.template_variables as VariableState) ?? {});
         setCurrentStep(storedStep);
@@ -188,6 +194,8 @@ function NewBroadcastWizard() {
               customField: audience.customField,
               csvContacts: audience.csvContacts,
               excludeTagIds: audience.excludeTagIds,
+              createdWithin: audience.createdWithin,
+              lastSeenWithin: audience.lastSeenWithin,
             },
             variables,
             agentType: agentSelection.agentType,
@@ -211,6 +219,8 @@ function NewBroadcastWizard() {
             customField: audience.customField,
             csvContacts: audience.csvContacts,
             excludeTagIds: audience.excludeTagIds,
+            createdWithin: audience.createdWithin,
+            lastSeenWithin: audience.lastSeenWithin,
           },
           variables,
           agentType: agentSelection.agentType,

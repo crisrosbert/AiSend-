@@ -580,21 +580,50 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
   // ── Load tenant routing config ────────────────────────────────────
   const config = await loadRoutingConfig(tenantId)
 
+
+
+
+
+
+  
+    // ── Reconcile 'ecommerce' against the LIVE enabled flag ────────────
+  //
+  // The column that actually gates the ecommerce agent is
+  // ai_agent_configs.is_enabled — it's what the Settings page toggle
+  // writes and what engine.ts checks before replying. This used to
+  // query a different, dead column ('is_active', which nothing ever
+  // writes) AND only ran once, the first time a tenant was ever routed
+  // — after that, whatever active_agent_types ended up with (from
+  // agent_routing_config, persisted below) was trusted forever. So
+  // turning the ecommerce agent off in Settings *after* that first
+  // message did nothing: routing kept treating it as active and kept
+  // sending replies through it, even though the agent itself would have
+  // refused if it were ever actually asked. Checking the real flag here,
+  // on every call, is what lets a merchant's Settings toggle (or a
+  // direct DB edit to the right column) actually take effect.
+  const { data: ecommerceCfg } = await db()
+    .from('ai_agent_configs')
+    .select('id')
+    .eq('user_id', tenantId)
+    .eq('is_enabled', true)
+    .maybeSingle()
+  const ecommerceEnabled = !!ecommerceCfg
+  if (ecommerceEnabled && !config.active_agent_types.includes('ecommerce')) {
+    config.active_agent_types.push('ecommerce')
+  } else if (!ecommerceEnabled) {
+    config.active_agent_types = config.active_agent_types.filter((t) => t !== 'ecommerce')
+  }
+
   // If the tenant has no routing config, check if they have the old-style
   // whatsapp_agent_id or ecommerce agent — build a fallback config.
   if (config.active_agent_types.length === 0) {
-    // Auto-detect: check if ecommerce agent is configured
-    const { data: aiConfig } = await db()
-      .from('ai_agent_configs')
-      .select('id')
-      .eq('user_id', tenantId)
-      .eq('is_active', true)
-      .maybeSingle()
+    // Check for general agents
 
-    if (aiConfig) {
-      config.active_agent_types.push('ecommerce')
-    }
 
+
+
+
+    
     // Check for general agents
     const { data: agents } = await db()
       .from('agents')

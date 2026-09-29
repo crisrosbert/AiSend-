@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
@@ -165,6 +165,8 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
   const [state, setState] = useState<BuilderInitial>(initial)
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [nameError, setNameError] = useState(false)
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   function patchTop<K extends keyof BuilderInitial>(key: K, value: BuilderInitial[K]) {
     setState((s) => ({ ...s, [key]: value }))
@@ -196,10 +198,22 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
   }
 
   async function save() {
+    // Previously this silently fell back to "Untitled automation" when the
+    // name field was left blank, which is exactly how the rules list ended
+    // up with several indistinguishable "Untitled automation" rows (the
+    // audit flagged duplicate/blank-named cards as a High-severity issue).
+    // Require a real name instead of quietly inventing one.
+    if (!state.name.trim()) {
+      setNameError(true)
+      nameInputRef.current?.focus()
+      toast.error("Give this rule a name before saving")
+      return
+    }
+    setNameError(false)
     setSaving(true)
     try {
       const payload = {
-        name: state.name || "Untitled automation",
+        name: state.name.trim(),
         description: state.description || null,
         trigger_type: state.trigger_type,
         trigger_config: state.trigger_config,
@@ -259,10 +273,17 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <input
+          ref={nameInputRef}
           value={state.name}
-          onChange={(e) => patchTop("name", e.target.value)}
-          placeholder="Untitled automation"
-          className="min-w-0 flex-1 rounded-md bg-transparent px-2 py-1 text-sm font-semibold text-white placeholder:text-slate-500 focus:bg-slate-800 focus:outline-none sm:text-base"
+          onChange={(e) => {
+            patchTop("name", e.target.value)
+            if (nameError && e.target.value.trim()) setNameError(false)
+          }}
+          placeholder="Name this rule…"
+          aria-invalid={nameError}
+          className={`min-w-0 flex-1 rounded-md bg-transparent px-2 py-1 text-sm font-semibold text-white placeholder:text-slate-500 focus:bg-slate-800 focus:outline-none sm:text-base ${
+            nameError ? "ring-1 ring-red-500 placeholder:text-red-400" : ""
+          }`}
         />
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <span className="hidden sm:inline">Active</span>

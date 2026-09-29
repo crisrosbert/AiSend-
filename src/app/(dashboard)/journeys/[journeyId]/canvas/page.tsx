@@ -16,6 +16,7 @@ import {
   Zap, MessageSquare, Image as ImageIcon, List as ListIcon, BookOpen,
   Package, Boxes, FileText, UserCheck, TrendingUp, GitBranch, Webhook,
   Tag, Loader2, Power, PowerOff, X, Brain, Settings as SettingsIcon, History,
+  Layers,
 } from "lucide-react";
 import { NODE_CATALOG, type Journey, type JourneyStatus, type NodeType, type Trigger } from "@/types/journey";
 import { useScopedBusinessId } from "@/hooks/use-business";
@@ -133,6 +134,13 @@ function CanvasInner() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  // The left step palette used to be a permanently-visible 240px column
+  // with no way to hide it — fine at desktop widths, but on a phone
+  // (~375px) it alone ate most of the screen and left no room for the
+  // canvas. It's now an overlay drawer below the `md` breakpoint,
+  // closed by default, and stays exactly as it was (a static sidebar)
+  // at `md` and above.
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [sendOpen, setSendOpen] = useState(true);
@@ -457,8 +465,17 @@ function CanvasInner() {
 
         {/* Command button matrix */}
         <div className="flex items-center gap-2">
+          {/* Mobile-only: opens the step palette as a drawer (see paletteOpen
+              below) — at md+ the palette is already visible as a sidebar,
+              so this button is hidden there. */}
+          <button
+            onClick={() => setPaletteOpen(true)}
+            className="flex md:hidden items-center gap-1.5 rounded-xl border border-[#e7ece9] bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-slate-300 transition-all shadow-xs"
+          >
+            <Layers className="size-3.5" /> Steps
+          </button>
           <button onClick={() => setAiPanelOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-white px-3.5 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-all shadow-xs">
-            <Sparkles className="size-3.5" /> Dry-Run Sandbox
+            <Sparkles className="size-3.5" /> <span className="hidden sm:inline">Dry-Run Sandbox</span><span className="sm:hidden">Sandbox</span>
           </button>
           <button
             onClick={toggleStatus}
@@ -467,7 +484,8 @@ function CanvasInner() {
             }`}
           >
             {isLive ? <Power className="size-3.5" /> : <PowerOff className="size-3.5" />}
-            {isLive ? "Status: Live" : "Status: Draft"}
+            <span className="hidden sm:inline">{isLive ? "Status: Live" : "Status: Draft"}</span>
+            <span className="sm:hidden">{isLive ? "Live" : "Draft"}</span>
           </button>
           <button
             onClick={handleSave}
@@ -476,20 +494,41 @@ function CanvasInner() {
             style={{ background: "linear-gradient(135deg,#10b981,#059669)", boxShadow: "0 4px 12px rgba(16,185,129,.2)" }}
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-            Save Changes
+            <span className="hidden sm:inline">Save Changes</span>
+            <span className="sm:hidden">Save</span>
           </button>
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* LEFT PALETTE PANEL */}
-        <aside className="w-60 border-r border-[#e7ece9] bg-white flex flex-col shrink-0">
-          <div className="p-3 border-b border-slate-50 bg-slate-50/50">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile-only backdrop behind the palette drawer — tapping it
+            closes the drawer, same as the sandbox's backdrop below. */}
+        {paletteOpen && (
+          <div
+            className="fixed inset-0 z-20 bg-black/30 md:hidden"
+            onClick={() => setPaletteOpen(false)}
+          />
+        )}
+
+        {/* LEFT PALETTE PANEL — a static sidebar at md+ (unchanged from
+            before), a slide-in overlay drawer below md, closed by default
+            so it doesn't eat the whole screen on a phone. */}
+        <aside
+          className={`${paletteOpen ? "flex" : "hidden"} md:flex fixed md:static inset-y-0 left-0 z-30 w-72 md:w-60 border-r border-[#e7ece9] bg-white flex-col shrink-0`}
+        >
+          <div className="flex items-center justify-between p-3 border-b border-slate-50 bg-slate-50/50">
             <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Automation Steps</h3>
+            <button
+              onClick={() => setPaletteOpen(false)}
+              className="md:hidden rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Close panel"
+            >
+              <X className="size-4" />
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto p-2.5 space-y-1">
-            <PaletteGroup label="Send" open={sendOpen} setOpen={setSendOpen} items={sendNodes} onAdd={addNodeOfType} />
-            <PaletteGroup label="Do" open={doOpen} setOpen={setDoOpen} items={doNodes} onAdd={addNodeOfType} />
+            <PaletteGroup label="Send" open={sendOpen} setOpen={setSendOpen} items={sendNodes} onAdd={(t) => { addNodeOfType(t); setPaletteOpen(false); }} />
+            <PaletteGroup label="Do" open={doOpen} setOpen={setDoOpen} items={doNodes} onAdd={(t) => { addNodeOfType(t); setPaletteOpen(false); }} />
           </div>
         </aside>
 
@@ -538,9 +577,19 @@ function CanvasInner() {
           )}
         </div>
 
-        {/* RIGHT DRAWER PANEL — LOGIC CONSOLE */}
+        {/* RIGHT DRAWER PANEL — LOGIC CONSOLE.
+            At md+ this behaves exactly as before (a static 320px column).
+            Below md it becomes a full-width overlay with a backdrop —
+            previously it was still a fixed 320px column even on a phone,
+            which on a ~375px screen left almost no room for anything
+            else and had no backdrop or way to dismiss it by tapping out. */}
         {aiPanelOpen && (
-          <aside className="w-80 shrink-0 overflow-y-auto border-l border-[#e7ece9] bg-white flex flex-col justify-between z-10">
+          <>
+            <div
+              className="fixed inset-0 z-20 bg-black/30 md:hidden"
+              onClick={() => setAiPanelOpen(false)}
+            />
+            <aside className="fixed md:static inset-y-0 right-0 z-30 w-full max-w-sm md:max-w-none md:w-80 shrink-0 overflow-y-auto border-l border-[#e7ece9] bg-white flex flex-col justify-between">
             <div className="border-b border-[#e7ece9] p-4 bg-slate-50/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -636,7 +685,8 @@ function CanvasInner() {
                 <Zap className="size-3.5" />
               </button>
             </div>
-          </aside>
+            </aside>
+          </>
         )}
       </div>
 

@@ -70,7 +70,7 @@ export function NodeConfigDrawer({ node, open, onClose, onSave, onDelete }: Node
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:max-w-md bg-white border-l border-[#e7ece9] overflow-y-auto">
-        <SheetHeader className="border-b border-[#e7ece9] pb-4">
+        <SheetHeader className="border-b border-[#e7ece9] px-6 pb-4">
           <div className="flex items-center gap-3">
             <div
               className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white"
@@ -89,7 +89,11 @@ export function NodeConfigDrawer({ node, open, onClose, onSave, onDelete }: Node
           </div>
         </SheetHeader>
 
-        <div className="space-y-4 py-5">
+        {/* px-6 matches the footer's own side padding below — without
+            it, fields ran flush to the panel's left/right edges while
+            the footer buttons stayed properly inset, which is exactly
+            the lopsided look that was flagged. */}
+        <div className="space-y-4 px-6 py-5">
           <NodeFormBody nodeType={nodeType} draft={draft} setDraft={setDraft} />
         </div>
 

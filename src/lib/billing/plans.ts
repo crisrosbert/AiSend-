@@ -21,6 +21,13 @@ export interface Plan {
   freeServiceConversations: number; // Meta gives 1000/mo free; you can cap lower per plan
 }
 
+// TODO(pricing): `starter` and `growth` below both currently price at
+// ₹1/month — that's test/placeholder data, not real pricing, and it's
+// what a real customer would see on the live Billing page right now
+// (flagged in the UI/UX audit as a High-severity trust issue). Left as
+// ₹1 intentionally rather than guessed at, since real pricing is a
+// business call, not a design fix — swap `priceMonthly`/`priceYearly`
+// for the real numbers before this plan list goes in front of customers.
 export const PLANS: Plan[] = [
   {
     id: 'free',
@@ -126,7 +133,12 @@ function pack(amount: number): CreditPack {
   };
 }
 
-export const CREDIT_PACKS: CreditPack[] = [5, 1, 25, 50].map(pack);
+// Ordered ascending and sized to actually reach the bonus tiers defined
+// above (from 1000 / 2500 / 5000) — the previous [5, 1, 25, 50] amounts
+// were unordered and too small to ever earn a bonus, which is why the
+// quick top-up buttons looked broken next to a wallet meant to hold
+// enough credit for real WhatsApp sending volume.
+export const CREDIT_PACKS: CreditPack[] = [500, 1000, 2500, 5000].map(pack);
 
 // Meta's approximate per-conversation cost in India (INR).
 // These are indicative — update from Meta's official rate card.

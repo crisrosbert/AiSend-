@@ -25,12 +25,43 @@ interface CustomFieldFilter {
   value: string;
 }
 
+/** A date-range refinement — either a quick preset or an explicit from/to. */
+export interface RecencyFilter {
+  preset?: '24h' | '7d' | '30d';
+  from?: string;
+  to?: string;
+}
+
 interface AudienceConfig {
   type: AudienceType;
   tagIds?: string[];
   customField?: CustomFieldFilter;
   csvContacts?: { phone: string; name?: string }[];
   excludeTagIds?: string[];
+  /** Only contacts created within this window — mirrors AiSensy's "Created At" filter. */
+  createdWithin?: RecencyFilter;
+  /** Only contacts with a conversation active within this window — mirrors AiSensy's "Last Seen" filter. */
+  lastSeenWithin?: RecencyFilter;
+}
+
+/** Turn a RecencyFilter into concrete from/to ISO bounds, or null if empty. */
+export function recencyBounds(f?: RecencyFilter): { from?: string; to?: string } | null {
+  if (!f) return null;
+  if (f.preset) {
+    const now = new Date();
+    const from = new Date(now);
+    if (f.preset === '24h') from.setDate(from.getDate() - 1);
+    else if (f.preset === '7d') from.setDate(from.getDate() - 7);
+    else from.setDate(from.getDate() - 30);
+    return { from: from.toISOString() };
+  }
+  if (f.from || f.to) {
+    return {
+      from: f.from ? new Date(f.from).toISOString() : undefined,
+      to: f.to ? new Date(new Date(f.to).getTime() + 24 * 60 * 60 * 1000 - 1).toISOString() : undefined,
+    };
+  }
+  return null;
 }
 
 interface Step2Props {
@@ -277,25 +308,62 @@ export function Step2SelectAudience({
         excludeSet = new Set((excludeRows ?? []).map((r) => r.contact_id));
       }
 
+      // Opted-out contacts are never sent to (enforced again, unconditionally,
+      // at actual send time) — subtracting them here too keeps this estimate
+      // honest instead of promising a reach the send won't deliver.
+      const { data: optedOutRows } = await supabase
+        .from('contacts')
+        .select('id')
+        .not('opted_out_at', 'is', null);
+      const optedOutSet = new Set((optedOutRows ?? []).map((r) => r.id));
+
+      // "Created At" — contacts.created_at within the chosen window.
+      let createdSet: Set<string> | null = null;
+      const createdBounds = recencyBounds(audience.createdWithin);
+      if (createdBounds) {
+        let q = supabase.from('contacts').select('id');
+        if (createdBounds.from) q = q.gte('created_at', createdBounds.from);
+        if (createdBounds.to) q = q.lte('created_at', createdBounds.to);
+        const { data } = await q;
+        createdSet = new Set((data ?? []).map((r) => r.id));
+      }
+
+      // "Last Seen" — via conversations.last_message_at, the closest
+      // thing this schema has to "when did we last hear from them".
+      let lastSeenSet: Set<string> | null = null;
+      const lastSeenBounds = recencyBounds(audience.lastSeenWithin);
+      if (lastSeenBounds) {
+        let q = supabase.from('conversations').select('contact_id');
+        if (lastSeenBounds.from) q = q.gte('last_message_at', lastSeenBounds.from);
+        if (lastSeenBounds.to) q = q.lte('last_message_at', lastSeenBounds.to);
+        const { data } = await q;
+        lastSeenSet = new Set((data ?? []).map((r) => r.contact_id));
+      }
+
+      const passesFilters = (id: string) =>
+        !excludeSet?.has(id) &&
+        !optedOutSet.has(id) &&
+        (!createdSet || createdSet.has(id)) &&
+        (!lastSeenSet || lastSeenSet.has(id));
+
       if (baseIds) {
-        const effective = [...baseIds].filter(
-          (id) => !excludeSet?.has(id),
-        );
+        const effective = [...baseIds].filter(passesFilters);
         setEstimatedCount(effective.length);
       } else {
-        // "All" — fetch the total, then subtract exclude set if any.
-        // A broadcast goes out from one business. Counting the whole
-        // account here would promise a reach the send will not deliver.
+        // "All" — fetch every contact id for this business, then apply
+        // the same filters client-side. A broadcast goes out from one
+        // business, so scoping to it (not the whole account) is what
+        // keeps this estimate honest.
         if (!businessId) { setEstimatedCount(null); return; }
-        const { count } = await supabase
+        const { data } = await supabase
           .from('contacts')
-          .select('*', { count: 'exact', head: true })
+          .select('id')
           .eq('business_id', businessId)
           // Website widget visitors have no real WhatsApp number
           // ("web_..." placeholder) — a broadcast can't reach them.
           .not('phone', 'ilike', 'web%');
-        const total = count ?? 0;
-        setEstimatedCount(excludeSet ? Math.max(0, total - excludeSet.size) : total);
+        const ids = (data ?? []).map((r) => r.id);
+        setEstimatedCount(ids.filter(passesFilters).length);
       }
     } finally {
       setLoadingCount(false);
@@ -307,6 +375,8 @@ export function Step2SelectAudience({
     audience.customField,
     audience.csvContacts,
     audience.excludeTagIds,
+    audience.createdWithin,
+    audience.lastSeenWithin,
   ]);
 
   useEffect(() => {
@@ -336,6 +406,15 @@ export function Step2SelectAudience({
       value: '',
     };
     onUpdate({ ...audience, customField: { ...prev, ...patch } });
+  }
+
+  function updateRecency(key: 'createdWithin' | 'lastSeenWithin', patch: Partial<RecencyFilter>) {
+    const prev = audience[key] ?? {};
+    onUpdate({ ...audience, [key]: { ...prev, ...patch } });
+  }
+
+  function clearRecency(key: 'createdWithin' | 'lastSeenWithin') {
+    onUpdate({ ...audience, [key]: undefined });
   }
 
   const isValid =
@@ -565,6 +644,80 @@ export function Step2SelectAudience({
           )}
         </div>
       )}
+
+      {/* Recency filters — apply on top of whatever audience type is
+          selected, same as the exclude list below. */}
+      <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+        <div>
+          <p className="text-sm font-medium text-white">Recency</p>
+          <p className="text-xs text-slate-400">
+            Narrow to contacts who joined or were last active recently — optional, and safe to combine.
+          </p>
+        </div>
+
+        {([
+          { key: 'createdWithin' as const, label: 'Created At' },
+          { key: 'lastSeenWithin' as const, label: 'Last Seen' },
+        ]).map(({ key, label }) => {
+          const value = audience[key];
+          return (
+            <div key={key} className="space-y-2">
+              <p className="text-xs font-medium text-slate-300">{label}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  { preset: '24h' as const, label: 'In 24hr' },
+                  { preset: '7d' as const, label: 'This Week' },
+                  { preset: '30d' as const, label: 'This Month' },
+                ]).map((p) => (
+                  <button
+                    key={p.preset}
+                    onClick={() => updateRecency(key, { preset: p.preset, from: undefined, to: undefined })}
+                    className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-all ${
+                      value?.preset === p.preset
+                        ? 'border-violet-500/30 bg-violet-500/10 text-violet-300'
+                        : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+                <input
+                  type="date"
+                  value={value?.from ?? ''}
+                  onChange={(e) => updateRecency(key, { preset: undefined, from: e.target.value })}
+                  className="h-7 rounded-md border border-slate-700 bg-slate-800 px-2 text-xs text-white outline-none focus:border-violet-500"
+                />
+                <span className="text-xs text-slate-500">to</span>
+                <input
+                  type="date"
+                  value={value?.to ?? ''}
+                  onChange={(e) => updateRecency(key, { preset: undefined, to: e.target.value })}
+                  className="h-7 rounded-md border border-slate-700 bg-slate-800 px-2 text-xs text-white outline-none focus:border-violet-500"
+                />
+                {value && (
+                  <button
+                    onClick={() => clearRecency(key)}
+                    className="text-xs text-slate-500 hover:text-red-400"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Opted-out contacts are always excluded — not a toggle, so this
+          can't be left off by accident. AiSensy makes you remember to
+          set "Opted In: Yes"; here it's just how sends work. */}
+      <div className="flex items-start gap-2 rounded-xl border border-emerald-900/40 bg-emerald-500/5 p-3">
+        <Users className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+        <p className="text-xs text-emerald-300">
+          Contacts who&apos;ve opted out are automatically excluded from every send — this isn&apos;t a
+          setting you can leave off by mistake.
+        </p>
+      </div>
 
       {/* Exclude list — applies regardless of audience type */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">

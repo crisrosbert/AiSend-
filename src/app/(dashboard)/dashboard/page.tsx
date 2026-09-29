@@ -12,8 +12,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { loadMetrics, loadActivity, loadConversationsSeries } from "@/lib/dashboard/queries";
+import { loadMetrics, loadActivity, loadConversationsSeries, loadMessagingQuotaUsage } from "@/lib/dashboard/queries";
 import type { MetricsBundle, ActivityItem, ConversationsSeriesPoint } from "@/lib/dashboard/types";
+import { describeMessagingTier, quotaStatus } from "@/lib/whatsapp/messaging-tier";
 import { WalletBalanceCard } from "@/components/dashboard/wallet-balance-card";
 import { PromoSection } from "@/components/dashboard/promo-section";
 import { ReferralConsumer } from "@/components/dashboard/referral-capture";
@@ -38,6 +39,7 @@ interface WaConfigState {
     display_phone_number?: string;
     verified_name?: string;
     quality_rating?: string;
+    messaging_limit_tier?: string;
   };
 }
 
@@ -78,6 +80,9 @@ export default function DashboardPage() {
   // null = still loading. Distinguishing "loading" from "not connected"
   // matters: we must never flash a wrong status to the user.
   const [waConfig, setWaConfig] = useState<WaConfigState | null>(null);
+  // null = not loaded yet. Used to compute "Remaining Quota" against
+  // the real tier ceiling instead of showing a static number.
+  const [quotaUsed24h, setQuotaUsed24h] = useState<number | null>(null);
 
   useEffect(() => {
     // Wait for the business before asking for numbers. Loading the
@@ -89,6 +94,9 @@ export default function DashboardPage() {
     void loadMetrics(db, businessId).then(setMetrics).catch(console.error).finally(() => setLoading(false));
     void loadActivity(db, 6, businessId).then(setActivity).catch(console.error);
     void loadConversationsSeries(db, 7, businessId).then(setSeries).catch(console.error);
+    void loadMessagingQuotaUsage(db, businessId)
+      .then((q) => setQuotaUsed24h(q.uniqueRecipients24h))
+      .catch(console.error);
     // Fetch THIS user's WhatsApp config. The API route scopes by user_id,
     // so a new tenant with no config correctly gets { connected: false }.
     void fetch("/api/whatsapp/config")
@@ -108,6 +116,8 @@ export default function DashboardPage() {
   const waConnected = waConfig?.connected === true;
   const waPhone = waConfig?.phone_info?.display_phone_number;
   const waQuality = waConfig?.phone_info?.quality_rating;
+  const tierInfo = describeMessagingTier(waConfig?.phone_info?.messaging_limit_tier);
+  const quota = tierInfo ? quotaStatus(quotaUsed24h ?? 0, tierInfo.limit) : null;
 
   const incomingSpark = series?.map((s) => s.incoming) ?? [];
   const outgoingSpark = series?.map((s) => s.outgoing) ?? [];
@@ -171,16 +181,51 @@ export default function DashboardPage() {
               </span>
             </div>
             <div className="cwa-stat">
-              <span className="cwa-stat-label">Messaging Limit</span>
-              {/* Meta doesn't expose the tier here; show a dash until connected
-                  rather than inventing a number the user may rely on. */}
-              <span className="cwa-stat-big">{waConnected ? "1K" : "—"}</span>
+              <span className="cwa-stat-label">Messaging Tier</span>
+              {/* Meta's real messaging_limit_tier for this number — was
+                  hardcoded to "1K" for every connected tenant before. */}
+              <span className="cwa-stat-big">{tierInfo ? `${tierInfo.label} (${tierInfo.limitDisplay}/24h)` : "—"}</span>
+            </div>
+            <div className="cwa-stat">
+              <span className="cwa-stat-label">Remaining Quota</span>
+              <span className={`cwa-stat-big ${quota?.isNearLimit ? "cwa-stat-warn" : ""}`}>
+                {quota
+                  ? quota.remaining === null
+                    ? "Unlimited"
+                    : quota.remaining.toLocaleString()
+                  : "—"}
+              </span>
             </div>
             <div className="cwa-stat">
               <span className="cwa-stat-label">Messages Today</span>
               <span className="cwa-stat-big">{metrics?.messagesSentToday.current ?? 0}</span>
             </div>
           </div>
+
+          {/* Proactive warning as the tier ceiling approaches — AiSensy
+              only ever shows the raw number and leaves you to notice.
+              Only rendered once real usage data has loaded, so a fresh
+              page load never flashes a false alarm. */}
+          {quota?.isNearLimit && quota.limit !== null && (
+            <div className="cwa-fade cwa-d2" style={{
+              display: "flex", alignItems: "flex-start", gap: 10,
+              borderRadius: 12, border: "1px solid #f5c451",
+              background: "#fff7e6", padding: "12px 14px", marginTop: 12,
+            }}>
+              <AlertCircle size={18} style={{ color: "#b45309", flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <p style={{ fontWeight: 600, color: "#92400e", fontSize: 14 }}>
+                  Approaching your messaging limit
+                </p>
+                <p style={{ color: "#92400e", fontSize: 13, marginTop: 2 }}>
+                  You&apos;ve messaged {quota.used.toLocaleString()} of {quota.limit.toLocaleString()} unique
+                  contacts allowed in the last 24 hours ({Math.round((quota.pctUsed ?? 0) * 100)}%). New sends
+                  may start failing once you hit the ceiling — consider pacing large campaigns, or wait for
+                  the window to roll forward.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="cwa-card cwa-steps-card cwa-fade cwa-d3">
             <div className="cwa-steps-head"><Crown size={20} className="cwa-bag" /><h3>Complete the steps &amp; win 200 Conversation Credits</h3></div>
@@ -427,7 +472,8 @@ const cssStyles = `
 .cwa-left,.cwa-right{display:flex;flex-direction:column;gap:14px}
 @media(min-width:640px){.cwa-left,.cwa-right{gap:16px}}
 .cwa-stats{display:grid;grid-template-columns:repeat(2,1fr);padding:16px 18px;gap:14px}
-@media(min-width:560px){.cwa-stats{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:560px){.cwa-stats{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:860px){.cwa-stats{grid-template-columns:repeat(5,1fr)}}
 .cwa-stat{display:flex;flex-direction:column;gap:6px}
 .cwa-stat-label{font-size:11.5px;color:var(--muted);font-weight:600}
 .cwa-badge{font-size:10px;font-weight:800;padding:4px 9px;border-radius:7px;width:max-content}
@@ -435,6 +481,7 @@ const cssStyles = `
 .cwa-badge-red{background:#fef2f2;color:#dc2626}
 .cwa-badge-muted{background:#f1f5f9;color:#64748b}
 .cwa-stat-big{font-family:"Sora";font-size:22px;font-weight:800}
+.cwa-stat-warn{color:#b45309}
 .cwa-steps-card{padding:18px 16px;background:linear-gradient(135deg,var(--brand-deep),var(--brand-press));color:#fff;border:none}
 @media(min-width:480px){.cwa-steps-card{padding:20px 22px}}
 .cwa-steps-head{display:flex;align-items:flex-start;gap:9px;margin-bottom:16px}

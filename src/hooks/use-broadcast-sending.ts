@@ -13,12 +13,41 @@ export interface CustomFieldFilter {
   value: string;
 }
 
+export interface RecencyFilter {
+  preset?: '24h' | '7d' | '30d';
+  from?: string;
+  to?: string;
+}
+
+/** Mirrors recencyBounds() in step2-select-audience.tsx — kept in sync so
+ *  the estimate shown in the wizard matches what actually gets sent. */
+function recencyBounds(f?: RecencyFilter): { from?: string; to?: string } | null {
+  if (!f) return null;
+  if (f.preset) {
+    const now = new Date();
+    const from = new Date(now);
+    if (f.preset === '24h') from.setDate(from.getDate() - 1);
+    else if (f.preset === '7d') from.setDate(from.getDate() - 7);
+    else from.setDate(from.getDate() - 30);
+    return { from: from.toISOString() };
+  }
+  if (f.from || f.to) {
+    return {
+      from: f.from ? new Date(f.from).toISOString() : undefined,
+      to: f.to ? new Date(new Date(f.to).getTime() + 24 * 60 * 60 * 1000 - 1).toISOString() : undefined,
+    };
+  }
+  return null;
+}
+
 export interface AudienceConfig {
   type: 'all' | 'tags' | 'custom_field' | 'csv';
   tagIds?: string[];
   customField?: CustomFieldFilter;
   csvContacts?: { phone: string; name?: string }[];
   excludeTagIds?: string[];
+  createdWithin?: RecencyFilter;
+  lastSeenWithin?: RecencyFilter;
 }
 
 export type VariableMapping =
@@ -179,6 +208,33 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         .in('tag_id', audience.excludeTagIds);
       const excludedIds = new Set((excludeRows ?? []).map((r) => r.contact_id));
       contacts = contacts.filter((c) => !excludedIds.has(c.id));
+    }
+
+    // Apply "Created At" recency filter — same bounds as the wizard's
+    // estimate, so what actually sends matches what was previewed.
+    const createdBounds = recencyBounds(audience.createdWithin);
+    if (createdBounds) {
+      contacts = contacts.filter((c) => {
+        const createdAt = (c as unknown as { created_at?: string }).created_at;
+        if (!createdAt) return false;
+        if (createdBounds.from && createdAt < createdBounds.from) return false;
+        if (createdBounds.to && createdAt > createdBounds.to) return false;
+        return true;
+      });
+    }
+
+    // Apply "Last Seen" recency filter, via conversations.last_message_at.
+    const lastSeenBounds = recencyBounds(audience.lastSeenWithin);
+    if (lastSeenBounds && contacts.length > 0) {
+      let q = supabase
+        .from('conversations')
+        .select('contact_id, last_message_at')
+        .in('contact_id', contacts.map((c) => c.id));
+      if (lastSeenBounds.from) q = q.gte('last_message_at', lastSeenBounds.from);
+      if (lastSeenBounds.to) q = q.lte('last_message_at', lastSeenBounds.to);
+      const { data: activeRows } = await q;
+      const activeIds = new Set((activeRows ?? []).map((r) => r.contact_id));
+      contacts = contacts.filter((c) => activeIds.has(c.id));
     }
 
     // ── OPT-OUT FILTER ─────────────────────────────────────────────

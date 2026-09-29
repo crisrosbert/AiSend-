@@ -20,6 +20,9 @@ import {
 import { NODE_CATALOG, type Journey, type JourneyStatus, type NodeType, type Trigger } from "@/types/journey";
 import { useScopedBusinessId } from "@/hooks/use-business";
 import { NodeConfigDrawer } from "../../node-config-drawer";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger as UiSelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   MessageSquare, Image: ImageIcon, List: ListIcon, BookOpen, Package, Boxes, FileText,
@@ -37,28 +40,28 @@ function TriggerNode({ data }: NodeProps) {
   const t = (data?.trigger as Trigger) ?? { type: "keyword", keywords: [] };
   return (
     <div
-      className="relative rounded-xl border-2 px-5 py-3 shadow-md text-white cursor-pointer transition-all hover:shadow-lg"
+      className="relative overflow-hidden rounded-xl px-4 py-3 text-white cursor-pointer transition-all"
       style={{
-        minWidth: 220,
+        width: 230,
         background: "linear-gradient(135deg,#10b981,#059669)",
-        borderColor: "#047857",
+        boxShadow: "0 1px 2px rgba(4,120,87,.15), 0 8px 20px -6px rgba(4,120,87,.45)",
       }}
     >
-      <div className="flex items-center gap-2">
-        <div className="flex size-7 items-center justify-center rounded-lg bg-white/20">
+      <div className="flex items-center gap-2.5">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-white/15">
           <Zap className="size-3.5" />
         </div>
-        <div>
-          <div className="text-[9px] font-bold uppercase tracking-wider opacity-80">Trigger Node</div>
-          <div className="text-sm font-bold leading-tight">
-            {t.type === "keyword" && (t.keywords?.length ? `Keywords: ${t.keywords.join(", ")}` : "Set up keywords")}
+        <div className="min-w-0">
+          <div className="text-[9px] font-bold uppercase tracking-wider text-white/70">Trigger</div>
+          <div className="text-xs font-bold leading-tight truncate">
+            {t.type === "keyword" && (t.keywords?.length ? `Keyword: ${t.keywords.join(", ")}` : "Set up keywords")}
             {t.type === "regex" && "Regex pattern"}
             {t.type === "template_start" && "Template start"}
             {t.type === "ad_click" && "Ad click"}
           </div>
         </div>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white !bg-emerald-600" />
+      <Handle type="source" position={Position.Bottom} className="!h-2 !w-2 !border-2 !border-white !bg-emerald-600" />
     </div>
   );
 }
@@ -70,36 +73,42 @@ function StepNode({ data }: NodeProps) {
   const hasData = data && Object.keys(data).filter((k) => k !== "nodeType" && k !== "preview").length > 0;
   return (
     <div
-      className="relative rounded-xl border bg-white shadow-sm transition-all hover:shadow-md cursor-pointer"
-      style={{ minWidth: 200, borderColor: `${accent}40` }}
+      className="relative overflow-hidden rounded-xl border bg-white transition-all hover:shadow-md cursor-pointer"
+      style={{
+        width: 210,
+        borderColor: "#e7ece9",
+        boxShadow: "0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06)",
+      }}
     >
-      <span className="absolute left-0 right-0 top-0 h-[3px] rounded-t-xl" style={{ background: accent }} />
-      <Handle type="target" position={Position.Top} className="!h-2.5 !w-2.5 !border-2 !border-white" style={{ background: accent }} />
-      <div className="px-4 py-3">
-        <div className="flex items-center gap-2.5">
+      {/* A slim left rail carries the category color instead of a
+          full-width top band — reads as an accent, not a color block. */}
+      <span className="absolute left-0 top-0 h-full w-[3px]" style={{ background: accent }} />
+      <Handle type="target" position={Position.Top} className="!h-2 !w-2 !border-2 !border-white" style={{ background: accent }} />
+      <div className="py-2.5 pl-4 pr-3">
+        <div className="flex items-center gap-2">
           <div
-            className="flex size-7 items-center justify-center rounded-lg text-white shrink-0"
-            style={{ background: `linear-gradient(135deg,${accent},${accent}dd)` }}
+            className="flex size-6 shrink-0 items-center justify-center rounded-md text-white"
+            style={{ background: accent }}
           >
-            <Icon className="size-3.5" />
+            <Icon className="size-3" />
           </div>
           <div className="min-w-0">
-            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
               {meta?.group ?? "Step"}
             </div>
             <div className="text-xs font-bold text-[#0c1f17] truncate">{meta?.label ?? "Node"}</div>
           </div>
         </div>
         {hasData && (
-          <div className="mt-2 text-[11px] text-slate-500 line-clamp-2 bg-slate-50 p-1.5 rounded border border-slate-100 font-medium">
+          <div className="mt-2 truncate rounded border border-slate-100 bg-slate-50 px-1.5 py-1 text-[11px] font-medium text-slate-500">
             {(data.text as string) || (data.caption as string) || (data.tagName as string) || (data.endpoint as string) || "Configured"}
           </div>
         )}
         {!hasData && (
-          <p className="mt-1.5 text-[11px] text-amber-600 font-medium animate-pulse">Click to configure →</p>
+          <p className="mt-1.5 text-[11px] font-medium text-amber-600">Click to configure →</p>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white" style={{ background: accent }} />
+      <Handle type="source" position={Position.Bottom} className="!h-2 !w-2 !border-2 !border-white" style={{ background: accent }} />
     </div>
   );
 }
@@ -468,8 +477,15 @@ function CanvasInner() {
           </div>
         </aside>
 
-        {/* CENTER CANVAS AREA */}
-        <div className="flex-1 relative bg-[#fcfdfe]">
+        {/* CENTER CANVAS AREA
+            min-w-0 is load-bearing here: a flex child won't shrink below
+            its content's natural width without it, so when the palette
+            (240px) and the Dry-Run Sandbox (320px) are both open, this
+            pane refused to shrink and ReactFlow's minimap/controls on
+            its right edge got pushed past the viewport and clipped by
+            the parent's overflow-hidden — the "right side is cutting"
+            symptom. */}
+        <div className="min-w-0 flex-1 relative bg-[#fcfdfe]">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -698,16 +714,20 @@ function TriggerConfigDrawer({
           <div className="p-6 space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-600">Trigger Type Rule</label>
-              <select
+              <Select
                 value={draft.type}
-                onChange={(e) => setDraft({ ...draft, type: e.target.value as Trigger["type"] })}
-                className="w-full rounded-xl border border-[#e7ece9] bg-white p-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none"
+                onValueChange={(v) => v && setDraft({ ...draft, type: v as Trigger["type"] })}
               >
-                <option value="keyword">Keyword match</option>
-                <option value="regex">Regex pattern</option>
-                <option value="template_start">Template-initiated</option>
-                <option value="ad_click">Ad click (Click-to-WhatsApp)</option>
-              </select>
+                <UiSelectTrigger className="w-full rounded-xl border border-[#e7ece9] bg-white p-2.5 h-auto text-xs text-slate-800 focus:border-emerald-500">
+                  <SelectValue />
+                </UiSelectTrigger>
+                <SelectContent>
+                  <SelectItem value="keyword">Keyword match</SelectItem>
+                  <SelectItem value="regex">Regex pattern</SelectItem>
+                  <SelectItem value="template_start">Template-initiated</SelectItem>
+                  <SelectItem value="ad_click">Ad click (Click-to-WhatsApp)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {draft.type === "keyword" && (

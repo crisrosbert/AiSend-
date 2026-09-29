@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { NODE_CATALOG, type Journey, type JourneyStatus, type NodeType, type Trigger } from "@/types/journey";
 import { useScopedBusinessId } from "@/hooks/use-business";
+import { NodeConfigDrawer } from "../../node-config-drawer";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   MessageSquare, Image: ImageIcon, List: ListIcon, BookOpen, Package, Boxes, FileText,
@@ -605,8 +606,10 @@ function CanvasInner() {
         )}
       </div>
 
-      {/* Node Configuration Drawer sheet mapping options overlay */}
-      <InlineDrawerOverlayConfig node={selectedNode} open={!!selectedNode} onClose={() => setSelectedNode(null)} onSave={updateNodeData} />
+      {/* Node Configuration Drawer — per-node-type form (media URL, list
+          sections, catalog/product IDs, condition operators, etc.) rather
+          than a single generic text box for every step type. */}
+      <NodeConfigDrawer node={selectedNode} open={!!selectedNode} onClose={() => setSelectedNode(null)} onSave={updateNodeData} />
 
       {triggerOpen && (
         <TriggerConfigDrawer open={triggerOpen} trigger={journey.trigger} onClose={() => setTriggerOpen(false)} onSave={(t) => { updateTrigger(t); setTriggerOpen(false); }} />
@@ -762,132 +765,6 @@ function TriggerConfigDrawer({
         <div className="border-t border-[#e7ece9] bg-white px-6 py-3.5 flex justify-end gap-2 shrink-0">
           <button onClick={onClose} className="rounded-xl border border-[#e7ece9] bg-white px-3.5 h-9 text-xs font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
           <button onClick={() => onSave(draft)} className="flex items-center gap-1.5 rounded-xl h-9 px-4 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm">Save Trigger Profile</button>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-function InlineDrawerOverlayConfig({
-  node, open, onClose, onSave,
-}: {
-  node: Node | null; open: boolean;
-  onClose: () => void; onSave: (nodeId: string, data: Record<string, unknown>) => void;
-}) {
-  const [text, setText] = useState("");
-  const [tagName, setTagName] = useState("");
-  const [endpoint, setEndpoint] = useState("");
-  const [method, setMethod] = useState("POST");
-  // Reset fields when a different node is selected — done during
-  // render (React's recommended pattern) instead of via an effect.
-  const [prevNodeId, setPrevNodeId] = useState<string | null>(null);
-  if (node && node.id !== prevNodeId) {
-    setPrevNodeId(node.id);
-    setText((node.data?.text as string) || "");
-    setTagName((node.data?.tagName as string) || "");
-    setEndpoint((node.data?.endpoint as string) || "");
-    setMethod((node.data?.method as string) || "POST");
-  }
-
-  if (!open || !node) return null;
-
-  const nodeType = node.data?.nodeType as NodeType;
-
-  const handleSave = () => {
-    if (nodeType === "TAG_CONTACT") {
-      onSave(node.id, { tagName });
-    } else if (nodeType === "WEBHOOK_CALL") {
-      onSave(node.id, { endpoint, method });
-    } else {
-      onSave(node.id, { text });
-    }
-    toast.success("Node parameters configured successfully");
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-xs" />
-      <aside
-        className="relative w-full max-w-md overflow-y-auto bg-white border-l border-[#e7ece9] shadow-2xl flex flex-col justify-between"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div>
-          <div className="border-b border-[#e7ece9] px-6 py-4 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-bold text-[#0c1f17]">Configure Action Node</h3>
-              <p className="text-xs text-slate-400">Set Up Content Metrics & Variable Rules</p>
-            </div>
-            <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
-              <X className="size-4" />
-            </button>
-          </div>
-
-          <div className="p-6 space-y-4">
-            {nodeType === "TAG_CONTACT" && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600">CRM Profile Tag Name</label>
-                <input
-                  type="text"
-                  value={tagName}
-                  onChange={(e) => setTagName(e.target.value)}
-                  placeholder="e.g. interested, warm-lead, premium"
-                  className="w-full rounded-xl border border-[#e7ece9] bg-white p-3 text-xs text-slate-800 outline-none focus:border-emerald-500"
-                />
-              </div>
-            )}
-
-            {nodeType === "WEBHOOK_CALL" && (
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600">HTTP Method</label>
-                  <select 
-                    value={method} 
-                    onChange={(e) => setMethod(e.target.value)}
-                    className="w-full rounded-xl border border-[#e7ece9] bg-white p-2.5 text-xs outline-none focus:border-emerald-500"
-                  >
-                    <option value="GET">GET</option>
-                    <option value="POST">POST</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600">API Endpoint URL</label>
-                  <input
-                    type="text"
-                    value={endpoint}
-                    onChange={(e) => setEndpoint(e.target.value)}
-                    placeholder="https://api.yourstore.com/webhook/orders"
-                    className="w-full rounded-xl border border-[#e7ece9] bg-white p-3 text-xs text-slate-800 outline-none focus:border-emerald-500 font-mono"
-                  />
-                </div>
-              </div>
-            )}
-
-            {nodeType !== "TAG_CONTACT" && nodeType !== "WEBHOOK_CALL" && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600">Message Content (Text Body)</label>
-                <textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Type the message automation block payload here..."
-                  rows={5}
-                  className="w-full rounded-xl border border-[#e7ece9] bg-white p-3 text-xs text-slate-800 outline-none focus:border-emerald-500"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="border-t border-[#e7ece9] bg-white px-6 py-3 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm"
-          >
-            <Save className="size-3.5" /> Save Configuration
-          </button>
         </div>
       </aside>
     </div>

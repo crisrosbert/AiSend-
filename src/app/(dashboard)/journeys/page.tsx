@@ -172,8 +172,15 @@ export default function JourneysPage() {
 
   const slotsPercent = Math.round((usage.journey_slots_used / Math.max(usage.journey_slots_limit, 1)) * 100);
   const creditsPercent = Math.round((usage.ai_credits_used / Math.max(usage.ai_credits_limit, 1)) * 100);
-  const slotsNearLimit = slotsPercent >= 80;
-  const creditsNearLimit = creditsPercent >= 80;
+  // Bar width is clamped to 100% below so it never overflows its track —
+  // but "over limit" (used > limit, e.g. 23/5 journeys) needs a visibly
+  // different treatment than merely "near limit" (e.g. 4/5), otherwise
+  // both render as the same full amber bar and a user can't tell whether
+  // they're about to hit the cap or have already blown well past it.
+  const slotsOverLimit = usage.journey_slots_used > usage.journey_slots_limit;
+  const creditsOverLimit = usage.ai_credits_used > usage.ai_credits_limit;
+  const slotsNearLimit = !slotsOverLimit && slotsPercent >= 80;
+  const creditsNearLimit = !creditsOverLimit && creditsPercent >= 80;
 
   return (
     <div className="space-y-6">
@@ -212,6 +219,11 @@ export default function JourneysPage() {
                 </span>
                 <span className="text-sm text-slate-400">/ {usage.journey_slots_limit}</span>
                 <span className="ml-1 text-xs font-semibold text-slate-500">journeys</span>
+                {slotsOverLimit && (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+                    Over limit
+                  </span>
+                )}
                 {slotsNearLimit && <AlertCircle className="size-3.5 text-amber-500" />}
               </div>
               <div className="mt-1.5 h-1.5 w-40 overflow-hidden rounded-full bg-slate-200">
@@ -219,7 +231,11 @@ export default function JourneysPage() {
                   className="h-full rounded-full transition-all"
                   style={{
                     width: `${Math.min(slotsPercent, 100)}%`,
-                    background: slotsNearLimit ? "linear-gradient(90deg,#f59e0b,#d97706)" : "linear-gradient(90deg,#10b981,#059669)",
+                    background: slotsOverLimit
+                      ? "linear-gradient(90deg,#ef4444,#dc2626)"
+                      : slotsNearLimit
+                        ? "linear-gradient(90deg,#f59e0b,#d97706)"
+                        : "linear-gradient(90deg,#10b981,#059669)",
                   }}
                 />
               </div>
@@ -232,6 +248,11 @@ export default function JourneysPage() {
                 </span>
                 <span className="text-sm text-slate-400">/ {usage.ai_credits_limit}</span>
                 <span className="ml-1 text-xs font-semibold text-slate-500">AI credits this cycle</span>
+                {creditsOverLimit && (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+                    Over limit
+                  </span>
+                )}
                 {creditsNearLimit && <AlertCircle className="size-3.5 text-amber-500" />}
               </div>
               <div className="mt-1.5 h-1.5 w-40 overflow-hidden rounded-full bg-slate-200">
@@ -239,13 +260,17 @@ export default function JourneysPage() {
                   className="h-full rounded-full transition-all"
                   style={{
                     width: `${Math.min(creditsPercent, 100)}%`,
-                    background: creditsNearLimit ? "linear-gradient(90deg,#f59e0b,#d97706)" : "linear-gradient(90deg,#8b5cf6,#6d28d9)",
+                    background: creditsOverLimit
+                      ? "linear-gradient(90deg,#ef4444,#dc2626)"
+                      : creditsNearLimit
+                        ? "linear-gradient(90deg,#f59e0b,#d97706)"
+                        : "linear-gradient(90deg,#8b5cf6,#6d28d9)",
                   }}
                 />
               </div>
             </div>
           </div>
-          {(slotsNearLimit || creditsNearLimit) && (
+          {(slotsNearLimit || creditsNearLimit || slotsOverLimit || creditsOverLimit) && (
             <Link
               href="/billing"
               className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-100"

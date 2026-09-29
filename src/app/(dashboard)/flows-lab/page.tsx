@@ -117,6 +117,10 @@ export default function FlowsLabPage() {
   const { profile } = useAuth();
   const [flows, setFlows] = useState<FlowDefinition[]>([]);
   const [ready, setReady] = useState(false);
+  // Same fix as Journeys: ask for a name up front instead of always
+  // creating "Untitled flow" and hoping someone renames it later.
+  const [namePromptOpen, setNamePromptOpen] = useState(false);
+  const [pendingName, setPendingName] = useState("");
 
   // Links stay slug-free — the (dashboard) route group serves them
   // at /flows-lab/..., and the [slug]/flows-lab/ shim redirects
@@ -140,8 +144,16 @@ export default function FlowsLabPage() {
     setFlows(listFlows(userId));
   }
 
-  function handleNew() {
-    router.push(`/flows-lab/new`);
+  function openNamePrompt() {
+    setPendingName("");
+    setNamePromptOpen(true);
+  }
+
+  function confirmNamePrompt() {
+    const trimmed = pendingName.trim();
+    if (!trimmed) return;
+    setNamePromptOpen(false);
+    router.push(`/flows-lab/new?name=${encodeURIComponent(trimmed)}`);
   }
 
   function handleDuplicate(id: string) {
@@ -195,7 +207,7 @@ export default function FlowsLabPage() {
           </div>
         </div>
         <Button
-          onClick={handleNew}
+          onClick={openNamePrompt}
           className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-sm shadow-emerald-500/30 hover:from-emerald-700 hover:to-emerald-600"
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -324,7 +336,7 @@ export default function FlowsLabPage() {
             Pick a template above or start from scratch.
           </p>
           <Button
-            onClick={handleNew}
+            onClick={openNamePrompt}
             className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-sm shadow-emerald-500/30 hover:from-emerald-700 hover:to-emerald-600"
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -339,6 +351,51 @@ export default function FlowsLabPage() {
           visually separate from the workspace above — this is a
           learning area, not part of the flow list. */}
       <TutorialsSection />
+
+      {namePromptOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setNamePromptOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-slate-900">Name your flow</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              You can rename it anytime from the flow list.
+            </p>
+            <input
+              autoFocus
+              value={pendingName}
+              onChange={(e) => setPendingName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && pendingName.trim()) confirmNamePrompt();
+                if (e.key === "Escape") setNamePromptOpen(false);
+              }}
+              placeholder="e.g. Book a demo"
+              maxLength={120}
+              className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:border-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/20"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setNamePromptOpen(false)}
+                className="rounded-lg px-3.5 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmNamePrompt}
+                disabled={!pendingName.trim()}
+                className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" />
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

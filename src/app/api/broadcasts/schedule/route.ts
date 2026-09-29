@@ -5,8 +5,13 @@ import { createClient } from '@/lib/supabase/server'
  * POST /api/broadcasts/schedule
  *
  * Saves a broadcast with status='scheduled' and a scheduled_at timestamp.
- * The cron endpoint /api/cron/fire-scheduled-broadcasts picks it up at
- * the right time and fires the actual send.
+ * The cron endpoint /api/cron/broadcast-sweep picks it up at the right
+ * time and fires the actual send — but only if something is actually
+ * calling that URL on a schedule. It is NOT in vercel.json (Hobby plans
+ * can't run a cron more than once/day) — an external pinger has to hit
+ * it every 10-15 min with the CRON_SECRET, or every scheduled broadcast
+ * will sit at 'scheduled' forever with 0 recipients, exactly as if
+ * nothing were wrong until someone checks back on it.
  *
  * Body:
  *   id?          — existing draft id to convert (omit to create new)

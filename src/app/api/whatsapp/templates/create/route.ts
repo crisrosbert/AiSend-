@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server'
+import { randomUUID } from 'node:crypto'
 import { createClient } from '@/lib/supabase/server'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { createTemplate, uploadProfilePhoto, type TemplateButton } from '@/lib/whatsapp/meta-api'
 import { isValidE164 } from '@/lib/whatsapp/phone-utils'
+
+function siteUrl(): string {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return 'http://localhost:3000'
+}
 
 const MEDIA_HEADER_FORMATS = { image: 'IMAGE', video: 'VIDEO' } as const
 type MediaHeaderType = keyof typeof MEDIA_HEADER_FORMATS
@@ -68,6 +75,8 @@ export async function POST(request: Request) {
       header_media_url,
       footer_text,
       buttons: rawButtons,
+      sample_values,
+      enable_click_tracking,
     } = body as {
       name?: string
       category?: string
@@ -78,6 +87,8 @@ export async function POST(request: Request) {
       header_media_url?: string
       footer_text?: string
       buttons?: Array<{ type?: string; text?: string; value?: string }>
+      sample_values?: string[]
+      enable_click_tracking?: boolean
     }
 
     if (!name || !body_text) {
@@ -97,6 +108,12 @@ export async function POST(request: Request) {
     for (const b of rawButtons ?? []) {
       const text = (b.text ?? '').trim()
       const value = (b.value ?? '').trim()
+      if (b.type === 'quick_reply') {
+        // Quick Replies carry no destination — just a label.
+        if (!text) continue
+        buttons.push({ type: 'QUICK_REPLY', text })
+        continue
+      }
       if (!text || !value) continue
       if (b.type === 'url') {
         if (!/^https?:\/\/.+/i.test(value)) {
@@ -124,6 +141,19 @@ export async function POST(request: Request) {
         }
         buttons.push({ type: 'PHONE_NUMBER', text, phoneNumber: value })
       }
+    }
+
+    // Meta doesn't allow Quick Reply buttons alongside URL/Call buttons
+    // in one template — it's one family or the other. Reject early with
+    // a message that says why, instead of letting Meta silently drop
+    // half of what was submitted.
+    const hasQuickReply = buttons.some((b) => b.type === 'QUICK_REPLY')
+    const hasCallToAction = buttons.some((b) => b.type === 'URL' || b.type === 'PHONE_NUMBER')
+    if (hasQuickReply && hasCallToAction) {
+      return NextResponse.json(
+        { error: 'A template can use Quick Reply buttons or Call-to-Action buttons, not both.' },
+        { status: 400 },
+      )
     }
 
     const mediaHeaderType =
@@ -212,6 +242,25 @@ export async function POST(request: Request) {
       }
     }
 
+    // 0b) Click tracking — only meaningful with exactly one URL button
+    // (Meta template buttons carry a single static URL each; tracking
+    // needs somewhere of ours to redirect through). When on, the URL
+    // Meta actually approves is this app's own /api/t/click/<token>
+    // endpoint — the real destination is kept locally and only used at
+    // redirect time. See migration 035 for the full mechanism.
+    let clickToken: string | null = null
+    let ctaTargetUrl: string | null = null
+    const urlButtonIndex = buttons.findIndex((b) => b.type === 'URL')
+    if (enable_click_tracking && urlButtonIndex !== -1) {
+      const urlButton = buttons[urlButtonIndex] as Extract<TemplateButton, { type: 'URL' }>
+      clickToken = randomUUID()
+      ctaTargetUrl = urlButton.url
+      buttons[urlButtonIndex] = {
+        ...urlButton,
+        url: `${siteUrl()}/api/t/click/${clickToken}`,
+      }
+    }
+
     // 1) Submit to Meta. Errors (bad category, duplicate name, button
     //    mismatch, etc.) surface here with Meta's own message so the
     //    user can fix and retry.
@@ -229,6 +278,7 @@ export async function POST(request: Request) {
         headerMediaHandle,
         footerText: footer_text || undefined,
         buttons: buttons.length > 0 ? buttons : undefined,
+        sampleValues: Array.isArray(sample_values) ? sample_values : undefined,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Meta rejected the template'
@@ -237,6 +287,16 @@ export async function POST(request: Request) {
 
     // 2) Persist locally so it appears in the list right away. Use the
     //    normalized name Meta actually registered (lowercase_underscore).
+    //
+    // The buttons shown/stored here use the REAL destination URL, not
+    // the tracking redirect Meta was given above — the redirect is an
+    // implementation detail, not something the user should see reflected
+    // back at them in their own template list.
+    const displayButtons =
+      clickToken && urlButtonIndex !== -1
+        ? buttons.map((b, i) => (i === urlButtonIndex ? { ...b, url: ctaTargetUrl } : b))
+        : buttons
+
     const normalizedName = name.trim().toLowerCase().replace(/\s+/g, '_')
     const row = {
       user_id: user.id,
@@ -247,9 +307,12 @@ export async function POST(request: Request) {
       header_content: mediaHeaderType ? header_media_url || null : header_text || null,
       body_text,
       footer_text: footer_text || null,
-      buttons: buttons.length > 0 ? buttons : null,
+      buttons: displayButtons.length > 0 ? displayButtons : null,
       status: titleCaseStatus(metaResult.status),
       meta_template_id: metaResult.id,
+      click_tracking_enabled: !!clickToken,
+      click_token: clickToken,
+      cta_target_url: ctaTargetUrl,
       updated_at: new Date().toISOString(),
     }
 

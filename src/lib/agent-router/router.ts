@@ -155,6 +155,14 @@ async function buildAgentRegistry(tenantId: string): Promise<AgentRegistry> {
       .maybeSingle(),
   ])
 
+  // ── Debug: log raw DB results so we can see exactly what the registry sees ──
+  console.log('[agent-registry] tenant:', tenantId,
+    '| general agents:', JSON.stringify(generalResult.data),
+    '| general error:', generalResult.error?.message ?? 'none',
+    '| ecommerce:', JSON.stringify(ecommerceResult.data),
+    '| ecommerce error:', ecommerceResult.error?.message ?? 'none',
+  )
+
   const byType = new Map<string, RegisteredAgent[]>()
   const byId = new Map<string, RegisteredAgent>()
 
@@ -687,6 +695,11 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
     buildAgentRegistry(tenantId),
     loadRoutingConfig(tenantId),
   ])
+
+  // ── Debug: log registry summary ──
+  console.log('[agent-registry] activeTypes:', registry.activeTypes,
+    '| agents:', [...registry.byId.entries()].map(([id, a]) => `${a.type}:${id}`),
+  )
 
   // No active agents at all? Nothing to route to.
   if (registry.activeTypes.length === 0) return null

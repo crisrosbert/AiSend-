@@ -641,8 +641,16 @@ async function processMessage(
       }
 
       // ── GENERAL AGENT (sales, support, realestate, etc.) ──
+      // Debug: log the exact dispatch decision so we can see if agentId is null
+      console.log('[webhook-dispatch] general check:',
+        'system=', routing.system,
+        '| agentId=', routing.agentId,
+        '| agentReplied=', agentReplied,
+        '| willDispatch=', !agentReplied && routing.system.startsWith('general:') && !!routing.agentId,
+      )
       if (!agentReplied && routing.system.startsWith('general:') && routing.agentId) {
         try {
+          console.log('[webhook-dispatch] calling handleWhatsAppMessage with agentId=', routing.agentId)
           agentReplied = await handleWhatsAppMessage({
             tenantId: userId,
             agentId: routing.agentId,
@@ -654,6 +662,7 @@ async function processMessage(
             phoneNumberId,
             accessToken,
           })
+          console.log('[webhook-dispatch] handleWhatsAppMessage returned:', agentReplied)
         } catch (err) {
           console.error('[whatsapp-agent] dispatch failed:', err)
         }

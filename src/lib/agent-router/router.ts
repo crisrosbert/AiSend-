@@ -1,918 +1,852 @@
-/**
- * src/lib/agent-router/router.ts
- *
- * ── THE AGENT ROUTER ────────────────────────────────────────────────────
- * Decides which agent (or agent system) handles each inbound WhatsApp
- * message. Exactly ONE agent responds per message — no double-replies,
- * no silent drops.
- *
- * ── ARCHITECTURE ────────────────────────────────────────────────────────
- *
- *   1. AGENT REGISTRY  — A live snapshot of every active agent, built
- *      fresh on each routing call from the agents + ai_agent_configs
- *      tables. This is the SINGLE SOURCE OF TRUTH for "which agents
- *      exist and are turned on right now." Nothing else is trusted.
- *
- *   2. ROUTING CONFIG   — Merchant preferences only: keyword overrides,
- *      LLM routing toggle. NOT a source of truth for active agents.
- *
- *   3. ROUTING PIPELINE — Runs in strict priority order:
- *        1. Sticky session (conversation already assigned)
- *        2. Ads agent (click-to-WhatsApp ad lead)
- *        3. Broadcast reply (replying to a campaign)
- *        4. Keyword match (merchant-defined or built-in ecommerce)
- *       4.5. Product catalog match (bare product name → ecommerce)
- *        5. LLM intent (GPT-4o-mini classification)
- *        6. Fallback (first active agent)
- *
- *   4. AGENT ISOLATION  — Every routing stage filters candidates through
- *      the live registry. An agent of type X can never be confused with
- *      type Y. A paused/deleted agent is invisible to the entire pipeline.
- *      Sticky sessions pointing at dead agents are auto-expired.
- */
-
+import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-
+import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
+import { getMediaUrl } from '@/lib/whatsapp/meta-api'
+import { normalizePhone, phonesMatch } from '@/lib/whatsapp/phone-utils'
+import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
+import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { runJourneysForInbound } from '@/lib/journeys/runner'
+import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
+import { handleWhatsAppMessage } from '@/lib/whatsapp-agent/handler'
+import { handleAiAgentMessage } from '@/lib/ai-agent/engine'
+import { handleInboundConsent } from '@/lib/optin/manager'
+import { routeMessage, type RoutingDecision } from '@/lib/agent-router/router'
+// Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _db: any = null
-function db() {
-  if (!_db) {
-    _db = createClient(
+let _adminClient: any = null
+function supabaseAdmin() {
+  if (!_adminClient) {
+    _adminClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
   }
-  return _db
+  return _adminClient
 }
-
-// ── Types ────────────────────────────────────────────────────────────────
-
-/**
- * The two "agent systems" in the codebase:
- * - 'ecommerce'       → src/lib/ai-agent/engine.ts (own tables, own sessions)
- * - 'general:<type>'  → src/lib/agent/engine.ts via whatsapp-agent/handler.ts
- *                        where <type> is the agents.agent_type (sales, support, realestate, etc.)
- */
-export type AgentSystem = 'ecommerce' | `general:${string}`
-
-export interface RoutingDecision {
-  /** Which agent system should handle this message */
-  system: AgentSystem
-  /** The specific agent row ID (for general system) */
-  agentId: string | null
-  /** Why this agent was chosen */
-  method: 'sticky' | 'ads' | 'broadcast' | 'keyword' | 'intent' | 'fallback'
-  /** The detected intent label (if LLM was used) */
-  intentLabel?: string
-  /** Confidence 0-1 (if LLM was used) */
-  confidence?: number
-  /** How long routing took in ms */
-  latencyMs: number
-}
-
-export interface RouteInput {
-  tenantId: string
-  conversationId: string
-  contactPhone: string
-  inboundText: string
-  /** Is this from a click-to-WhatsApp ad? */
-  isAdLead: boolean
-  /** The tenant's ads agent (from whatsapp_config) */
-  adsAgentId?: string | null
-  adsAgentEnabled?: boolean
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTION 1: AGENT REGISTRY — Live snapshot of active agents
-// ═══════════════════════════════════════════════════════════════════════
-//
-// The registry is built fresh on every routing call. It replaces the old
-// approach of reading `agent_routing_config.active_agent_types` once and
-// trusting it forever — which meant newly activated agents were invisible
-// and paused agents kept getting routed to.
-//
-// TWO INDEPENDENT AGENT SYSTEMS exist:
-//   • Ecommerce  — lives in `ai_agent_configs`, gated by `is_enabled`
-//   • General    — lives in `agents`, gated by `is_active`
-// They have different tables, different columns, and different handlers.
-// The registry queries both in parallel and builds one clean map.
-
-/** A single active agent in the registry. */
-interface RegisteredAgent {
+interface WhatsAppMessage {
   id: string
-  type: string           // 'sales', 'support', 'realestate', 'ecommerce', etc.
-  system: AgentSystem    // 'ecommerce' | 'general:sales' | etc.
-  createdAt: string      // For deterministic ordering (oldest = default)
+  from: string
+  timestamp: string
+  type: string
+  text?: { body: string }
+  image?: { id: string; mime_type: string; caption?: string }
+  video?: { id: string; mime_type: string; caption?: string }
+  document?: { id: string; mime_type: string; filename?: string; caption?: string }
+  audio?: { id: string; mime_type: string }
+  sticker?: { id: string; mime_type: string }
+  location?: { latitude: number; longitude: number; name?: string; address?: string }
+  reaction?: { message_id: string; emoji: string }
+  /** Present when the customer swipe-replies to one of our messages. */
+  context?: { id: string }
+  /** Present when the customer arrived via a Click-to-WhatsApp ad. */
+  referral?: {
+    source_url?: string
+    source_id?: string
+    source_type?: string
+    headline?: string
+    body?: string
+    ctwa_clid?: string
+  }
 }
-
-/**
- * Immutable snapshot of every active agent for a tenant at a point in time.
- *
- * Built once per routeMessage() call — every routing stage uses this
- * instead of the persisted config, so a toggle on the Agents page takes
- * effect on the very next inbound message with zero delay.
- */
-interface AgentRegistry {
-  /** All active agents, grouped by type. Each group is ordered oldest-first. */
-  byType: Map<string, RegisteredAgent[]>
-
-  /** Every active agent ID → its RegisteredAgent, for O(1) lookup. */
-  byId: Map<string, RegisteredAgent>
-
-  /** Ordered list of active types (deterministic: ecommerce first if present, then by earliest agent). */
-  activeTypes: string[]
-
-  /** Is the ecommerce agent specifically enabled? */
-  ecommerceEnabled: boolean
+interface WhatsAppWebhookEntry {
+  id: string
+  changes: Array<{
+    value: {
+      messaging_product?: string
+      metadata?: {
+        display_phone_number: string
+        phone_number_id: string
+      }
+      contacts?: Array<{
+        profile: { name: string }
+        wa_id: string
+      }>
+      messages?: WhatsAppMessage[]
+      statuses?: Array<{
+        id: string
+        status: string
+        timestamp: string
+        recipient_id: string
+      }>
+      // message_template_status_update events carry these instead of
+      // messages/statuses. Meta pushes them when a submitted template is
+      // approved, rejected, paused, etc.
+      message_template_id?: number | string
+      message_template_name?: string
+      message_template_language?: string
+      event?: string
+      reason?: string | null
+    }
+    field: string
+  }>
 }
-
-/**
- * Build a live AgentRegistry for this tenant by querying the source-of-truth
- * tables directly. Both queries run in parallel for minimal latency.
- *
- * This is the ONLY function that decides which agents are active.
- * Nothing else in the router makes that judgment.
- */
-async function buildAgentRegistry(tenantId: string): Promise<AgentRegistry> {
-  // Query both agent systems in parallel — one DB round-trip each
-  const [generalResult, ecommerceResult] = await Promise.all([
-    // General agents: sales, support, realestate, creative, etc.
-    // Column: agents.is_active (boolean)
-    db()
-      .from('agents')
-      .select('id, agent_type, created_at')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: true }),
-
-    // Ecommerce agent: product catalog agent
-    // Column: ai_agent_configs.is_enabled (boolean) — NOT is_active (dead column)
-    db()
-      .from('ai_agent_configs')
-      .select('id')
-      .eq('user_id', tenantId)
-      .eq('is_enabled', true)
-      .maybeSingle(),
-  ])
-
-  // ── Debug: log raw DB results so we can see exactly what the registry sees ──
-  console.log('[agent-registry] tenant:', tenantId,
-    '| general agents:', JSON.stringify(generalResult.data),
-    '| general error:', generalResult.error?.message ?? 'none',
-    '| ecommerce:', JSON.stringify(ecommerceResult.data),
-    '| ecommerce error:', ecommerceResult.error?.message ?? 'none',
-  )
-
-  const byType = new Map<string, RegisteredAgent[]>()
-  const byId = new Map<string, RegisteredAgent>()
-
-  // ── Register general agents ──
-  for (const row of generalResult.data ?? []) {
-    const type = row.agent_type || 'other'
-    const agent: RegisteredAgent = {
-      id: row.id,
-      type,
-      system: `general:${type}` as AgentSystem,
-      createdAt: row.created_at,
+// GET - Webhook verification
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const mode = searchParams.get('hub.mode')
+    const challenge = searchParams.get('hub.challenge')
+    const verifyToken = searchParams.get('hub.verify_token')
+    if (mode !== 'subscribe' || !challenge || !verifyToken) {
+      return NextResponse.json(
+        { error: 'Missing verification parameters' },
+        { status: 400 }
+      )
     }
-
-    if (!byType.has(type)) byType.set(type, [])
-    byType.get(type)!.push(agent)
-    byId.set(row.id, agent)
-  }
-
-  // ── Register ecommerce agent ──
-  const ecommerceEnabled = !!ecommerceResult.data
-  if (ecommerceEnabled) {
-    const ecommerceAgent: RegisteredAgent = {
-      id: ecommerceResult.data.id,
-      type: 'ecommerce',
-      system: 'ecommerce',
-      createdAt: '1970-01-01T00:00:00Z', // Always first in priority
+    // Fetch all whatsapp configs to check verify tokens
+    const { data: configs, error: configError } = await supabaseAdmin()
+      .from('whatsapp_config')
+      .select('id, verify_token')
+    if (configError || !configs) {
+      console.error('Error fetching configs for verification:', configError)
+      return NextResponse.json(
+        { error: 'Verification failed' },
+        { status: 403 }
+      )
     }
-    byType.set('ecommerce', [ecommerceAgent])
-    byId.set(ecommerceResult.data.id, ecommerceAgent)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let matchedConfig: any = null
+    for (const config of configs) {
+      if (!config.verify_token) continue
+      try {
+        if (decrypt(config.verify_token) === verifyToken) {
+          matchedConfig = config
+          break
+        }
+      } catch {
+        // Malformed / wrong-key token row — skip it and keep checking.
+      }
+    }
+    if (matchedConfig) {
+      if (isLegacyFormat(matchedConfig.verify_token)) {
+        void supabaseAdmin()
+          .from('whatsapp_config')
+          .update({ verify_token: encrypt(verifyToken) })
+          .eq('id', matchedConfig.id)
+          .then(({ error }: { error: unknown }) => {
+            if (error) {
+              console.warn(
+                '[webhook] verify_token GCM upgrade failed:',
+                (error as { message?: string })?.message ?? error,
+              )
+            }
+          })
+      }
+      return new Response(challenge, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    }
+    return NextResponse.json(
+      { error: 'Verification token mismatch' },
+      { status: 403 }
+    )
+  } catch (error) {
+    console.error('Error in webhook GET verification:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+export const maxDuration = 60
+// POST - Receive messages
+export async function POST(request: Request) {
+  const rawBody = await request.text()
+  const signature = request.headers.get('x-hub-signature-256')
+  if (!verifyMetaWebhookSignature(rawBody, signature)) {
+    console.warn('[webhook] rejected request with invalid signature')
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+  }
+  let body: { entry?: WhatsAppWebhookEntry[] }
+  try {
+    body = JSON.parse(rawBody)
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  // ── Build ordered active types list ──
-  // Ecommerce first (if present), then other types ordered by their
-  // earliest agent's created_at — gives deterministic fallback priority.
-  const typeOrder: { type: string; earliest: string }[] = []
-  for (const [type, agents] of byType.entries()) {
-    typeOrder.push({ type, earliest: agents[0].createdAt })
-  }
-  typeOrder.sort((a, b) => {
-    // Ecommerce always first
-    if (a.type === 'ecommerce') return -1
-    if (b.type === 'ecommerce') return 1
-    return a.earliest.localeCompare(b.earliest)
+
+  
+  // ── Answer Meta first, think afterwards ──
+  //
+  // This used to `await processWebhook(body)`, which held the webhook
+  // open while the AI composed a reply — one to five seconds. Meta
+  // retries a webhook it considers slow, and each retry re-ran the whole
+  // pipeline: two replies to the customer, two model calls billed to us.
+  after(async () => {
+    try {
+      await processWebhook(body)
+    } catch (error) {
+      console.error('[webhook] processing failed after response:', error)
+    }
   })
 
-  return {
-    byType,
-    byId,
-    activeTypes: typeOrder.map((t) => t.type),
-    ecommerceEnabled,
+  return NextResponse.json({ status: 'received' }, { status: 200 })
+}
+
+
+
+async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
+  if (!body.entry) return
+  for (const entry of body.entry) {
+    for (const change of entry.changes) {
+      const value = change.value
+      if (
+        change.field === 'message_template_status_update' ||
+        value.message_template_name
+      ) {
+        await handleTemplateStatusUpdate(value)
+        continue
+      }
+      if (value.statuses) {
+        for (const status of value.statuses) {
+          await handleStatusUpdate(status)
+        }
+      }
+      if (!value.messages || !value.contacts) continue
+      const phoneNumberId = value.metadata!.phone_number_id
+      const { data: config, error: configError } = await supabaseAdmin()
+        .from('whatsapp_config')
+        .select('*')
+        .eq('phone_number_id', phoneNumberId)
+        .single()
+      if (configError || !config) {
+        console.error('No config found for phone_number_id:', phoneNumberId)
+        continue
+      }
+      const decryptedAccessToken = decrypt(config.access_token)
+      for (let i = 0; i < value.messages.length; i++) {
+        const message = value.messages[i]
+        const contact = value.contacts[i] || value.contacts[0]
+        await processMessage(
+          message,
+          contact,
+          config.user_id,
+          decryptedAccessToken,
+          phoneNumberId,
+          config.ads_agent_enabled ?? false,
+          config.ads_agent_id ?? null,
+          config.whatsapp_agent_id ?? null,
+          // Inbound messages have no signed-in user to ask, so the
+          // business comes from the number the message arrived on.
+          // That row is the only thing that knows.
+          config.business_id ?? null,
+        )
+      }
+    }
   }
 }
-
-// ── Registry query helpers ──────────────────────────────────────────────
-
-/** Is this agent type currently active (has at least one live agent)? */
-function isTypeActive(registry: AgentRegistry, type: string): boolean {
-  return registry.byType.has(type)
+const RECIPIENT_STATUS_LADDER = [
+  'pending',
+  'sent',
+  'delivered',
+  'read',
+  'replied',
+] as const
+function ladderLevel(s: string): number {
+  const idx = (RECIPIENT_STATUS_LADDER as readonly string[]).indexOf(s)
+  return idx < 0 ? -1 : idx
 }
-
-/** Is this specific agent ID currently active? */
-function isAgentActive(registry: AgentRegistry, agentId: string): boolean {
-  return registry.byId.has(agentId)
-}
-
-/**
- * Get the default (oldest active) agent ID for a type.
- * Returns null if no active agent of that type exists.
- */
-function getDefaultAgent(registry: AgentRegistry, type: string): string | null {
-  const agents = registry.byType.get(type)
-  return agents?.[0]?.id ?? null
-}
-
-/**
- * Resolve a specific agent for a type. Checks in order:
- *   1. If a specific agentId is given AND it's active → use it
- *   2. Otherwise → default (oldest active) agent of that type
- *   3. If no agent of that type → null
- *
- * This replaces the old resolveAgentId() that trusted default_agents
- * blindly and could silently target dead/paused agents.
- */
-function resolveAgent(
-  registry: AgentRegistry,
-  type: string,
-  preferredAgentId?: string | null,
-): string | null {
-  // Preferred agent is valid only if it's still active AND of the right type
-  if (preferredAgentId && registry.byId.has(preferredAgentId)) {
-    const agent = registry.byId.get(preferredAgentId)!
-    if (agent.type === type) return preferredAgentId
+function isValidStatusTransition(current: string, incoming: string): boolean {
+  if (incoming === 'failed') {
+    return current === 'pending' || current === 'sent'
   }
-
-  // Fall back to the default (oldest active) agent of this type
-  return getDefaultAgent(registry, type)
-}
-
-/**
- * When routing picks a general agent type but no agent of that type exists,
- * fall back to ecommerce (if active) rather than dropping the message.
- *
- * This prevents the silent-drop scenario where the LLM classifies a
- * message as "sales" but the merchant only has an ecommerce agent.
- */
-function withEcommerceFallback(
-  registry: AgentRegistry,
-  system: AgentSystem,
-  agentId: string | null,
-): { system: AgentSystem; agentId: string | null } {
-  if (system.startsWith('general:') && !agentId && registry.ecommerceEnabled) {
-    return { system: 'ecommerce', agentId: null }
+  if (current === 'failed') {
+    return false
   }
-  return { system, agentId }
+  const ci = ladderLevel(current)
+  const ii = ladderLevel(incoming)
+  if (ii < 0) return false
+  if (ci < 0) return true
+  return ii > ci
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTION 2: ROUTING CONFIG — Merchant preferences only
-// ═══════════════════════════════════════════════════════════════════════
-
-interface RoutingConfig {
-  keyword_overrides: Record<string, string>
-  llm_routing_enabled: boolean
+async function handleTemplateStatusUpdate(value: {
+  message_template_id?: number | string
+  message_template_name?: string
+  message_template_language?: string
+  event?: string
+  reason?: string | null
+}) {
+  const metaId =
+    value.message_template_id != null
+      ? String(value.message_template_id)
+      : null
+  const name = value.message_template_name
+  const language = value.message_template_language
+  const event = (value.event || '').toUpperCase()
+  if (!metaId && !name) {
+    console.warn('[webhook] template status update with no id or name')
+    return
+  }
+  let status: 'Approved' | 'Rejected' | 'Pending'
+  switch (event) {
+    case 'APPROVED':
+      status = 'Approved'
+      break
+    case 'REJECTED':
+    case 'DISABLED':
+    case 'PAUSED':
+    case 'FLAGGED':
+      status = 'Rejected'
+      break
+    default:
+      status = 'Pending'
+  }
+  const patch: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  }
+  if (metaId) {
+    const { data, error } = await supabaseAdmin()
+      .from('message_templates')
+      .update(patch)
+      .eq('meta_template_id', metaId)
+      .select('id')
+    if (!error && data && data.length > 0) return
+  }
+  if (name) {
+    let q = supabaseAdmin()
+      .from('message_templates')
+      .update(patch)
+      .eq('name', name)
+    if (language) q = q.eq('language', language)
+    const { error } = await q
+    if (error) {
+      console.error('[webhook] template status update failed:', error.message)
+    }
+  }
 }
-
-const DEFAULT_CONFIG: RoutingConfig = {
-  keyword_overrides: {},
-  llm_routing_enabled: true,
-}
-
-async function loadRoutingConfig(tenantId: string): Promise<RoutingConfig> {
-  const { data } = await db()
-    .from('agent_routing_config')
-    .select('keyword_overrides, llm_routing_enabled')
-    .eq('tenant_id', tenantId)
+async function handleStatusUpdate(status: {
+  id: string
+  status: string
+  timestamp: string
+  recipient_id: string
+}) {
+  const { error: msgErr } = await supabaseAdmin()
+    .from('messages')
+    .update({ status: status.status })
+    .eq('message_id', status.id)
+  if (msgErr) {
+    console.error('Error updating message status:', msgErr)
+  }
+  const tsIso = new Date(parseInt(status.timestamp) * 1000).toISOString()
+  const { data: recipient, error: recFetchErr } = await supabaseAdmin()
+    .from('broadcast_recipients')
+    .select('id, status')
+    .eq('whatsapp_message_id', status.id)
     .maybeSingle()
-
-  if (!data) return DEFAULT_CONFIG
-
-  return {
-    keyword_overrides:
-      typeof data.keyword_overrides === 'object' && data.keyword_overrides
-        ? data.keyword_overrides
-        : DEFAULT_CONFIG.keyword_overrides,
-    llm_routing_enabled: data.llm_routing_enabled ?? true,
+  if (recFetchErr) {
+    console.error('Error fetching broadcast recipient:', recFetchErr)
+    return
+  }
+  if (!recipient) return
+  if (!isValidStatusTransition(recipient.status, status.status)) return
+  const update: Record<string, unknown> = { status: status.status }
+  if (status.status === 'sent' && !('sent_at' in update)) update.sent_at = tsIso
+  if (status.status === 'delivered') update.delivered_at = tsIso
+  if (status.status === 'read') update.read_at = tsIso
+  const { error: recUpdateErr } = await supabaseAdmin()
+    .from('broadcast_recipients')
+    .update(update)
+    .eq('id', recipient.id)
+  if (recUpdateErr) {
+    console.error('Error updating broadcast recipient status:', recUpdateErr)
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTION 3: ROUTING PIPELINE STAGES
-// ═══════════════════════════════════════════════════════════════════════
-
-// ── Sticky session ──────────────────────────────────────────────────────
-
-const STICKY_SESSION_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
-
-/**
- * Resolve a phone number to this tenant's contact row.
- * Shared by sticky-override and broadcast-reply checks.
- */
-async function resolveContactId(
-  tenantId: string,
-  contactPhone: string,
+async function flagBroadcastReplyIfAny(userId: string, contactId: string) {
+  try {
+    const { data: recs, error } = await supabaseAdmin()
+      .from('broadcast_recipients')
+      .select('id, status, broadcast_id, broadcasts!inner(user_id)')
+      .eq('contact_id', contactId)
+      .eq('broadcasts.user_id', userId)
+      .in('status', ['sent', 'delivered', 'read'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (error || !recs || recs.length === 0) return
+    const row = recs[0]
+    const { error: updErr } = await supabaseAdmin()
+      .from('broadcast_recipients')
+      .update({ status: 'replied', replied_at: new Date().toISOString() })
+      .eq('id', row.id)
+    if (updErr) {
+      console.error('Error marking broadcast recipient replied:', updErr)
+    }
+  } catch (err) {
+    console.error('flagBroadcastReplyIfAny failed:', err)
+  }
+}
+async function lookupInternalIdByMetaId(
+  metaId: string,
+  conversationId: string
 ): Promise<string | null> {
-  const { data } = await db()
-    .from('contacts')
+  const { data, error } = await supabaseAdmin()
+    .from('messages')
     .select('id')
-    .eq('user_id', tenantId)
-    .eq('phone', contactPhone)
+    .eq('message_id', metaId)
+    .eq('conversation_id', conversationId)
     .maybeSingle()
+  if (error) {
+    console.error('[webhook] lookupInternalIdByMetaId failed:', error.message)
+    return null
+  }
   return data?.id ?? null
 }
-
-/**
- * Was this contact sent a broadcast AFTER the given timestamp?
- *
- * A broadcast sent after a sticky session was set represents the
- * merchant's fresh, explicit choice of agent for this contact — it
- * should override the stale sticky routing so replies to the new
- * campaign go to the new campaign's agent.
- */
-async function hasNewerBroadcast(
-  tenantId: string,
-  contactPhone: string,
-  sinceIso: string,
-): Promise<boolean> {
-  const contactId = await resolveContactId(tenantId, contactPhone)
-  if (!contactId) return false
-
-  const { data } = await db()
-    .from('broadcast_recipients')
-    .select('id')
-    .eq('contact_id', contactId)
-    .gt('created_at', sinceIso)
-    .limit(1)
-    .maybeSingle()
-
-  return !!data
-}
-
-/**
- * Check if this conversation has a valid sticky session.
- *
- * AGENT ISOLATION: The sticky session is validated against the live
- * registry. If the sticky agent was paused or deleted since routing
- * was set, the sticky session is treated as expired and the message
- * is re-routed from scratch — preventing replies from going to a
- * dead agent.
- */
-async function checkStickySession(
+async function handleReaction(
+  message: WhatsAppMessage,
   conversationId: string,
-  tenantId: string,
-  contactPhone: string,
-  registry: AgentRegistry,
-): Promise<{ system: AgentSystem; agentId: string | null } | null> {
-  const { data } = await db()
+  contactId: string
+) {
+  const reaction = message.reaction
+  if (!reaction?.message_id) return
+  const targetInternalId = await lookupInternalIdByMetaId(
+    reaction.message_id,
+    conversationId
+  )
+  if (!targetInternalId) {
+    console.warn(
+      '[webhook] reaction target message not found; skipping',
+      reaction.message_id
+    )
+    return
+  }
+  if (!reaction.emoji) {
+    const { error: delError } = await supabaseAdmin()
+      .from('message_reactions')
+      .delete()
+      .eq('message_id', targetInternalId)
+      .eq('actor_type', 'customer')
+      .eq('actor_id', contactId)
+    if (delError) {
+      console.error('[webhook] reaction delete failed:', delError.message)
+    }
+    return
+  }
+  const { error: upsertError } = await supabaseAdmin()
+    .from('message_reactions')
+    .upsert(
+      {
+        message_id: targetInternalId,
+        conversation_id: conversationId,
+        actor_type: 'customer',
+        actor_id: contactId,
+        emoji: reaction.emoji,
+      },
+      { onConflict: 'message_id,actor_type,actor_id' }
+    )
+  if (upsertError) {
+    console.error('[webhook] reaction upsert failed:', upsertError.message)
+  }
+}
+async function processMessage(
+  message: WhatsAppMessage,
+  contact: { profile: { name: string }; wa_id: string },
+  userId: string,
+  accessToken: string,
+  phoneNumberId: string,
+  adsAgentEnabled: boolean,
+  adsAgentId: string | null,
+  whatsappAgentId: string | null,
+  businessId: string | null,
+) {
+  const senderPhone = normalizePhone(message.from)
+  const contactName = contact.profile.name
+  const contactOutcome = await findOrCreateContact(
+    userId,
+    senderPhone,
+    contactName,
+    businessId
+  )
+  if (!contactOutcome) return
+  const contactRecord = contactOutcome.contact
+  const conversation = await findOrCreateConversation(
+    userId,
+    contactRecord.id,
+    businessId
+  )
+  if (!conversation) return
+  if (message.type === 'reaction') {
+    await handleReaction(message, conversation.id, contactRecord.id)
+    return
+  }
+  const { contentText, mediaUrl, mediaType } = await parseMessageContent(
+    message,
+    accessToken
+  )
+  let replyToInternalId: string | null = null
+  if (message.context?.id) {
+    replyToInternalId = await lookupInternalIdByMetaId(
+      message.context.id,
+      conversation.id
+    )
+    if (!replyToInternalId) {
+      console.warn(
+        '[webhook] reply context parent not found:',
+        message.context.id
+      )
+    }
+  }
+  void mediaType
+  const ALLOWED_CONTENT_TYPES = new Set([
+    'text', 'image', 'document', 'audio', 'video', 'location', 'template',
+  ])
+  const contentType = ALLOWED_CONTENT_TYPES.has(message.type)
+    ? message.type
+    : message.type === 'sticker'
+      ? 'image'
+      : 'text'
+  const { count: priorCustomerMsgCount } = await supabaseAdmin()
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversation.id)
+    .eq('sender_type', 'customer')
+  const isFirstInboundMessage = (priorCustomerMsgCount ?? 0) === 0
+  const { error: msgError } = await supabaseAdmin().from('messages').insert({
+    conversation_id: conversation.id,
+    sender_type: 'customer',
+    content_type: contentType,
+    content_text: contentText,
+    media_url: mediaUrl,
+    message_id: message.id,
+    status: 'delivered',
+    created_at: new Date(parseInt(message.timestamp) * 1000).toISOString(),
+    reply_to_message_id: replyToInternalId,
+  })
+
+  
+  if (msgError) {
+    // 23505 is a unique-constraint violation, and on this table it means
+    // one thing: Meta has sent us this message before. Migration 023
+    // added the constraint so a retry lands here instead of producing a
+    // second reply and a second model call.
+    if (msgError.code === '23505') {
+      console.log('[webhook] duplicate delivery, already handled:', message.id)
+      return
+    }
+    console.error('Error inserting message:', msgError)
+    return
+  }
+
+  
+  const { error: convError } = await supabaseAdmin()
     .from('conversations')
-    .select('routed_agent_type, routed_agent_id, status, routed_at')
-    .eq('id', conversationId)
-    .maybeSingle()
+    .update({
+      last_message_text: contentText || `[${message.type}]`,
+      last_message_at: new Date().toISOString(),
+      unread_count: (conversation.unread_count || 0) + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', conversation.id)
+  if (convError) {
+    console.error('Error updating conversation:', convError)
+  }
+  await flagBroadcastReplyIfAny(userId, contactRecord.id)
+  const inboundText = contentText ?? message.text?.body ?? ''
+  // ── OPT-IN / OPT-OUT (compliance) ──
+  // Honor STOP/START immediately. If the message was a consent keyword,
+  // record it and stop — don't run agents/journeys on it.
+  const consentHandled = await handleInboundConsent({
+    userId,
+    contactId: contactRecord.id,
+    phone: senderPhone,
+    inboundText,
+  })
+  if (consentHandled) return
+  // ── JOURNEYS FIRST (deterministic, always) ──
+  // Journeys answer first. If one did, skip AI agents entirely.
+  // Their non-messaging steps (tag, assign, create deal, update field)
+  // still run, because a merchant is relying on those regardless of who
+  // spoke.
+  let journeyReplied = false
+  try {
+    journeyReplied = await runJourneysForInbound({
+      userId,
+      businessId,
+      conversationId: conversation.id,
+      contactId: contactRecord.id,
+      customerPhone: senderPhone,
+      inboundText,
+      phoneNumberId,
+      accessToken,
+    })
+  } catch (err) {
+    console.error('[journeys] dispatch failed:', err)
+  }
 
-  if (!data?.routed_agent_type || data.status === 'pending') return null
+  // ── AGENT ROUTER ──
+  // Replaces the old sequential chain. The router picks exactly ONE
+  // agent system for each message: sticky session → ads → broadcast →
+  // keyword → LLM intent → fallback. No more double-replies.
+  const referral = message.referral ?? null
+  const isAdLead = !!(referral && (referral.source_id || referral.source_type === 'ad'))
 
-  // ── Time-based expiry ──
-  if (data.routed_at) {
-    const age = Date.now() - new Date(data.routed_at).getTime()
-    if (age > STICKY_SESSION_TTL_MS) return null
+  let agentReplied = false
+  if (!journeyReplied) {
+    let routing: RoutingDecision | null = null
+    try {
+      routing = await routeMessage({
+        tenantId: userId,
+        conversationId: conversation.id,
+        contactPhone: senderPhone,
+        inboundText,
+        isAdLead,
+        adsAgentId,
+        adsAgentEnabled,
+      })
+    } catch (err) {
+      console.error('[agent-router] routing failed:', err)
+    }
 
-    // A campaign sent after this sticky was set overrides it
-    if (await hasNewerBroadcast(tenantId, contactPhone, data.routed_at)) {
+    if (routing) {
+      console.log(`[agent-router] → ${routing.system} via ${routing.method}${routing.intentLabel ? ` (intent: ${routing.intentLabel})` : ''} [${routing.latencyMs}ms]`)
+
+      // ── ADS AGENT (special handler, separate flow) ──
+      if (routing.method === 'ads' && adsAgentId && isAdLead) {
+        try {
+          agentReplied = await handleAdLead({
+            tenantId: userId,
+            agentId: adsAgentId,
+            conversationId: conversation.id,
+            contactId: contactRecord.id,
+            customerPhone: senderPhone,
+            contactName,
+            inboundText,
+            phoneNumberId,
+            accessToken,
+            referral: referral as MetaReferral,
+          })
+        } catch (err) {
+          console.error('[ads-agent] dispatch failed:', err)
+        }
+        if (agentReplied) {
+          // Skip automations sends — ads agent already replied
+          return
+        }
+      }
+
+      // ── ECOMMERCE AGENT (own tables, own sessions) ──
+      if (routing.system === 'ecommerce') {
+        try {
+          console.log(`[ai-agent] Dispatching: type=${message.type}, inboundText="${inboundText}", from=${senderPhone}`)
+          await handleAiAgentMessage({
+            userId,
+            contactPhone: senderPhone,
+            inboundMessage: inboundText,
+            supabase: supabaseAdmin(),
+          })
+          agentReplied = true
+        } catch (err) {
+          console.error('[ai-ecommerce-agent] dispatch failed:', err)
+        }
+      }
+
+      // ── GENERAL AGENT (sales, support, realestate, etc.) ──
+      // Debug: log the exact dispatch decision so we can see if agentId is null
+      console.log('[webhook-dispatch] general check:',
+        'system=', routing.system,
+        '| agentId=', routing.agentId,
+        '| agentReplied=', agentReplied,
+        '| willDispatch=', !agentReplied && routing.system.startsWith('general:') && !!routing.agentId,
+      )
+      if (!agentReplied && routing.system.startsWith('general:') && routing.agentId) {
+        try {
+          console.log('[webhook-dispatch] calling handleWhatsAppMessage with agentId=', routing.agentId)
+          agentReplied = await handleWhatsAppMessage({
+            tenantId: userId,
+            agentId: routing.agentId,
+            conversationId: conversation.id,
+            contactId: contactRecord.id,
+            customerPhone: senderPhone,
+            contactName,
+            inboundText,
+            phoneNumberId,
+            accessToken,
+          })
+          console.log('[webhook-dispatch] handleWhatsAppMessage returned:', agentReplied)
+        } catch (err) {
+          console.error('[whatsapp-agent] dispatch failed:', err)
+        }
+      }
+    }
+  }
+
+  // ── AUTOMATIONS LAST ──
+  const automationTriggers: (
+    | 'new_contact_created'
+    | 'first_inbound_message'
+    | 'new_message_received'
+    | 'keyword_match'
+  )[] = ['new_message_received', 'keyword_match']
+  if (contactOutcome.wasCreated) automationTriggers.unshift('new_contact_created')
+  if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message')
+  await Promise.allSettled(
+    automationTriggers.map((triggerType) =>
+      runAutomationsForTrigger({
+        userId,
+        businessId,
+        triggerType,
+        contactId: contactRecord.id,
+        suppressReplies: journeyReplied || agentReplied,
+        context: {
+          message_text: inboundText,
+          conversation_id: conversation.id,
+        },
+      }),
+    ),
+  )
+}
+async function parseMessageContent(
+  message: WhatsAppMessage,
+  accessToken: string
+): Promise<{
+  contentText: string | null
+  mediaUrl: string | null
+  mediaType: string | null
+}> {
+  const verifyAndBuildUrl = async (
+    mediaId: string
+  ): Promise<string | null> => {
+    try {
+      await getMediaUrl({ mediaId, accessToken })
+      return `/api/whatsapp/media/${mediaId}`
+    } catch (error) {
+      console.error(
+        `Failed to verify media ${mediaId} with Meta:`,
+        error instanceof Error ? error.message : error
+      )
       return null
     }
   }
+  switch (message.type) {
+    case 'text':
+      return { contentText: message.text?.body || null, mediaUrl: null, mediaType: null }
+    case 'image':
+      if (message.image?.id) {
+        return { contentText: message.image.caption || null, mediaUrl: await verifyAndBuildUrl(message.image.id), mediaType: message.image.mime_type }
+      }
+      return { contentText: null, mediaUrl: null, mediaType: null }
+    case 'video':
+      if (message.video?.id) {
+        return { contentText: message.video.caption || null, mediaUrl: await verifyAndBuildUrl(message.video.id), mediaType: message.video.mime_type }
+      }
+      return { contentText: null, mediaUrl: null, mediaType: null }
+    case 'document':
+      if (message.document?.id) {
+        return { contentText: message.document.caption || message.document.filename || null, mediaUrl: await verifyAndBuildUrl(message.document.id), mediaType: message.document.mime_type }
+      }
+      return { contentText: null, mediaUrl: null, mediaType: null }
+    case 'audio':
+      if (message.audio?.id) {
+        return { contentText: null, mediaUrl: await verifyAndBuildUrl(message.audio.id), mediaType: message.audio.mime_type }
+      }
+      return { contentText: null, mediaUrl: null, mediaType: null }
+    case 'sticker':
+      if (message.sticker?.id) {
+        return { contentText: null, mediaUrl: await verifyAndBuildUrl(message.sticker.id), mediaType: message.sticker.mime_type }
+      }
+      return { contentText: null, mediaUrl: null, mediaType: null }
+    case 'location':
+      if (message.location) {
+        const loc = message.location
+        const locationText = [loc.name, loc.address, `${loc.latitude},${loc.longitude}`].filter(Boolean).join(' - ')
+        return { contentText: locationText, mediaUrl: null, mediaType: null }
+      }
+      return { contentText: null, mediaUrl: null, mediaType: null }
+    case 'reaction':
+      return { contentText: message.reaction?.emoji || null, mediaUrl: null, mediaType: null }
 
-  // ── Agent liveness validation ──
-  // If the sticky agent is no longer active, expire this session so
-  // the message gets re-routed to a live agent instead of silently
-  // targeting a dead one.
-  const stickySystem = data.routed_agent_type as AgentSystem
-  const stickyAgentId = data.routed_agent_id ?? null
-
-  if (stickySystem === 'ecommerce') {
-    // Ecommerce agent was turned off → expire sticky
-    if (!registry.ecommerceEnabled) return null
-  } else if (stickySystem.startsWith('general:')) {
-    if (stickyAgentId) {
-      // Specific agent was paused/deleted → expire sticky
-      if (!isAgentActive(registry, stickyAgentId)) return null
-    } else {
-      // Type has no active agents → expire sticky
-      const type = stickySystem.replace('general:', '')
-      if (!isTypeActive(registry, type)) return null
+    // ── Interactive button/list replies ──
+    // When customer clicks a quick-reply button (e.g. "Pay Online", "Cash on Delivery")
+    // WhatsApp sends type='interactive' with button_reply or list_reply
+    case 'interactive': {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const interactive = (message as any).interactive
+      if (interactive?.button_reply) {
+        // Button reply: use the button ID as text (e.g. "pay_online", "pay_cod")
+        // Also include title as fallback for intent detection
+        return { contentText: interactive.button_reply.id || interactive.button_reply.title || null, mediaUrl: null, mediaType: null }
+      }
+      if (interactive?.list_reply) {
+        // List reply: use the list item ID or title
+        return { contentText: interactive.list_reply.id || interactive.list_reply.title || null, mediaUrl: null, mediaType: null }
+      }
+      return { contentText: null, mediaUrl: null, mediaType: null }
     }
+
+    // ── Button template replies ──
+    // When customer clicks a template quick-reply button
+    case 'button':
+      return { contentText: (message as any).button?.text || (message as any).button?.payload || null, mediaUrl: null, mediaType: null }
+
+    default:
+      return { contentText: `[Unsupported message type: ${message.type}]`, mediaUrl: null, mediaType: null }
   }
-
-  return { system: stickySystem, agentId: stickyAgentId }
 }
-
-// ── Broadcast reply detection ───────────────────────────────────────────
-
-interface BroadcastReplyTarget {
-  system: AgentSystem
-  agentId: string | null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ContactRow = any
+interface ContactOutcome {
+  contact: ContactRow
+  wasCreated: boolean
 }
-
-async function checkBroadcastReply(
-  tenantId: string,
-  contactPhone: string,
-): Promise<BroadcastReplyTarget | null> {
-  const contactId = await resolveContactId(tenantId, contactPhone)
-  if (!contactId) return null
-
-  const { data } = await db()
-    .from('broadcast_recipients')
-    .select('broadcast_id')
+async function findOrCreateContact(
+  userId: string,
+  phone: string,
+  name: string,
+  businessId: string | null
+): Promise<ContactOutcome | null> {
+  const { data: contacts, error: contactsError } = await supabaseAdmin()
+    .from('contacts')
+    .select('*')
+    .eq('user_id', userId)
+  if (contactsError) {
+    console.error('Error fetching contacts:', contactsError)
+    return null
+  }
+  const existingContact = contacts?.find((c: ContactRow) => phonesMatch(c.phone, phone))
+  if (existingContact) {
+    if (name && name !== existingContact.name) {
+      await supabaseAdmin()
+        .from('contacts')
+        .update({ name, updated_at: new Date().toISOString() })
+        .eq('id', existingContact.id)
+    }
+    return { contact: existingContact, wasCreated: false }
+  }
+  const { data: newContact, error: createError } = await supabaseAdmin()
+    .from('contacts')
+    .insert({ user_id: userId, phone, name: name || phone, business_id: businessId })
+    .select()
+    .single()
+  if (createError) {
+    console.error('Error creating contact:', createError)
+    return null
+  }
+  return { contact: newContact, wasCreated: true }
+}
+async function findOrCreateConversation(
+  userId: string,
+  contactId: string,
+  businessId: string | null
+) {
+  const { data: existing, error: findError } = await supabaseAdmin()
+    .from('conversations')
+    .select('*')
+    .eq('user_id', userId)
     .eq('contact_id', contactId)
-    .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
-
-  if (!data?.broadcast_id) return null
-
-  const { data: broadcast } = await db()
-    .from('broadcasts')
-    .select('agent_type, agent_id, user_id')
-    .eq('id', data.broadcast_id)
-    .eq('user_id', tenantId)
-    .maybeSingle()
-
-  if (!broadcast?.agent_type) return null
-
-  const system: AgentSystem =
-    broadcast.agent_type === 'ecommerce'
-      ? 'ecommerce'
-      : (`general:${broadcast.agent_type}` as AgentSystem)
-
-  return {
-    system,
-    agentId: system === 'ecommerce' ? null : (broadcast.agent_id ?? null),
+  if (!findError && existing) {
+    return existing
   }
-}
-
-// ── Keyword matching ────────────────────────────────────────────────────
-
-function matchKeywords(
-  text: string,
-  overrides: Record<string, string>,
-): AgentSystem | null {
-  const lower = text.toLowerCase().trim()
-
-  // Built-in ecommerce keywords (always checked)
-  const ecommerceKeywords = [
-    'price', 'buy', 'order', 'cart', 'checkout', 'product', 'shop',
-    'delivery', 'shipping', 'discount', 'offer', 'deal', 'stock',
-    'available', 'cost', 'payment', 'cod', 'cash on delivery',
-    // Hindi/Hinglish
-    'khareedna', 'keemat', 'daam', 'rate', 'kitna', 'mangwana',
-  ]
-
-  for (const kw of ecommerceKeywords) {
-    if (lower.includes(kw)) return 'ecommerce'
-  }
-
-  // Merchant-defined keyword → agent type
-  for (const [keyword, agentType] of Object.entries(overrides)) {
-    if (lower.includes(keyword.toLowerCase())) {
-      if (agentType === 'ecommerce') return 'ecommerce'
-      return `general:${agentType}` as AgentSystem
-    }
-  }
-
-  return null
-}
-
-// ── Product catalog match ───────────────────────────────────────────────
-
-async function matchProductCatalog(
-  tenantId: string,
-  text: string,
-): Promise<boolean> {
-  const lower = text.toLowerCase().trim()
-  if (!lower) return false
-
-  const { data: products, error } = await db()
-    .from('ai_agent_products')
-    .select('name')
-    .eq('user_id', tenantId)
-    .limit(1000)
-
-  if (error || !products?.length) return false
-
-  for (const p of products as { name: string | null }[]) {
-    const name = String(p.name || '').toLowerCase().trim()
-    if (!name) continue
-
-    if (lower.includes(name)) return true
-
-    const nameWords = name.split(/\s+/).filter((w) => w.length > 2)
-    if (nameWords.length > 0 && nameWords.every((w) => lower.includes(w))) {
-      return true
-    }
-  }
-
-  return false
-}
-
-// ── LLM intent classification ───────────────────────────────────────────
-
-interface IntentResult {
-  system: AgentSystem
-  label: string
-  confidence: number
-}
-
-async function classifyIntent(
-  text: string,
-  activeTypes: string[],
-): Promise<IntentResult> {
-  const typeDescriptions: Record<string, string> = {
-    ecommerce: 'Shopping, products, prices, orders, cart, checkout, delivery, returns',
-    sales: 'Sales inquiries, pricing, deals, negotiations, quotes, proposals',
-    marketing: 'Marketing campaigns, promotions, brand awareness, content',
-    support: 'Customer support, complaints, issues, troubleshooting, help',
-    realestate: 'Properties, apartments, houses, rent, buy, real estate, location, BHK, sqft',
-    creative: 'Design, creative work, content creation, media',
-    social: 'Social media, engagement, community, posts',
-    other: 'General inquiries that don\'t fit other categories',
-  }
-
-  const activeDescriptions = activeTypes
-    .map((t) => `- ${t}: ${typeDescriptions[t] || 'General'}`)
-    .join('\n')
-
-  try {
-    const openaiApiKey = process.env.OPENAI_API_KEY
-    if (!openaiApiKey) {
-      console.error('[agent-router] OPENAI_API_KEY not set — skipping LLM classification')
-      const fallbackType = activeTypes[0] || 'support'
-      return {
-        system: fallbackType === 'ecommerce' ? 'ecommerce' : `general:${fallbackType}`,
-        label: fallbackType,
-        confidence: 0.1,
-      }
-    }
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        temperature: 0,
-        max_tokens: 60,
-        messages: [
-          {
-            role: 'system',
-            content: `You are an intent classifier for a WhatsApp business. Classify the customer's message into exactly ONE of these agent types:\n${activeDescriptions}\n\nIMPORTANT: if "ecommerce" is one of the listed types, strongly prefer it for anything that could plausibly be a customer trying to buy, browse, or ask about a product — including a bare product name, a product category (e.g. "biscuit", "snacks", "tea"), quantities, or short messages with little context. Only choose a different type when the message is CLEARLY about something else — e.g. asking about a marketing campaign or promotion content (marketing), negotiating a bulk/business deal or asking for a sales quote (sales), reporting a problem or complaint (support). When in doubt between ecommerce and another type, choose ecommerce.\n\nRespond with JSON: {"type": "<agent_type>", "confidence": 0.0-1.0}\nOnly use types from the list above.`,
-          },
-          { role: 'user', content: text },
-        ],
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API ${response.status}: ${await response.text()}`)
-    }
-
-    const data = await response.json()
-    const raw = data.choices?.[0]?.message?.content?.trim() ?? ''
-    const jsonStr = raw.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
-    const parsed = JSON.parse(jsonStr)
-
-    const chosenType = String(parsed.type || activeTypes[0])
-    const confidence = Math.min(1, Math.max(0, Number(parsed.confidence) || 0.5))
-
-    return {
-      system: chosenType === 'ecommerce' ? 'ecommerce' : `general:${chosenType}`,
-      label: chosenType,
-      confidence,
-    }
-  } catch (err) {
-    console.error('[agent-router] LLM classification failed:', err)
-    const fallbackType = activeTypes[0] || 'support'
-    return {
-      system: fallbackType === 'ecommerce' ? 'ecommerce' : `general:${fallbackType}`,
-      label: fallbackType,
-      confidence: 0.1,
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTION 4: PERSISTENCE & LOGGING
-// ═══════════════════════════════════════════════════════════════════════
-
-async function persistRouting(
-  conversationId: string,
-  decision: RoutingDecision,
-): Promise<void> {
-  await db()
+  const { data: newConv, error: createError } = await supabaseAdmin()
     .from('conversations')
-    .update({
-      routed_agent_type: decision.system,
-      routed_agent_id: decision.agentId,
-      routing_reason: decision.method,
-      routed_at: new Date().toISOString(),
-    })
-    .eq('id', conversationId)
-}
-
-async function logRouting(
-  tenantId: string,
-  conversationId: string,
-  contactPhone: string,
-  inboundText: string,
-  decision: RoutingDecision,
-): Promise<void> {
-  try {
-    await db().from('agent_routing_log').insert({
-      tenant_id: tenantId,
-      conversation_id: conversationId,
-      contact_phone: contactPhone,
-      inbound_text: inboundText.slice(0, 500),
-      chosen_agent_type: decision.system,
-      chosen_agent_id: decision.agentId,
-      routing_method: decision.method,
-      intent_detected: decision.intentLabel ?? null,
-      confidence: decision.confidence ?? null,
-      latency_ms: decision.latencyMs,
-    })
-  } catch (err) {
-    // Logging failure must never block the reply
-    console.error('[agent-router] log insert failed:', err)
+    .insert({ user_id: userId, contact_id: contactId, business_id: businessId })
+    .select()
+    .single()
+  if (createError) {
+    console.error('Error creating conversation:', createError)
+    return null
   }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTION 5: THE MAIN ROUTER
-// ═══════════════════════════════════════════════════════════════════════
-
-/**
- * Route an inbound WhatsApp message to the right agent.
- *
- * Returns a RoutingDecision the webhook uses to call exactly one agent
- * system. Returns null when no agent is configured at all.
- *
- * AGENT ISOLATION GUARANTEE:
- * - The registry is built fresh from live DB state on every call
- * - Every routing stage validates its pick against the registry
- * - A paused/deleted agent can never be selected
- * - Agents of different types are cleanly separated — type X routing
- *   can never accidentally invoke a type Y agent
- * - Stale sticky sessions pointing at dead agents are auto-expired
- */
-export async function routeMessage(input: RouteInput): Promise<RoutingDecision | null> {
-  const start = Date.now()
-  const {
-    tenantId, conversationId, contactPhone, inboundText,
-    isAdLead, adsAgentId, adsAgentEnabled,
-  } = input
-
-  // ── Build live agent registry + load merchant config in parallel ──
-  // This is the foundational step: from here on, the registry is the
-  // single source of truth for which agents are active. No other
-  // table, column, or cached value overrides it.
-  const [registry, config] = await Promise.all([
-    buildAgentRegistry(tenantId),
-    loadRoutingConfig(tenantId),
-  ])
-
-  // ── Debug: log registry summary ──
-  console.log('[agent-registry] activeTypes:', registry.activeTypes,
-    '| agents:', [...registry.byId.entries()].map(([id, a]) => `${a.type}:${id}`),
-  )
-
-  // No active agents at all? Nothing to route to.
-  if (registry.activeTypes.length === 0) return null
-
-  // ── 1. STICKY SESSION ─────────────────────────────────────────────
-  // If this conversation was already routed to a LIVE agent, keep it.
-  // Dead/paused agents are auto-expired by the registry validation.
-  const sticky = await checkStickySession(conversationId, tenantId, contactPhone, registry)
-  if (sticky) {
-    const decision: RoutingDecision = {
-      system: sticky.system,
-      agentId: sticky.agentId,
-      method: 'sticky',
-      latencyMs: Date.now() - start,
-    }
-    await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
-    return decision
-  }
-
-  // ── 2. ADS AGENT ──────────────────────────────────────────────────
-  // Validate the ads agent is still active before routing to it
-  if (adsAgentEnabled && adsAgentId && isAdLead && isAgentActive(registry, adsAgentId)) {
-    const decision: RoutingDecision = {
-      system: 'general:sales',
-      agentId: adsAgentId,
-      method: 'ads',
-      latencyMs: Date.now() - start,
-    }
-    await persistRouting(conversationId, decision)
-    await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
-    return decision
-  }
-
-  // ── 3. BROADCAST REPLY ────────────────────────────────────────────
-  const broadcastTarget = await checkBroadcastReply(tenantId, contactPhone)
-  if (broadcastTarget) {
-    const agentType = broadcastTarget.system === 'ecommerce'
-      ? 'ecommerce'
-      : broadcastTarget.system.replace('general:', '')
-
-    // Validate broadcast's agent against the live registry
-    const agentId = broadcastTarget.system === 'ecommerce'
-      ? null
-      : resolveAgent(registry, agentType, broadcastTarget.agentId)
-    const resolved = withEcommerceFallback(registry, broadcastTarget.system, agentId)
-
-    const decision: RoutingDecision = {
-      system: resolved.system,
-      agentId: resolved.agentId,
-      method: 'broadcast',
-      latencyMs: Date.now() - start,
-    }
-    await persistRouting(conversationId, decision)
-    await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
-    return decision
-  }
-
-  // ── 4. KEYWORD MATCH ──────────────────────────────────────────────
-  const keywordMatch = matchKeywords(inboundText, config.keyword_overrides)
-  if (keywordMatch) {
-    const matchedType = keywordMatch === 'ecommerce'
-      ? 'ecommerce'
-      : keywordMatch.replace('general:', '')
-
-    // Only route to the keyword match if that type is actually active
-    if (isTypeActive(registry, matchedType)) {
-      const rawAgentId = keywordMatch === 'ecommerce'
-        ? null
-        : resolveAgent(registry, matchedType)
-      const resolved = withEcommerceFallback(registry, keywordMatch, rawAgentId)
-
-      const decision: RoutingDecision = {
-        system: resolved.system,
-        agentId: resolved.agentId,
-        method: 'keyword',
-        latencyMs: Date.now() - start,
-      }
-      await persistRouting(conversationId, decision)
-      await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
-      return decision
-    }
-  }
-
-  // ── 4.5 PRODUCT CATALOG MATCH ─────────────────────────────────────
-  if (registry.ecommerceEnabled) {
-    const productMatch = await matchProductCatalog(tenantId, inboundText)
-    if (productMatch) {
-      const decision: RoutingDecision = {
-        system: 'ecommerce',
-        agentId: null,
-        method: 'keyword',
-        intentLabel: 'product_catalog_match',
-        latencyMs: Date.now() - start,
-      }
-      await persistRouting(conversationId, decision)
-      await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
-      return decision
-    }
-  }
-
-  // ── 5. LLM INTENT CLASSIFICATION ─────────────────────────────────
-  if (config.llm_routing_enabled && registry.activeTypes.length > 1) {
-    const rawIntent = await classifyIntent(inboundText, registry.activeTypes)
-
-    // Low-confidence non-ecommerce guesses default to ecommerce when active
-    const intent: IntentResult =
-      registry.ecommerceEnabled &&
-      rawIntent.system !== 'ecommerce' &&
-      rawIntent.confidence < 0.75
-        ? { system: 'ecommerce', label: `${rawIntent.label}_low_confidence`, confidence: rawIntent.confidence }
-        : rawIntent
-
-    const agentType = intent.system === 'ecommerce'
-      ? 'ecommerce'
-      : intent.system.replace('general:', '')
-
-    // LLM might hallucinate a type that doesn't exist — validate it
-    const validatedType = isTypeActive(registry, agentType) ? agentType : registry.activeTypes[0]
-    const validatedSystem: AgentSystem = validatedType === 'ecommerce'
-      ? 'ecommerce'
-      : `general:${validatedType}`
-
-    const rawAgentId = validatedSystem === 'ecommerce'
-      ? null
-      : resolveAgent(registry, validatedType)
-    const resolved = withEcommerceFallback(registry, validatedSystem, rawAgentId)
-
-    const decision: RoutingDecision = {
-      system: resolved.system,
-      agentId: resolved.agentId,
-      method: 'intent',
-      intentLabel: intent.label,
-      confidence: intent.confidence,
-      latencyMs: Date.now() - start,
-    }
-    await persistRouting(conversationId, decision)
-    await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
-    return decision
-  }
-
-  // ── 6. FALLBACK ───────────────────────────────────────────────────
-  // First active type in priority order (ecommerce first if present)
-  const fallbackType = registry.activeTypes[0]
-  const fallbackSystem: AgentSystem = fallbackType === 'ecommerce'
-    ? 'ecommerce'
-    : `general:${fallbackType}`
-  const rawFallbackAgentId = fallbackType === 'ecommerce'
-    ? null
-    : resolveAgent(registry, fallbackType)
-  const resolvedFallback = withEcommerceFallback(registry, fallbackSystem, rawFallbackAgentId)
-
-  const decision: RoutingDecision = {
-    system: resolvedFallback.system,
-    agentId: resolvedFallback.agentId,
-    method: 'fallback',
-    latencyMs: Date.now() - start,
-  }
-  await persistRouting(conversationId, decision)
-  await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
-  return decision
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTION 6: PUBLIC UTILITIES
-// ═══════════════════════════════════════════════════════════════════════
-
-/**
- * Clear a conversation's routing assignment.
- * Call this when:
- * - A human agent takes over (status → 'pending')
- * - The merchant manually reassigns
- * - The conversation is resolved and a new topic starts
- */
-export async function clearRouting(conversationId: string): Promise<void> {
-  await db()
-    .from('conversations')
-    .update({
-      routed_agent_type: null,
-      routed_agent_id: null,
-      routing_reason: null,
-      routed_at: null,
-    })
-    .eq('id', conversationId)
-}
-
-/**
- * Manually assign a conversation to a specific agent.
- * Used by the dashboard when a merchant drags a conversation to an agent.
- */
-export async function manualRoute(
-  conversationId: string,
-  tenantId: string,
-  agentId: string,
-  agentType: string,
-): Promise<void> {
-  const system: AgentSystem = agentType === 'ecommerce'
-    ? 'ecommerce'
-    : `general:${agentType}`
-
-  await db()
-    .from('conversations')
-    .update({
-      routed_agent_type: system,
-      routed_agent_id: agentId,
-      routing_reason: 'manual',
-      routed_at: new Date().toISOString(),
-    })
-    .eq('id', conversationId)
-
-  await logRouting(tenantId, conversationId, '', '[manual assignment]', {
-    system,
-    agentId,
-    method: 'sticky',
-    latencyMs: 0,
-  })
+  return newConv
 }

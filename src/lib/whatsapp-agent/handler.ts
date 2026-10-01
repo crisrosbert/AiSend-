@@ -90,7 +90,11 @@ export async function handleWhatsAppMessage(
       .eq('tenant_id', tenantId)
       .maybeSingle()
 
-    if (!agent?.is_active) return false
+    console.log('[whatsapp-agent] agent lookup:', JSON.stringify(agent))
+    if (!agent?.is_active) {
+      console.log('[whatsapp-agent] BAIL: agent inactive or not found')
+      return false
+    }
 
     // ── Never speak over a human ──
     // Once a teammate takes a conversation (status 'pending'), the bot
@@ -102,7 +106,11 @@ export async function handleWhatsAppMessage(
       .eq('id', conversationId)
       .maybeSingle()
 
-    if (conversation?.status === 'pending') return false
+    console.log('[whatsapp-agent] conversation status:', conversation?.status)
+    if (conversation?.status === 'pending') {
+      console.log('[whatsapp-agent] BAIL: conversation is pending (human took over)')
+      return false
+    }
 
     // ── Ask the agent ──
     const result = await runAgent({
@@ -115,6 +123,13 @@ export async function handleWhatsAppMessage(
       inboundText,
       agentId,
     })
+
+    console.log('[whatsapp-agent] runAgent result:', JSON.stringify({
+      reply: result?.reply?.substring(0, 200),
+      error: result?.error,
+      handoffRequested: result?.handoffRequested,
+      mediaCount: result?.mediaToSend?.length ?? 0,
+    }))
 
     let reply = result?.reply?.trim()
     let brokeDown = false
@@ -138,6 +153,7 @@ export async function handleWhatsAppMessage(
         // A genuine, deliberate silence from the engine. Let the rest of
         // the pipeline proceed rather than sending filler the merchant
         // never wrote.
+        console.log('[whatsapp-agent] BAIL: runAgent returned no reply and no error')
         return false
       }
     }

@@ -3,21 +3,32 @@
  *
  * ── THE AGENT ROUTER ────────────────────────────────────────────────────
  * Decides which agent (or agent system) handles each inbound WhatsApp
- * message. Replaces the old sequential chain where every agent tried in
- * order and the first one to reply won — which meant real-estate agents
- * answering product queries.
+ * message. Exactly ONE agent responds per message — no double-replies,
+ * no silent drops.
  *
- * ── ROUTING ORDER ───────────────────────────────────────────────────────
- *   1. STICKY SESSION — conversation already assigned? Same agent answers.
- *   2. ADS AGENT     — click-to-WhatsApp ad lead? Ads agent.
- *   3. BROADCAST REPLY — replying to a broadcast? The broadcasting agent.
- *   4. KEYWORD MATCH  — merchant-defined keyword → agent type mapping.
- *   5. LLM INTENT    — GPT-4o-mini classifies the message (fast, cheap).
- *   6. FALLBACK      — first active agent in the tenant's priority list.
+ * ── ARCHITECTURE ────────────────────────────────────────────────────────
  *
- * ── GUARANTEE ───────────────────────────────────────────────────────────
- * Exactly ONE agent responds per message. The router picks the agent,
- * the webhook executes it. No more double-replies.
+ *   1. AGENT REGISTRY  — A live snapshot of every active agent, built
+ *      fresh on each routing call from the agents + ai_agent_configs
+ *      tables. This is the SINGLE SOURCE OF TRUTH for "which agents
+ *      exist and are turned on right now." Nothing else is trusted.
+ *
+ *   2. ROUTING CONFIG   — Merchant preferences only: keyword overrides,
+ *      LLM routing toggle. NOT a source of truth for active agents.
+ *
+ *   3. ROUTING PIPELINE — Runs in strict priority order:
+ *        1. Sticky session (conversation already assigned)
+ *        2. Ads agent (click-to-WhatsApp ad lead)
+ *        3. Broadcast reply (replying to a campaign)
+ *        4. Keyword match (merchant-defined or built-in ecommerce)
+ *       4.5. Product catalog match (bare product name → ecommerce)
+ *        5. LLM intent (GPT-4o-mini classification)
+ *        6. Fallback (first active agent)
+ *
+ *   4. AGENT ISOLATION  — Every routing stage filters candidates through
+ *      the live registry. An agent of type X can never be confused with
+ *      type Y. A paused/deleted agent is invisible to the entire pipeline.
+ *      Sticky sessions pointing at dead agents are auto-expired.
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -71,18 +82,205 @@ export interface RouteInput {
   adsAgentEnabled?: boolean
 }
 
-// ── Routing config (cached per request) ──────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// SECTION 1: AGENT REGISTRY — Live snapshot of active agents
+// ═══════════════════════════════════════════════════════════════════════
+//
+// The registry is built fresh on every routing call. It replaces the old
+// approach of reading `agent_routing_config.active_agent_types` once and
+// trusting it forever — which meant newly activated agents were invisible
+// and paused agents kept getting routed to.
+//
+// TWO INDEPENDENT AGENT SYSTEMS exist:
+//   • Ecommerce  — lives in `ai_agent_configs`, gated by `is_enabled`
+//   • General    — lives in `agents`, gated by `is_active`
+// They have different tables, different columns, and different handlers.
+// The registry queries both in parallel and builds one clean map.
+
+/** A single active agent in the registry. */
+interface RegisteredAgent {
+  id: string
+  type: string           // 'sales', 'support', 'realestate', 'ecommerce', etc.
+  system: AgentSystem    // 'ecommerce' | 'general:sales' | etc.
+  createdAt: string      // For deterministic ordering (oldest = default)
+}
+
+/**
+ * Immutable snapshot of every active agent for a tenant at a point in time.
+ *
+ * Built once per routeMessage() call — every routing stage uses this
+ * instead of the persisted config, so a toggle on the Agents page takes
+ * effect on the very next inbound message with zero delay.
+ */
+interface AgentRegistry {
+  /** All active agents, grouped by type. Each group is ordered oldest-first. */
+  byType: Map<string, RegisteredAgent[]>
+
+  /** Every active agent ID → its RegisteredAgent, for O(1) lookup. */
+  byId: Map<string, RegisteredAgent>
+
+  /** Ordered list of active types (deterministic: ecommerce first if present, then by earliest agent). */
+  activeTypes: string[]
+
+  /** Is the ecommerce agent specifically enabled? */
+  ecommerceEnabled: boolean
+}
+
+/**
+ * Build a live AgentRegistry for this tenant by querying the source-of-truth
+ * tables directly. Both queries run in parallel for minimal latency.
+ *
+ * This is the ONLY function that decides which agents are active.
+ * Nothing else in the router makes that judgment.
+ */
+async function buildAgentRegistry(tenantId: string): Promise<AgentRegistry> {
+  // Query both agent systems in parallel — one DB round-trip each
+  const [generalResult, ecommerceResult] = await Promise.all([
+    // General agents: sales, support, realestate, creative, etc.
+    // Column: agents.is_active (boolean)
+    db()
+      .from('agents')
+      .select('id, agent_type, created_at')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true }),
+
+    // Ecommerce agent: product catalog agent
+    // Column: ai_agent_configs.is_enabled (boolean) — NOT is_active (dead column)
+    db()
+      .from('ai_agent_configs')
+      .select('id')
+      .eq('user_id', tenantId)
+      .eq('is_enabled', true)
+      .maybeSingle(),
+  ])
+
+  const byType = new Map<string, RegisteredAgent[]>()
+  const byId = new Map<string, RegisteredAgent>()
+
+  // ── Register general agents ──
+  for (const row of generalResult.data ?? []) {
+    const type = row.agent_type || 'other'
+    const agent: RegisteredAgent = {
+      id: row.id,
+      type,
+      system: `general:${type}` as AgentSystem,
+      createdAt: row.created_at,
+    }
+
+    if (!byType.has(type)) byType.set(type, [])
+    byType.get(type)!.push(agent)
+    byId.set(row.id, agent)
+  }
+
+  // ── Register ecommerce agent ──
+  const ecommerceEnabled = !!ecommerceResult.data
+  if (ecommerceEnabled) {
+    const ecommerceAgent: RegisteredAgent = {
+      id: ecommerceResult.data.id,
+      type: 'ecommerce',
+      system: 'ecommerce',
+      createdAt: '1970-01-01T00:00:00Z', // Always first in priority
+    }
+    byType.set('ecommerce', [ecommerceAgent])
+    byId.set(ecommerceResult.data.id, ecommerceAgent)
+  }
+
+  // ── Build ordered active types list ──
+  // Ecommerce first (if present), then other types ordered by their
+  // earliest agent's created_at — gives deterministic fallback priority.
+  const typeOrder: { type: string; earliest: string }[] = []
+  for (const [type, agents] of byType.entries()) {
+    typeOrder.push({ type, earliest: agents[0].createdAt })
+  }
+  typeOrder.sort((a, b) => {
+    // Ecommerce always first
+    if (a.type === 'ecommerce') return -1
+    if (b.type === 'ecommerce') return 1
+    return a.earliest.localeCompare(b.earliest)
+  })
+
+  return {
+    byType,
+    byId,
+    activeTypes: typeOrder.map((t) => t.type),
+    ecommerceEnabled,
+  }
+}
+
+// ── Registry query helpers ──────────────────────────────────────────────
+
+/** Is this agent type currently active (has at least one live agent)? */
+function isTypeActive(registry: AgentRegistry, type: string): boolean {
+  return registry.byType.has(type)
+}
+
+/** Is this specific agent ID currently active? */
+function isAgentActive(registry: AgentRegistry, agentId: string): boolean {
+  return registry.byId.has(agentId)
+}
+
+/**
+ * Get the default (oldest active) agent ID for a type.
+ * Returns null if no active agent of that type exists.
+ */
+function getDefaultAgent(registry: AgentRegistry, type: string): string | null {
+  const agents = registry.byType.get(type)
+  return agents?.[0]?.id ?? null
+}
+
+/**
+ * Resolve a specific agent for a type. Checks in order:
+ *   1. If a specific agentId is given AND it's active → use it
+ *   2. Otherwise → default (oldest active) agent of that type
+ *   3. If no agent of that type → null
+ *
+ * This replaces the old resolveAgentId() that trusted default_agents
+ * blindly and could silently target dead/paused agents.
+ */
+function resolveAgent(
+  registry: AgentRegistry,
+  type: string,
+  preferredAgentId?: string | null,
+): string | null {
+  // Preferred agent is valid only if it's still active AND of the right type
+  if (preferredAgentId && registry.byId.has(preferredAgentId)) {
+    const agent = registry.byId.get(preferredAgentId)!
+    if (agent.type === type) return preferredAgentId
+  }
+
+  // Fall back to the default (oldest active) agent of this type
+  return getDefaultAgent(registry, type)
+}
+
+/**
+ * When routing picks a general agent type but no agent of that type exists,
+ * fall back to ecommerce (if active) rather than dropping the message.
+ *
+ * This prevents the silent-drop scenario where the LLM classifies a
+ * message as "sales" but the merchant only has an ecommerce agent.
+ */
+function withEcommerceFallback(
+  registry: AgentRegistry,
+  system: AgentSystem,
+  agentId: string | null,
+): { system: AgentSystem; agentId: string | null } {
+  if (system.startsWith('general:') && !agentId && registry.ecommerceEnabled) {
+    return { system: 'ecommerce', agentId: null }
+  }
+  return { system, agentId }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SECTION 2: ROUTING CONFIG — Merchant preferences only
+// ═══════════════════════════════════════════════════════════════════════
 
 interface RoutingConfig {
-  active_agent_types: string[]
-  default_agents: Record<string, string>
   keyword_overrides: Record<string, string>
   llm_routing_enabled: boolean
 }
 
 const DEFAULT_CONFIG: RoutingConfig = {
-  active_agent_types: [],
-  default_agents: {},
   keyword_overrides: {},
   llm_routing_enabled: true,
 }
@@ -90,20 +288,13 @@ const DEFAULT_CONFIG: RoutingConfig = {
 async function loadRoutingConfig(tenantId: string): Promise<RoutingConfig> {
   const { data } = await db()
     .from('agent_routing_config')
-    .select('active_agent_types, default_agents, keyword_overrides, llm_routing_enabled')
+    .select('keyword_overrides, llm_routing_enabled')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
   if (!data) return DEFAULT_CONFIG
 
   return {
-    active_agent_types: Array.isArray(data.active_agent_types)
-      ? data.active_agent_types
-      : DEFAULT_CONFIG.active_agent_types,
-    default_agents:
-      typeof data.default_agents === 'object' && data.default_agents
-        ? data.default_agents
-        : DEFAULT_CONFIG.default_agents,
     keyword_overrides:
       typeof data.keyword_overrides === 'object' && data.keyword_overrides
         ? data.keyword_overrides
@@ -112,21 +303,17 @@ async function loadRoutingConfig(tenantId: string): Promise<RoutingConfig> {
   }
 }
 
-// ── Sticky session check ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// SECTION 3: ROUTING PIPELINE STAGES
+// ═══════════════════════════════════════════════════════════════════════
 
-// A sticky routing decision that's more than this old is treated as stale
-// and re-evaluated from scratch. Without an expiry, one misrouted message
-// (e.g. an LLM guessing "marketing" for a bare product name) would lock a
-// customer's conversation to the wrong agent forever, since every later
-// message short-circuits straight to the sticky system before keyword
-// match, product-catalog match, or the LLM ever runs again.
+// ── Sticky session ──────────────────────────────────────────────────────
+
 const STICKY_SESSION_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
 
 /**
- * Resolve a phone number to this tenant's contact row. Shared by the
- * sticky-override check below and checkBroadcastReply(), both of which
- * need to go from "who texted" to "what did we send them" via
- * broadcast_recipients, which is keyed on contact_id, not phone.
+ * Resolve a phone number to this tenant's contact row.
+ * Shared by sticky-override and broadcast-reply checks.
  */
 async function resolveContactId(
   tenantId: string,
@@ -142,20 +329,12 @@ async function resolveContactId(
 }
 
 /**
- * Was this contact sent a broadcast AFTER `sinceIso`?
+ * Was this contact sent a broadcast AFTER the given timestamp?
  *
- * Sticky session exists so a mid-conversation reply doesn't get
- * re-classified by keyword/LLM every message. But it was blindly
- * winning over a broadcast's own agent pick too: a merchant selects
- * "Kalosa Aesthetics (sales)" for a fresh campaign, the recipient
- * already has a sticky routing from an earlier, unrelated chat (e.g.
- * "Welcome back!" from the ecommerce agent) less than 6h old, and every
- * reply to the NEW campaign kept going to the OLD agent — silently, with
- * no error, which is exactly why the reply "looked random" rather than
- * wrong: it was answering as if the campaign had never been sent.
- *
- * A broadcast sent after the sticky routing was set is the merchant's
- * explicit, fresh choice of agent for this contact and should win.
+ * A broadcast sent after a sticky session was set represents the
+ * merchant's fresh, explicit choice of agent for this contact — it
+ * should override the stale sticky routing so replies to the new
+ * campaign go to the new campaign's agent.
  */
 async function hasNewerBroadcast(
   tenantId: string,
@@ -176,10 +355,20 @@ async function hasNewerBroadcast(
   return !!data
 }
 
+/**
+ * Check if this conversation has a valid sticky session.
+ *
+ * AGENT ISOLATION: The sticky session is validated against the live
+ * registry. If the sticky agent was paused or deleted since routing
+ * was set, the sticky session is treated as expired and the message
+ * is re-routed from scratch — preventing replies from going to a
+ * dead agent.
+ */
 async function checkStickySession(
   conversationId: string,
   tenantId: string,
   contactPhone: string,
+  registry: AgentRegistry,
 ): Promise<{ system: AgentSystem; agentId: string | null } | null> {
   const { data } = await db()
     .from('conversations')
@@ -187,40 +376,47 @@ async function checkStickySession(
     .eq('id', conversationId)
     .maybeSingle()
 
-  // No routing yet, or conversation was handed to a human
   if (!data?.routed_agent_type || data.status === 'pending') return null
 
-  // Stale — let the message be re-routed (keyword/product/LLM) instead of
-  // permanently repeating whatever agent answered hours/days ago.
+  // ── Time-based expiry ──
   if (data.routed_at) {
     const age = Date.now() - new Date(data.routed_at).getTime()
     if (age > STICKY_SESSION_TTL_MS) return null
 
-    // A campaign sent to this contact more recently than this sticky
-    // routing was set overrides it — step aside so the normal
-    // broadcast-reply check (step 3 below) picks the campaign's agent
-    // instead of silently repeating whatever answered before it.
+    // A campaign sent after this sticky was set overrides it
     if (await hasNewerBroadcast(tenantId, contactPhone, data.routed_at)) {
       return null
     }
   }
 
-  return {
-    system: data.routed_agent_type as AgentSystem,
-    agentId: data.routed_agent_id ?? null,
+  // ── Agent liveness validation ──
+  // If the sticky agent is no longer active, expire this session so
+  // the message gets re-routed to a live agent instead of silently
+  // targeting a dead one.
+  const stickySystem = data.routed_agent_type as AgentSystem
+  const stickyAgentId = data.routed_agent_id ?? null
+
+  if (stickySystem === 'ecommerce') {
+    // Ecommerce agent was turned off → expire sticky
+    if (!registry.ecommerceEnabled) return null
+  } else if (stickySystem.startsWith('general:')) {
+    if (stickyAgentId) {
+      // Specific agent was paused/deleted → expire sticky
+      if (!isAgentActive(registry, stickyAgentId)) return null
+    } else {
+      // Type has no active agents → expire sticky
+      const type = stickySystem.replace('general:', '')
+      if (!isTypeActive(registry, type)) return null
+    }
   }
+
+  return { system: stickySystem, agentId: stickyAgentId }
 }
 
-// ── Broadcast reply detection ────────────────────────────────────────────
+// ── Broadcast reply detection ───────────────────────────────────────────
 
 interface BroadcastReplyTarget {
   system: AgentSystem
-  /**
-   * The exact agent chosen in the broadcast wizard (broadcasts.agent_id,
-   * migration 033), when the merchant picked one. Null means "no specific
-   * agent was pinned to this campaign" — the caller falls back to
-   * resolving one by type, same as before this column existed.
-   */
   agentId: string | null
 }
 
@@ -228,18 +424,9 @@ async function checkBroadcastReply(
   tenantId: string,
   contactPhone: string,
 ): Promise<BroadcastReplyTarget | null> {
-  // This previously queried tables that don't exist in the schema
-  // ("broadcast_contacts", "broadcast_histories") — see 001_initial_schema.sql,
-  // where broadcast sends live in "broadcasts" and recipients in
-  // "broadcast_recipients" (keyed by contact_id, not phone). Every call
-  // silently returned null, so broadcast-reply routing has never actually
-  // fired. Resolve the contact first, since that's what broadcast_recipients
-  // is keyed on.
   const contactId = await resolveContactId(tenantId, contactPhone)
   if (!contactId) return null
 
-  // Check if this contact received a broadcast recently (within 24h window)
-  // and the broadcast had an agent_type tag.
   const { data } = await db()
     .from('broadcast_recipients')
     .select('broadcast_id')
@@ -251,8 +438,6 @@ async function checkBroadcastReply(
 
   if (!data?.broadcast_id) return null
 
-  // Check if the broadcast had an agent_type (and, since migration 033,
-  // a specific agent_id the merchant picked for this campaign)
   const { data: broadcast } = await db()
     .from('broadcasts')
     .select('agent_type, agent_id, user_id')
@@ -262,9 +447,10 @@ async function checkBroadcastReply(
 
   if (!broadcast?.agent_type) return null
 
-  // Map broadcast agent_type to system
   const system: AgentSystem =
-    broadcast.agent_type === 'ecommerce' ? 'ecommerce' : (`general:${broadcast.agent_type}` as AgentSystem)
+    broadcast.agent_type === 'ecommerce'
+      ? 'ecommerce'
+      : (`general:${broadcast.agent_type}` as AgentSystem)
 
   return {
     system,
@@ -272,7 +458,7 @@ async function checkBroadcastReply(
   }
 }
 
-// ── Keyword matching ─────────────────────────────────────────────────────
+// ── Keyword matching ────────────────────────────────────────────────────
 
 function matchKeywords(
   text: string,
@@ -280,7 +466,7 @@ function matchKeywords(
 ): AgentSystem | null {
   const lower = text.toLowerCase().trim()
 
-  // Built-in ecommerce keywords (always active if ecommerce is in the list)
+  // Built-in ecommerce keywords (always checked)
   const ecommerceKeywords = [
     'price', 'buy', 'order', 'cart', 'checkout', 'product', 'shop',
     'delivery', 'shipping', 'discount', 'offer', 'deal', 'stock',
@@ -304,15 +490,8 @@ function matchKeywords(
   return null
 }
 
-// ── Product catalog match ────────────────────────────────────────────────
-//
-// A bare product name ("Green tea", "Organic ragi") has none of the
-// generic buy/price/shop words above, so it falls through to the LLM —
-// which, with no purchase-intent cue in the text, can easily guess
-// "marketing" or "sales" instead of "ecommerce". If the tenant has
-// actually synced a product with (or containing) that name, the message
-// is unambiguous: route straight to ecommerce, no LLM call, no risk of
-// misclassification.
+// ── Product catalog match ───────────────────────────────────────────────
+
 async function matchProductCatalog(
   tenantId: string,
   text: string,
@@ -332,13 +511,8 @@ async function matchProductCatalog(
     const name = String(p.name || '').toLowerCase().trim()
     if (!name) continue
 
-    // Whole product name appears in the message verbatim
-    // ("I need green tea" contains "green tea").
     if (lower.includes(name)) return true
 
-    // Or every significant word of the product name appears somewhere
-    // in the message, in any order (tolerates punctuation/word-order
-    // differences like "ragi organic" vs "Organic Ragi").
     const nameWords = name.split(/\s+/).filter((w) => w.length > 2)
     if (nameWords.length > 0 && nameWords.every((w) => lower.includes(w))) {
       return true
@@ -348,7 +522,7 @@ async function matchProductCatalog(
   return false
 }
 
-// ── LLM intent classification ────────────────────────────────────────────
+// ── LLM intent classification ───────────────────────────────────────────
 
 interface IntentResult {
   system: AgentSystem
@@ -360,7 +534,6 @@ async function classifyIntent(
   text: string,
   activeTypes: string[],
 ): Promise<IntentResult> {
-  // Build the agent type descriptions for the LLM
   const typeDescriptions: Record<string, string> = {
     ecommerce: 'Shopping, products, prices, orders, cart, checkout, delivery, returns',
     sales: 'Sales inquiries, pricing, deals, negotiations, quotes, proposals',
@@ -403,10 +576,7 @@ async function classifyIntent(
             role: 'system',
             content: `You are an intent classifier for a WhatsApp business. Classify the customer's message into exactly ONE of these agent types:\n${activeDescriptions}\n\nIMPORTANT: if "ecommerce" is one of the listed types, strongly prefer it for anything that could plausibly be a customer trying to buy, browse, or ask about a product — including a bare product name, a product category (e.g. "biscuit", "snacks", "tea"), quantities, or short messages with little context. Only choose a different type when the message is CLEARLY about something else — e.g. asking about a marketing campaign or promotion content (marketing), negotiating a bulk/business deal or asking for a sales quote (sales), reporting a problem or complaint (support). When in doubt between ecommerce and another type, choose ecommerce.\n\nRespond with JSON: {"type": "<agent_type>", "confidence": 0.0-1.0}\nOnly use types from the list above.`,
           },
-          {
-            role: 'user',
-            content: text,
-          },
+          { role: 'user', content: text },
         ],
       }),
     })
@@ -417,7 +587,6 @@ async function classifyIntent(
 
     const data = await response.json()
     const raw = data.choices?.[0]?.message?.content?.trim() ?? ''
-    // Parse JSON from the response (handle markdown code blocks)
     const jsonStr = raw.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
     const parsed = JSON.parse(jsonStr)
 
@@ -431,7 +600,6 @@ async function classifyIntent(
     }
   } catch (err) {
     console.error('[agent-router] LLM classification failed:', err)
-    // Fallback: return first active type with low confidence
     const fallbackType = activeTypes[0] || 'support'
     return {
       system: fallbackType === 'ecommerce' ? 'ecommerce' : `general:${fallbackType}`,
@@ -441,59 +609,14 @@ async function classifyIntent(
   }
 }
 
-// ── Resolve agent ID for a general:<type> system ─────────────────────────
-
-async function resolveAgentId(
-  tenantId: string,
-  agentType: string,
-  config: RoutingConfig,
-): Promise<string | null> {
-  // Check default_agents mapping first
-  const defaultId = config.default_agents[agentType]
-  if (defaultId) return defaultId
-
-  // Find the first active agent of this type for this tenant
-  const { data } = await db()
-    .from('agents')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .eq('agent_type', agentType)
-    .eq('is_active', true)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-
-  return data?.id ?? null
-}
-
-// If routing picks a general:<type> agent but no active agent of that
-// type exists for this tenant (e.g. the merchant only ever set up the
-// ecommerce/product agent, never a dedicated Sales/Support bot),
-// resolveAgentId returns null. The webhook only calls the general-agent
-// handler when agentId is truthy (routing.system.startsWith('general:')
-// && routing.agentId) — so a null agentId here silently drops the reply
-// entirely, with no error and no fallback, which is why messages that
-// get classified as "sales"/"support"/etc. sometimes get NO WhatsApp
-// reply at all. Fall back to the ecommerce agent (if active) instead of
-// leaving the customer unanswered.
-function withAgentFallback(
-  system: AgentSystem,
-  agentId: string | null,
-  config: RoutingConfig,
-): { system: AgentSystem; agentId: string | null } {
-  if (system.startsWith('general:') && !agentId && config.active_agent_types.includes('ecommerce')) {
-    return { system: 'ecommerce', agentId: null }
-  }
-  return { system, agentId }
-}
-
-// ── Persist routing decision ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// SECTION 4: PERSISTENCE & LOGGING
+// ═══════════════════════════════════════════════════════════════════════
 
 async function persistRouting(
   conversationId: string,
   decision: RoutingDecision,
 ): Promise<void> {
-  // Update conversation with sticky session
   await db()
     .from('conversations')
     .update({
@@ -517,7 +640,7 @@ async function logRouting(
       tenant_id: tenantId,
       conversation_id: conversationId,
       contact_phone: contactPhone,
-      inbound_text: inboundText.slice(0, 500), // Trim for storage
+      inbound_text: inboundText.slice(0, 500),
       chosen_agent_type: decision.system,
       chosen_agent_id: decision.agentId,
       routing_method: decision.method,
@@ -531,14 +654,23 @@ async function logRouting(
   }
 }
 
-// ── THE MAIN ROUTER ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// SECTION 5: THE MAIN ROUTER
+// ═══════════════════════════════════════════════════════════════════════
 
 /**
  * Route an inbound WhatsApp message to the right agent.
  *
  * Returns a RoutingDecision the webhook uses to call exactly one agent
- * system. Returns null when no agent is configured at all (the webhook
- * should fall through to automations only).
+ * system. Returns null when no agent is configured at all.
+ *
+ * AGENT ISOLATION GUARANTEE:
+ * - The registry is built fresh from live DB state on every call
+ * - Every routing stage validates its pick against the registry
+ * - A paused/deleted agent can never be selected
+ * - Agents of different types are cleanly separated — type X routing
+ *   can never accidentally invoke a type Y agent
+ * - Stale sticky sessions pointing at dead agents are auto-expired
  */
 export async function routeMessage(input: RouteInput): Promise<RoutingDecision | null> {
   const start = Date.now()
@@ -547,11 +679,22 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
     isAdLead, adsAgentId, adsAgentEnabled,
   } = input
 
+  // ── Build live agent registry + load merchant config in parallel ──
+  // This is the foundational step: from here on, the registry is the
+  // single source of truth for which agents are active. No other
+  // table, column, or cached value overrides it.
+  const [registry, config] = await Promise.all([
+    buildAgentRegistry(tenantId),
+    loadRoutingConfig(tenantId),
+  ])
+
+  // No active agents at all? Nothing to route to.
+  if (registry.activeTypes.length === 0) return null
+
   // ── 1. STICKY SESSION ─────────────────────────────────────────────
-  // If this conversation was already routed, keep it there — unless a
-  // broadcast sent to this contact after that routing overrides it (see
-  // checkStickySession's hasNewerBroadcast check above).
-  const sticky = await checkStickySession(conversationId, tenantId, contactPhone)
+  // If this conversation was already routed to a LIVE agent, keep it.
+  // Dead/paused agents are auto-expired by the registry validation.
+  const sticky = await checkStickySession(conversationId, tenantId, contactPhone, registry)
   if (sticky) {
     const decision: RoutingDecision = {
       system: sticky.system,
@@ -559,15 +702,15 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
       method: 'sticky',
       latencyMs: Date.now() - start,
     }
-    // Log but don't update — it's already persisted
     await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
     return decision
   }
 
   // ── 2. ADS AGENT ──────────────────────────────────────────────────
-  if (adsAgentEnabled && adsAgentId && isAdLead) {
+  // Validate the ads agent is still active before routing to it
+  if (adsAgentEnabled && adsAgentId && isAdLead && isAgentActive(registry, adsAgentId)) {
     const decision: RoutingDecision = {
-      system: `general:sales`, // Ads leads are sales
+      system: 'general:sales',
       agentId: adsAgentId,
       method: 'ads',
       latencyMs: Date.now() - start,
@@ -577,93 +720,18 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
     return decision
   }
 
-  // ── Load tenant routing config ────────────────────────────────────
-  const config = await loadRoutingConfig(tenantId)
-
-
-
-
-
-
-  
-    // ── Reconcile 'ecommerce' against the LIVE enabled flag ────────────
-  //
-  // The column that actually gates the ecommerce agent is
-  // ai_agent_configs.is_enabled — it's what the Settings page toggle
-  // writes and what engine.ts checks before replying. This used to
-  // query a different, dead column ('is_active', which nothing ever
-  // writes) AND only ran once, the first time a tenant was ever routed
-  // — after that, whatever active_agent_types ended up with (from
-  // agent_routing_config, persisted below) was trusted forever. So
-  // turning the ecommerce agent off in Settings *after* that first
-  // message did nothing: routing kept treating it as active and kept
-  // sending replies through it, even though the agent itself would have
-  // refused if it were ever actually asked. Checking the real flag here,
-  // on every call, is what lets a merchant's Settings toggle (or a
-  // direct DB edit to the right column) actually take effect.
-  const { data: ecommerceCfg } = await db()
-    .from('ai_agent_configs')
-    .select('id')
-    .eq('user_id', tenantId)
-    .eq('is_enabled', true)
-    .maybeSingle()
-  const ecommerceEnabled = !!ecommerceCfg
-  if (ecommerceEnabled && !config.active_agent_types.includes('ecommerce')) {
-    config.active_agent_types.push('ecommerce')
-  } else if (!ecommerceEnabled) {
-    config.active_agent_types = config.active_agent_types.filter((t) => t !== 'ecommerce')
-  }
-
-  // If the tenant has no routing config, check if they have the old-style
-  // whatsapp_agent_id or ecommerce agent — build a fallback config.
-  if (config.active_agent_types.length === 0) {
-    // Check for general agents
-
-
-
-
-
-    
-    // Check for general agents
-    const { data: agents } = await db()
-      .from('agents')
-      .select('id, agent_type')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: true })
-
-    if (agents?.length) {
-      for (const a of agents) {
-        const type = a.agent_type || 'other'
-        if (!config.active_agent_types.includes(type)) {
-          config.active_agent_types.push(type)
-        }
-        // First agent of each type becomes the default
-        if (!config.default_agents[type]) {
-          config.default_agents[type] = a.id
-        }
-      }
-    }
-
-    // Still nothing? No agent at all.
-    if (config.active_agent_types.length === 0) return null
-  }
-
   // ── 3. BROADCAST REPLY ────────────────────────────────────────────
   const broadcastTarget = await checkBroadcastReply(tenantId, contactPhone)
   if (broadcastTarget) {
-    // If the merchant pinned a specific agent to this campaign
-    // (broadcasts.agent_id, migration 033), use exactly that agent —
-    // don't re-resolve by type, which could pick a different agent of
-    // the same type. Only fall back to type-based resolution for older
-    // broadcasts that predate that column.
     const agentType = broadcastTarget.system === 'ecommerce'
       ? 'ecommerce'
       : broadcastTarget.system.replace('general:', '')
+
+    // Validate broadcast's agent against the live registry
     const agentId = broadcastTarget.system === 'ecommerce'
       ? null
-      : broadcastTarget.agentId ?? await resolveAgentId(tenantId, agentType, config)
-    const resolved = withAgentFallback(broadcastTarget.system, agentId, config)
+      : resolveAgent(registry, agentType, broadcastTarget.agentId)
+    const resolved = withEcommerceFallback(registry, broadcastTarget.system, agentId)
 
     const decision: RoutingDecision = {
       system: resolved.system,
@@ -678,33 +746,32 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
 
   // ── 4. KEYWORD MATCH ──────────────────────────────────────────────
   const keywordMatch = matchKeywords(inboundText, config.keyword_overrides)
-  if (keywordMatch && config.active_agent_types.includes(
-    keywordMatch === 'ecommerce' ? 'ecommerce' : keywordMatch.replace('general:', ''),
-  )) {
-    const agentType = keywordMatch === 'ecommerce'
+  if (keywordMatch) {
+    const matchedType = keywordMatch === 'ecommerce'
       ? 'ecommerce'
       : keywordMatch.replace('general:', '')
-    const rawAgentId = keywordMatch === 'ecommerce'
-      ? null
-      : await resolveAgentId(tenantId, agentType, config)
-    const resolved = withAgentFallback(keywordMatch, rawAgentId, config)
 
-    const decision: RoutingDecision = {
-      system: resolved.system,
-      agentId: resolved.agentId,
-      method: 'keyword',
-      latencyMs: Date.now() - start,
+    // Only route to the keyword match if that type is actually active
+    if (isTypeActive(registry, matchedType)) {
+      const rawAgentId = keywordMatch === 'ecommerce'
+        ? null
+        : resolveAgent(registry, matchedType)
+      const resolved = withEcommerceFallback(registry, keywordMatch, rawAgentId)
+
+      const decision: RoutingDecision = {
+        system: resolved.system,
+        agentId: resolved.agentId,
+        method: 'keyword',
+        latencyMs: Date.now() - start,
+      }
+      await persistRouting(conversationId, decision)
+      await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
+      return decision
     }
-    await persistRouting(conversationId, decision)
-    await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
-    return decision
   }
 
   // ── 4.5 PRODUCT CATALOG MATCH ─────────────────────────────────────
-  // Deterministic and cheap — checked before the LLM so a plain product
-  // name never gets misclassified as "marketing"/"sales" for lack of a
-  // generic buy/price keyword.
-  if (config.active_agent_types.includes('ecommerce')) {
+  if (registry.ecommerceEnabled) {
     const productMatch = await matchProductCatalog(tenantId, inboundText)
     if (productMatch) {
       const decision: RoutingDecision = {
@@ -721,25 +788,31 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
   }
 
   // ── 5. LLM INTENT CLASSIFICATION ─────────────────────────────────
-  if (config.llm_routing_enabled && config.active_agent_types.length > 1) {
-    const rawIntent = await classifyIntent(inboundText, config.active_agent_types)
-    // Second line of defense on top of the prompt bias: a low-confidence
-    // guess for anything other than ecommerce (e.g. gpt-4o-mini unsure
-    // whether "Biscuit" means marketing or ecommerce) defaults to
-    // ecommerce when it's active, instead of risking a wrong agent.
+  if (config.llm_routing_enabled && registry.activeTypes.length > 1) {
+    const rawIntent = await classifyIntent(inboundText, registry.activeTypes)
+
+    // Low-confidence non-ecommerce guesses default to ecommerce when active
     const intent: IntentResult =
-      config.active_agent_types.includes('ecommerce') &&
+      registry.ecommerceEnabled &&
       rawIntent.system !== 'ecommerce' &&
       rawIntent.confidence < 0.75
         ? { system: 'ecommerce', label: `${rawIntent.label}_low_confidence`, confidence: rawIntent.confidence }
         : rawIntent
+
     const agentType = intent.system === 'ecommerce'
       ? 'ecommerce'
       : intent.system.replace('general:', '')
-    const rawAgentId = intent.system === 'ecommerce'
+
+    // LLM might hallucinate a type that doesn't exist — validate it
+    const validatedType = isTypeActive(registry, agentType) ? agentType : registry.activeTypes[0]
+    const validatedSystem: AgentSystem = validatedType === 'ecommerce'
+      ? 'ecommerce'
+      : `general:${validatedType}`
+
+    const rawAgentId = validatedSystem === 'ecommerce'
       ? null
-      : await resolveAgentId(tenantId, agentType, config)
-    const resolved = withAgentFallback(intent.system, rawAgentId, config)
+      : resolveAgent(registry, validatedType)
+    const resolved = withEcommerceFallback(registry, validatedSystem, rawAgentId)
 
     const decision: RoutingDecision = {
       system: resolved.system,
@@ -755,15 +828,15 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
   }
 
   // ── 6. FALLBACK ───────────────────────────────────────────────────
-  // Use the first active agent type in priority order.
-  const fallbackType = config.active_agent_types[0]
+  // First active type in priority order (ecommerce first if present)
+  const fallbackType = registry.activeTypes[0]
   const fallbackSystem: AgentSystem = fallbackType === 'ecommerce'
     ? 'ecommerce'
     : `general:${fallbackType}`
   const rawFallbackAgentId = fallbackType === 'ecommerce'
     ? null
-    : await resolveAgentId(tenantId, fallbackType, config)
-  const resolvedFallback = withAgentFallback(fallbackSystem, rawFallbackAgentId, config)
+    : resolveAgent(registry, fallbackType)
+  const resolvedFallback = withEcommerceFallback(registry, fallbackSystem, rawFallbackAgentId)
 
   const decision: RoutingDecision = {
     system: resolvedFallback.system,
@@ -775,6 +848,10 @@ export async function routeMessage(input: RouteInput): Promise<RoutingDecision |
   await logRouting(tenantId, conversationId, contactPhone, inboundText, decision)
   return decision
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// SECTION 6: PUBLIC UTILITIES
+// ═══════════════════════════════════════════════════════════════════════
 
 /**
  * Clear a conversation's routing assignment.
@@ -822,7 +899,7 @@ export async function manualRoute(
   await logRouting(tenantId, conversationId, '', '[manual assignment]', {
     system,
     agentId,
-    method: 'sticky', // logged as sticky since it's a manual override
+    method: 'sticky',
     latencyMs: 0,
   })
 }

@@ -27,6 +27,7 @@ import {
   buildAgentSystemAddon,
   handleCapabilityTool,
   type Agent,
+  type LeadFormSpec,
 } from '@/lib/agent/engine-capabilities'
 import type { MediaItem } from '@/lib/agent/tools/media-tools'
 
@@ -68,6 +69,9 @@ export interface AgentResult {
   // NEW: media the AI chose to send. flow-engine sends each of these to the
   // customer as a separate WhatsApp media message, in order, after `reply`.
   mediaToSend: MediaItem[]
+  // NEW: set when the AI calls show_lead_form on the web widget. The widget
+  // route renders these fields as a form. Null on WhatsApp / when not asked.
+  showLeadForm: LeadFormSpec | null
 }
 
 // ── Base tools (always available) ──
@@ -173,6 +177,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
     handoffRequested: false,
     tokensUsed: 0,
     mediaToSend: [],
+    showLeadForm: null,
   }
 
   // Provider + key check (gemini or openai depending on LLM_PROVIDER)
@@ -189,6 +194,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
   const startedAt = Date.now()
   const toolsUsed: string[] = []
   const mediaToSend: MediaItem[] = []
+  let showLeadForm: LeadFormSpec | null = null
   let handoffRequested = false
   let totalTokens = 0
 
@@ -228,6 +234,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
         const toolOut = await executeTool(toolCall, args, agent)
 
         if (toolOut.media) mediaToSend.push(toolOut.media)
+        if (toolOut.leadForm) showLeadForm = toolOut.leadForm
 
         if (toolCall.name === 'handoff_to_human') {
           handoffRequested = true
@@ -279,6 +286,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
       handoffRequested,
       tokensUsed: totalTokens,
       mediaToSend,
+      showLeadForm,
     }
   } catch (err) {
     console.error('[agent/engine] error:', err)
@@ -298,6 +306,7 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
 interface ToolExecResult {
   result: string
   media?: MediaItem
+  leadForm?: LeadFormSpec
 }
 
 async function executeTool(
@@ -316,7 +325,7 @@ async function executeTool(
         toolCall.name,
         toolCall.args,
       )
-      if (capOut) return { result: capOut.result, media: capOut.media }
+      if (capOut) return { result: capOut.result, media: capOut.media, leadForm: capOut.leadForm }
     }
 
     switch (toolCall.name) {

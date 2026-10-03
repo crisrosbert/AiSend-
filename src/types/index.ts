@@ -8,6 +8,22 @@ export interface Profile {
   created_at: string;
 }
 
+export interface Conversation {
+  id: string;
+  user_id: string;
+  contact_id: string;
+  status: ConversationStatus;
+  assigned_agent_id?: string;
+  last_message_text?: string;
+  last_message_at?: string;
+  unread_count: number;
+  created_at: string;
+  updated_at: string;
+  contact?: Contact;
+  needs_attention?: boolean;   // ← add
+  handoff_reason?: string;     // ← add
+}
+
 export interface Contact {
   id: string;
   user_id: string;

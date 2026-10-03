@@ -19,6 +19,13 @@
 // and tell the model, in the tool result, to say plainly that we moved
 // it. The one thing we never do is claim a time we cannot keep.
 //
+// ── UPDATE-ON-CORRECTION ─────────────────────────────────────────────
+// A customer who gives a time and then corrects it ("actually, make it
+// 12") must not end up with two appointment rows. When this conversation
+// already produced a pending request very recently, we UPDATE that row
+// instead of inserting a new one. A time window keeps genuinely separate
+// bookings made later in the same (long-lived) WhatsApp thread apart.
+//
 // Used by: src/lib/agent/engine.ts
 // Table:   agent_appointments
 
@@ -68,6 +75,10 @@ export interface BookAppointmentArgs {
   fallbackContact?: string | null
 }
 
+// How recently a 'requested' row in this conversation counts as "the one
+// the customer is correcting" rather than a separate booking.
+const RECENT_REQUEST_MS = 2 * 60 * 60 * 1000 // 2 hours
+
 export async function bookAppointment(
   args: BookAppointmentArgs,
 ): Promise<string> {
@@ -91,28 +102,71 @@ export async function bookAppointment(
       ].join(' ')
     }
 
-    const { data, error } = await db()
+    // The row we want to end up with, whether we insert or update.
+    const row = {
+      tenant_id: args.tenantId,
+      business_id: args.businessId ?? null,
+      contact_id: args.contactId,
+      conversation_id: args.conversationId,
+      customer_name: args.customerName.trim(),
+      customer_phone: args.customerPhone.trim(),
+      service: args.service?.trim() || 'Consultation',
+      appointment_at: slot.iso,
+      // Keep the customer's own words alongside the resolved slot.
+      // When staff ring back, "they asked for tonight" is the context
+      // that makes the call make sense.
+      notes: buildNotes(args.notes, args.preferredDate, slot.adjusted ? slot.note : undefined),
+      status: 'requested',
+    }
+
+    // ── Update-in-place on correction ──
+    // Is there already a recent pending request in this conversation? If
+    // so the customer is correcting it, not booking a second slot.
+    const sinceIso = new Date(Date.now() - RECENT_REQUEST_MS).toISOString()
+    const { data: existing } = await db()
       .from('agent_appointments')
-      .insert({
-        tenant_id: args.tenantId,
-        business_id: args.businessId ?? null,
-        contact_id: args.contactId,
-        conversation_id: args.conversationId,
-        customer_name: args.customerName.trim(),
-        customer_phone: args.customerPhone.trim(),
-        service: args.service?.trim() || 'Consultation',
-        appointment_at: slot.iso,
-        // Keep the customer's own words alongside the resolved slot.
-        // When staff ring back, "they asked for tonight" is the context
-        // that makes the call make sense.
-        notes: buildNotes(args.notes, args.preferredDate, slot.adjusted ? slot.note : undefined),
-        status: 'requested',
-      })
       .select('id')
-      .single()
+      .eq('conversation_id', args.conversationId)
+      .eq('status', 'requested')
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    let data: { id: string } | null = null
+    let error: { message?: string; details?: string } | null = null
+    let wasUpdated = false
+
+    if (existing?.id) {
+      // Correcting the existing request — overwrite its mutable fields.
+      const upd = await db()
+        .from('agent_appointments')
+        .update({
+          customer_name: row.customer_name,
+          customer_phone: row.customer_phone,
+          service: row.service,
+          appointment_at: row.appointment_at,
+          notes: row.notes,
+        })
+        .eq('id', existing.id)
+        .select('id')
+        .single()
+      data = upd.data
+      error = upd.error
+      wasUpdated = true
+    } else {
+      // First request in this conversation — insert a new row.
+      const ins = await db()
+        .from('agent_appointments')
+        .insert(row)
+        .select('id')
+        .single()
+      data = ins.data
+      error = ins.error
+    }
 
     if (error || !data) {
-      console.error('[booking-tools] insert failed:', error?.message, error?.details)
+      console.error('[booking-tools] save failed:', error?.message, error?.details)
       // Signals failure to the model so it does NOT falsely tell the
       // customer the booking succeeded.
       return [
@@ -131,8 +185,8 @@ export async function bookAppointment(
       .eq('id', args.contactId)
 
     // ── What the model is told to say ──
-    // Two different scripts, because the honest thing to say depends on
-    // whether we could keep the customer's time.
+    // Three scripts: time moved, time changed by the customer, or a clean
+    // first save. The honest thing to say depends on which happened.
     if (slot.adjusted) {
       return [
         `Saved, but the time was changed to ${slot.label}.`,
@@ -140,6 +194,14 @@ export async function bookAppointment(
         `Tell the customer clearly that the time they asked for is not available and why, then offer ${slot.label} and ask if that works.`,
         'Do not pretend their original time was accepted.',
       ].filter(Boolean).join(' ')
+    }
+
+    if (wasUpdated) {
+      return [
+        `Booking updated to ${slot.label}.`,
+        `Customer: ${args.customerName}, phone: ${args.customerPhone}.`,
+        `Confirm the new time ${slot.label} warmly and say the team will call to finalise the details.`,
+      ].join(' ')
     }
 
     return [

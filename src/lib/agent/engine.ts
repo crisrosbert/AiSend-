@@ -72,6 +72,9 @@ export interface AgentResult {
   // NEW: set when the AI calls show_lead_form on the web widget. The widget
   // route renders these fields as a form. Null on WhatsApp / when not asked.
   showLeadForm: LeadFormSpec | null
+  // NEW: present only when the turn failed. Callers can log it; a normal
+  // successful reply leaves this undefined.
+  error?: string
 }
 
 // ── Base tools (always available) ──
@@ -289,15 +292,16 @@ export async function runAgent(args: RunAgentArgs): Promise<AgentResult> {
       showLeadForm,
     }
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
     console.error('[agent/engine] error:', err)
     await logUsage(args, {
       toolsUsed,
       handoff: false,
       tokens: totalTokens,
       latencyMs: Date.now() - startedAt,
-      error: err instanceof Error ? err.message : String(err),
+      error: message,
     })
-    return empty
+    return { ...empty, error: message }
   }
 }
 

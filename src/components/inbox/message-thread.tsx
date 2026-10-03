@@ -20,6 +20,7 @@ import {
   Check,
   Clock,
   ArrowLeft,
+  Bot,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -419,12 +420,34 @@ export function MessageThread({
       if (!conversation) return;
 
       const supabase = createClient();
-      await supabase
+
+      // Returning a conversation to 'open' must also clear the handoff
+      // flags, or the WhatsApp agent stays muted. The agent bails while
+      // status is 'pending'; on the way out it also set needs_attention
+      // and handoff_reason, and leaving those set keeps the inbox
+      // flagging the chat as needing a human. Clearing them here is what
+      // actually hands the conversation back to the bot.
+      const patch: Record<string, unknown> = { status };
+      if (status === "open") {
+        patch.needs_attention = false;
+        patch.handoff_reason = null;
+      }
+
+      const { error } = await supabase
         .from("conversations")
-        .update({ status })
+        .update(patch)
         .eq("id", conversation.id);
 
+      if (error) {
+        console.error("Failed to update status:", error);
+        toast.error("Failed to update status");
+        return;
+      }
+
       onStatusChange(conversation.id, status);
+      if (status === "open") {
+        toast.success("Returned to bot — the AI will reply to new messages");
+      }
     },
     [conversation, onStatusChange]
   );
@@ -624,6 +647,7 @@ export function MessageThread({
   const currentStatus = STATUS_OPTIONS.find(
     (s) => s.value === conversation.status
   );
+  const isHandedOff = conversation.status === "pending";
   const assignedAgentId = conversation.assigned_agent_id ?? null;
   const currentAssignee = profiles.find((p) => p.user_id === assignedAgentId);
   const assignLabel = assignedAgentId
@@ -665,6 +689,22 @@ export function MessageThread({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Return to bot — only while the conversation is handed off to a
+              human (status 'pending'). Resumes the AI agent in one click,
+              clearing the handoff flags, instead of making the merchant
+              know that "Open" is what un-mutes the bot. */}
+          {isHandedOff && (
+            <button
+              type="button"
+              onClick={() => handleStatusChange("open")}
+              title="Resume the AI agent for this conversation"
+              className="inline-flex items-center justify-center h-7 gap-1 rounded-md bg-emerald-500 px-2 text-xs font-semibold text-white hover:bg-emerald-600"
+            >
+              <Bot className="h-3 w-3" />
+              <span className="hidden sm:inline">Return to bot</span>
+            </button>
+          )}
+
           {/* Status dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
@@ -685,6 +725,9 @@ export function MessageThread({
                   className={cn("text-sm", opt.color)}
                 >
                   {opt.label}
+                  {opt.value === "open" && (
+                    <span className="ml-1 text-[10px] text-slate-400">(bot on)</span>
+                  )}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -746,6 +789,26 @@ export function MessageThread({
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Handed-off banner — explains why the bot is quiet and offers the
+          one-click way back, for merchants who never look at the status
+          control in the header. */}
+      {isHandedOff && (
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2">
+          <p className="text-xs font-medium text-amber-700">
+            This chat was handed to a human — the AI is paused here.
+            {conversation.handoff_reason ? ` (${conversation.handoff_reason})` : ""}
+          </p>
+          <button
+            type="button"
+            onClick={() => handleStatusChange("open")}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-600"
+          >
+            <Bot className="h-3 w-3" />
+            Return to bot
+          </button>
+        </div>
+      )}
 
       {/* Messages Area — a light, textured backdrop (our own pattern, not
           a copy of WhatsApp's wallpaper) so message bubbles have some

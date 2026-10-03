@@ -1,18 +1,26 @@
 // src/lib/agent/engine-capabilities.ts
 //
-// The capability layer for the multi-agent engine. Reads an agent's row
-// (capability flags) and turns lead-form + media into AI tools that are
-// only present when the agent has them enabled.
+// The capability layer that turns one engine into many agents on WhatsApp.
+// It matches engine.ts conventions exactly: tools are LLMTool (name +
+// parameters), tool handlers return a plain string result, and media is
+// returned as a side-channel item so flow-engine can send it as a separate
+// WhatsApp media message.
 //
-// engine.ts imports: loadAgent, buildAgentTools, buildAgentSystemAddon,
-//                    handleCapabilityTool, type Agent
+// engine.ts calls, per turn:
+//   loadAgent(agentId)            -> capability flags + persona source
+//   buildAgentSystemAddon(agent)  -> media catalog + lead-capture rules
+//   buildAgentTools(agent)        -> extra LLMTools gated by flags
+//   handleCapabilityTool(...)     -> executes submit_lead / send_media
 //
-// This keeps engine.ts clean — all the per-capability logic lives here.
+// Nothing here is agent-specific — behaviour is data (the agents row).
+//
+// Depends on:
+//   ./tools/lead-form-tools  (saveLead)
+//   ./tools/media-tools      (getAgentMedia, describeMediaForPrompt, resolveMedia, MediaItem)
 
 import { createClient } from '@supabase/supabase-js'
 import type { LLMTool } from '@/lib/agent/llm-provider'
-import { parseBusinessHours, type BusinessHours } from '@/lib/agent/business-hours'
-import { saveLead, buildLeadFormFields } from '@/lib/agent/tools/lead-form-tools'
+import { saveLead, buildLeadFormFields, type SaveLeadArgs } from '@/lib/agent/tools/lead-form-tools'
 import {
   getAgentMedia,
   describeMediaForPrompt,
@@ -32,19 +40,10 @@ function db() {
   return _client
 }
 
-// ── The Agent shape (matches the agents table) ──
+// ── The agent record (mirrors the agents table from migration 022) ──
 export interface Agent {
   id: string
   tenant_id: string
-  /**
-   * Which business this agent belongs to. Null on rows created before
-   * migration 030, and on anything written while business_id is still
-   * nullable — so every consumer must handle null rather than assume
-   * it. Everything the agent writes (leads, bookings, knowledge) is
-   * filed under this, not under whatever config happened to route the
-   * request here.
-   */
-  business_id: string | null
   journey_id: string | null
   name: string
   agent_type: string
@@ -58,206 +57,214 @@ export interface Agent {
   media_enabled: boolean
   payment_enabled: boolean
   is_active: boolean
-  /**
-   * Opening hours, always populated — parseBusinessHours() substitutes a
-   * default rather than returning null, so nothing downstream has to
-   * handle "we don't know when this business is open". Not knowing is
-   * what let the agent offer midnight appointments.
-   */
-  business_hours: BusinessHours
-  /**
-   * A number the agent can give out when the system itself fails. Null
-   * when the tenant has not set one, in which case the agent promises a
-   * callback instead of inventing a number.
-   */
-  fallback_contact: string | null
 }
 
-// Load an agent row by id. Returns null if not found (engine falls back
-// to legacy all-tools behaviour).
+// Load an agent by id. Returns null if not found / inactive so the engine
+// falls back to its original always-on tool set (backward compatible).
 export async function loadAgent(agentId: string): Promise<Agent | null> {
   try {
-    const { data } = await db()
+    const { data, error } = await db()
       .from('agents')
       .select('*')
       .eq('id', agentId)
+      .eq('is_active', true)
       .maybeSingle()
-    if (!data) return null
-
-    // lead_form_fields may come back as JSONB (already array) or string
-    let fields = data.lead_form_fields
-    if (typeof fields === 'string') {
-      try { fields = JSON.parse(fields) } catch { fields = ['first_name', 'last_name', 'phone', 'email'] }
-    }
-
-    return {
-      ...data,
-      lead_form_fields: Array.isArray(fields) ? fields : ['first_name', 'last_name', 'phone', 'email'],
-      // Parsed here, once, so every consumer gets a valid object. The
-      // column may be missing entirely on tenants who haven't run the
-      // migration yet — the default covers that too.
-      business_hours: parseBusinessHours(data.business_hours),
-      fallback_contact: normalisePhone(data.fallback_contact),
-    } as Agent
+    if (error || !data) return null
+    return data as Agent
   } catch (err) {
-    console.error('[engine-capabilities] loadAgent error:', err)
+    console.error('[engine/caps] loadAgent error:', err)
     return null
   }
 }
 
-/** Trim to something worth reading aloud, or null. */
-function normalisePhone(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null
-  const trimmed = raw.trim()
-  return trimmed.length >= 6 ? trimmed : null
-}
+// ── Capability tools (LLMTool format — same shape as engine.ts TOOLS) ──
 
-// ── Capability tools (only added when the agent has the flag on) ──
-const SUBMIT_LEAD_TOOL: LLMTool = {
-  name: 'submit_lead',
+// On the web widget there IS a form UI, so the AI calls show_lead_form and the
+// widget renders the fields. On WhatsApp there is no form, so lead capture is
+// conversational via submit_lead. Both tools are exposed when lead capture is
+// on; the AI picks the right one guided by the system-prompt addon.
+const SHOW_LEAD_FORM_TOOL: LLMTool = {
+  name: 'show_lead_form',
   description:
-    'Show the customer a lead-capture form to collect their contact details. Use this when the customer shows real interest (asks about pricing, wants a demo, wants to be contacted) and you want to capture them as a lead. The form appears in the chat for them to fill.',
+    'Display a short contact form in the chat widget to collect the customer\'s details. ' +
+    'Use this on the web chat widget when the customer shows interest or asks to be contacted. ' +
+    'Do NOT also ask for the same fields in text. (If you are on a channel without a form UI, ' +
+    'such as WhatsApp, collect the details conversationally and use submit_lead instead.)',
   parameters: {
     type: 'object',
     properties: {
-      reason: { type: 'string', description: 'Why you are showing the form now (internal note)' },
+      reason: {
+        type: 'string',
+        description:
+          'One short sentence shown above the form, e.g. "Share your details and our team will call you back."',
+      },
     },
     required: [],
+  },
+}
+
+// On WhatsApp there is no rendered form, so lead capture is conversational:
+// the AI collects the fields in chat (phone we usually already have) and then
+// calls submit_lead to persist them.
+const SUBMIT_LEAD_TOOL: LLMTool = {
+  name: 'submit_lead',
+  description:
+    'Save the customer as a lead once you have collected their details in the chat. ' +
+    'Collect at least a name and one contact (phone or email) before calling. ' +
+    'The phone number is often already known from WhatsApp — still pass it if the customer gives a different one.',
+  parameters: {
+    type: 'object',
+    properties: {
+      first_name: { type: 'string', description: 'Customer first name' },
+      last_name: { type: 'string', description: 'Customer last name (optional)' },
+      phone: { type: 'string', description: 'Contact phone number' },
+      email: { type: 'string', description: 'Email address' },
+      company_name: { type: 'string', description: 'Company name (B2B only)' },
+    },
+    required: ['first_name'],
   },
 }
 
 const SEND_MEDIA_TOOL: LLMTool = {
   name: 'send_media',
   description:
-    'Send the customer an image, PDF, brochure, or video from the available media list. Use the media id or title. Use this when the customer wants to see something visual — a brochure, floor plan, product photo, price list PDF, or video.',
+    'Send an image, PDF, brochure, or video to the customer. Pass the media id (preferred) ' +
+    'or an exact title from the available-media list in your context. Only send media that is ' +
+    'genuinely relevant to what the customer asked.',
   parameters: {
     type: 'object',
     properties: {
-      media: { type: 'string', description: 'The id or title of the media item to send' },
+      id_or_title: {
+        type: 'string',
+        description: 'The media id from the available-media list, or its exact title.',
+      },
     },
-    required: ['media'],
+    required: ['id_or_title'],
   },
 }
 
-/**
- * Load this agent's media, or nothing when the capability is off.
- *
- * Fetched once per turn and handed to both buildAgentTools and
- * buildAgentSystemAddon, so enabling media costs one query rather than
- * two, and the tool list and the prompt can never disagree about what
- * is available.
- */
-export async function loadAgentMedia(agent: Agent): Promise<MediaItem[]> {
-  if (!agent.media_enabled) return []
-  return getAgentMedia(agent.id)
-}
-
-// Build the capability tools for this agent, gated by flags.
-export function buildAgentTools(agent: Agent, media: MediaItem[] = []): LLMTool[] {
+// Extra tools an agent is allowed to use, gated by its flags.
+export function buildAgentTools(agent: Agent): LLMTool[] {
   const tools: LLMTool[] = []
-  if (agent.lead_form_enabled) tools.push(SUBMIT_LEAD_TOOL)
-
-  // The flag alone is not enough — the agent must actually have files.
-  //
-  // Handing the model a send_media tool with an empty catalog invites it
-  // to guess at an item, fail to find one, and tell the customer
-  // something is on its way. That is the dangling-promise failure all
-  // over again, and it becomes common the moment media is switched on
-  // for agents that have not uploaded anything yet.
-  if (agent.media_enabled && media.length > 0) tools.push(SEND_MEDIA_TOOL)
-
+  if (agent.lead_form_enabled) {
+    tools.push(SHOW_LEAD_FORM_TOOL) // web widget: rendered form
+    tools.push(SUBMIT_LEAD_TOOL) // WhatsApp: conversational capture
+  }
+  if (agent.media_enabled) tools.push(SEND_MEDIA_TOOL)
   return tools
 }
 
-// Build the system-prompt addon: media catalog + lead-form guidance.
-export async function buildAgentSystemAddon(
-  agent: Agent,
-  media: MediaItem[] = [],
-): Promise<string> {
+// Extra system-prompt text appended after the persona/override:
+//   - the media catalog (so the AI knows what it can send)
+//   - lead-capture instructions (gate vs progressive)
+export async function buildAgentSystemAddon(agent: Agent): Promise<string> {
   let addon = ''
 
-  // Lead form rules
-  if (agent.lead_form_enabled) {
-    if (agent.lead_form_mode === 'gate') {
-      addon += `\n[Lead capture — GATE mode]: Before helping in detail, call submit_lead to show the contact form. Politely explain you'll capture their details so the team can assist them properly.`
-    } else {
-      addon += `\n[Lead capture — PROGRESSIVE mode]: Chat naturally first. Once the customer shows genuine interest (asks about pricing, a demo, or wants to be contacted), call submit_lead to show the contact form. Don't ask for the form too early — earn it.`
-    }
+  if (agent.media_enabled) {
+    const media = await getAgentMedia(agent.id)
+    addon += describeMediaForPrompt(media)
   }
 
-  // Media catalog — the caller has already loaded it via loadAgentMedia.
-  if (agent.media_enabled && media.length > 0) {
-    addon += describeMediaForPrompt(media)
-    addon += `\n[When the customer wants to see any of the above, call send_media with its id. Only ever offer what is on this list — if they ask for something that is not, say plainly that you do not have it.]`
+  if (agent.lead_form_enabled) {
+    const wanted = agent.lead_form_fields?.length
+      ? agent.lead_form_fields.join(', ')
+      : 'first_name, phone'
+    if (agent.lead_form_mode === 'gate') {
+      addon +=
+        `\n\n[Lead capture — GATE mode]: Early in the conversation, warmly ask for the customer's ` +
+        `details (${wanted}) before going deep. Once you have them, call submit_lead. ` +
+        `Ask naturally, one or two fields at a time — never dump a form.`
+    } else {
+      addon +=
+        `\n\n[Lead capture — PROGRESSIVE mode]: Help the customer first. Once they show real ` +
+        `interest or ask to be contacted, collect their details (${wanted}) conversationally and ` +
+        `call submit_lead. Ask one or two fields at a time — never dump a form.`
+    }
   }
 
   return addon
 }
 
-// ── Capability tool execution ──
-export interface CapabilityToolResult {
-  result: string
-  media?: MediaItem
-  showLeadForm?: { fields: Array<{ key: string; label: string; type: string; required: boolean }> }
+// ── Tool dispatch ──
+// Returns a string result (fed back to the model) plus, for send_media, the
+// resolved media item the engine hands to flow-engine to deliver on WhatsApp.
+// The fields the web widget should render for a lead form.
+export interface LeadFormSpec {
+  reason: string
+  fields: ReturnType<typeof buildLeadFormFields>
 }
 
-// Handle submit_lead / send_media. Returns null if the tool isn't a
-// capability tool (so the engine falls through to its own switch).
+export interface CapabilityToolOutput {
+  result: string
+  media?: MediaItem
+  leadForm?: LeadFormSpec
+}
+
 export async function handleCapabilityTool(
   agent: Agent,
   conversationId: string,
-  _customerPhone: string,
+  customerPhone: string,
   toolName: string,
   toolArgs: Record<string, unknown>,
-): Promise<CapabilityToolResult | null> {
-  // submit_lead → tell the widget to render the form
-  if (toolName === 'submit_lead') {
-    const fields = buildLeadFormFields(agent.lead_form_fields)
-    return {
-      result:
-        'The contact form is now shown to the customer. Ask them to fill it in so the team can reach out. Once submitted, thank them warmly.',
-      showLeadForm: { fields },
-    }
-  }
-
-  // send_media → resolve the item and return it for delivery
-  if (toolName === 'send_media') {
-    const idOrTitle = String(toolArgs.media || '')
-    const item = await resolveMedia(agent.id, idOrTitle)
-    if (!item) {
-      // Never "you'll share it shortly" — there is no later message in
-      // which to share it, so that sentence is a promise the agent
-      // cannot keep.
+): Promise<CapabilityToolOutput | null> {
+  switch (toolName) {
+    case 'show_lead_form': {
+      if (!agent.lead_form_enabled) {
+        return { result: 'Lead capture is not enabled for this agent.' }
+      }
       return {
         result:
-          'That item does not exist. Tell the customer plainly that you do not have that particular file, and offer what you do have or to answer their question directly. Do NOT say you will send it later.',
+          'The contact form is now shown to the customer. Wait for them to submit it before continuing.',
+        leadForm: {
+          reason: str(toolArgs.reason) || 'Share your details and our team will reach out.',
+          fields: buildLeadFormFields(agent.lead_form_fields),
+        },
       }
     }
-    return {
-      result: `Sending "${item.title}" to the customer now. Briefly introduce it in your reply.`,
-      media: item,
-    }
-  }
 
-  return null
+    case 'submit_lead': {
+      if (!agent.lead_form_enabled) {
+        return { result: 'Lead capture is not enabled for this agent.' }
+      }
+      const leadArgs: SaveLeadArgs = {
+        tenantId: agent.tenant_id,
+        agentId: agent.id,
+        conversationId,
+        firstName: str(toolArgs.first_name),
+        lastName: str(toolArgs.last_name),
+        // fall back to the WhatsApp number if the AI didn't collect a new one
+        phone: str(toolArgs.phone) || customerPhone,
+        email: str(toolArgs.email),
+        companyName: str(toolArgs.company_name),
+      }
+      const result = await saveLead(leadArgs)
+      return { result }
+    }
+
+    case 'send_media': {
+      if (!agent.media_enabled) {
+        return { result: 'Media is not enabled for this agent.' }
+      }
+      const item = await resolveMedia(agent.id, str(toolArgs.id_or_title) ?? '')
+      if (!item) {
+        return {
+          result:
+            "No matching media found. Tell the customer you'll share it shortly and continue.",
+        }
+      }
+      return {
+        result: `Sent "${item.title}" to the customer. Add one short sentence introducing it.`,
+        media: item,
+      }
+    }
+
+    default:
+      return null // not a capability tool — let the engine handle it
+  }
 }
 
-// Save a lead form submission (called by the widget route when the
-// customer submits the form).
-export async function submitLeadForm(
-  agent: Agent,
-  conversationId: string,
-  values: Record<string, string>,
-): Promise<string> {
-  return saveLead({
-    tenantId: agent.tenant_id,
-    businessId: agent.business_id ?? null,
-    agentId: agent.id,
-    conversationId,
-    firstName: values.first_name,
-    lastName: values.last_name,
-    phone: values.phone,
-    email: values.email,
-    companyName: values.company_name,
-  })
+function str(v: unknown): string | undefined {
+  if (v === undefined || v === null) return undefined
+  const s = String(v).trim()
+  return s.length ? s : undefined
 }

@@ -43,6 +43,12 @@ const SECURITY_HEADERS = [
       // tiny inline assets.
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https://fonts.gstatic.com",
+      // Marketing-page videos are pasted in as links: YouTube / Vimeo
+      // players load in an iframe, and a direct .mp4 link loads as media.
+      // Without these, flipping this header from Report-Only to enforcing
+      // would silently blank every embedded video.
+      "frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com",
+      "media-src 'self' https:",
       // Supabase REST + realtime (WSS). All Meta API calls happen
       // server-side, so graph.facebook.com does not belong here.
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co",

@@ -113,6 +113,7 @@ const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; hint: stri
   },
   { value: "keyword_match", label: "Keyword Match", hint: "Message contains specific keyword(s)" },
   { value: "new_contact_created", label: "New Contact Created", hint: "When a contact is auto-created from an incoming message" },
+  { value: "lead_created", label: "New Lead (Any Source)", hint: "Meta Lead Form, Click-to-WhatsApp ad, website form, Google Ads — any lead source" },
   { value: "conversation_assigned", label: "Conversation Assigned", hint: "When assigned to an agent" },
   { value: "tag_added", label: "Tag Added", hint: "When a tag is added to a contact" },
   { value: "time_based", label: "Time-Based", hint: "On a recurring schedule" },

@@ -66,6 +66,7 @@ const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string }[] = [
   { value: "first_inbound_message", label: "First message from contact" },
   { value: "keyword_match",         label: "Keyword match"              },
   { value: "new_contact_created",   label: "New contact created"        },
+  { value: "lead_created",          label: "New lead (any source)"      },
   { value: "conversation_assigned", label: "Conversation assigned"      },
   { value: "tag_added",             label: "Tag added to contact"       },
   { value: "time_based",            label: "Time-based (schedule)"      },

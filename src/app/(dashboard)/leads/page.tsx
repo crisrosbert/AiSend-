@@ -10,7 +10,7 @@
 // The earlier website-chat view (conversations the AI handled on the
 // widget) now lives at /leads/website.
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useBusiness } from "@/hooks/use-business";
@@ -69,27 +69,31 @@ export default function AllLeadsPage() {
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
 
-  const load = useCallback(async () => {
-    if (businessLoading) return;
-    setLoading(true);
-    let query = supabase
-      .from("leads")
-      .select(
-        "id, name, first_name, last_name, phone, email, source, campaign, ad_headline, interest, status, touchpoints, created_at",
-      )
-      .order("created_at", { ascending: false })
-      .limit(500);
-    // Include rows with no business: leads written before businesses
-    // existed, or by a source that doesn't know one, would otherwise vanish.
-    if (businessId) query = query.or(`business_id.eq.${businessId},business_id.is.null`);
-    const { data } = await query;
-    setLeads((data as Lead[]) ?? []);
-    setLoading(false);
-  }, [supabase, businessId, businessLoading]);
-
   useEffect(() => {
-    load();
-  }, [load]);
+    if (businessLoading) return;
+    // Fetch inside the effect with a cancel flag: a stale response (business
+    // switched mid-request) must not overwrite the newer list.
+    let cancelled = false;
+    (async () => {
+      let query = supabase
+        .from("leads")
+        .select(
+          "id, name, first_name, last_name, phone, email, source, campaign, ad_headline, interest, status, touchpoints, created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(500);
+      // Include rows with no business: leads written before businesses
+      // existed, or by a source that doesn't know one, would otherwise vanish.
+      if (businessId) query = query.or(`business_id.eq.${businessId},business_id.is.null`);
+      const { data } = await query;
+      if (cancelled) return;
+      setLeads((data as Lead[]) ?? []);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, businessId, businessLoading]);
 
   const counts = useMemo(() => {
     const m = new Map<string, number>();

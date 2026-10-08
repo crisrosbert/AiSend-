@@ -14,7 +14,7 @@ export const metadata = {
  */
 export default function TermsPage() {
   return (
-    <LegalShell title="Terms &amp; Conditions" subtitle="Last updated: June 2026">
+    <LegalShell title="Terms &amp; Conditions" subtitle="Last updated: October 2026">
       <p>
         These Terms &amp; Conditions (&quot;Terms&quot;) govern your access to and use of the
         <strong> AiSend</strong> platform (the &quot;Service&quot;). By creating an account or
@@ -25,7 +25,8 @@ export default function TermsPage() {
       <p>
         AiSend provides software to send and receive messages, run campaigns, automate
         replies, and manage customers on the WhatsApp Business Platform via the Official WhatsApp
-        Business API. We are an independent software provider; WhatsApp and Meta are trademarks of
+        Business API, and to collect leads from Facebook Lead Ads, websites and Click-to-WhatsApp
+        ads into one dashboard. We are an independent software provider; WhatsApp and Meta are trademarks of
         Meta Platforms, Inc.
       </p>
 
@@ -115,7 +116,7 @@ export default function TermsPage() {
       <h2>11. Contact</h2>
       <p>
         Questions about these Terms? Email{' '}
-        <a href="mailto:crisrosbert@gmail.com">crisrosbert@gmail.com</a>.
+        <a href="mailto:admin@performancemktg.net">admin@performancemktg.net</a>.
       </p>
     </LegalShell>
   )

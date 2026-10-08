@@ -11,6 +11,7 @@ import {
   MessageSquare,
   History,
   Users,
+  UserPlus,
   Radio,
   Zap,
   Settings,
@@ -54,7 +55,7 @@ const navItems = [
   { path: "flows-lab",   label: "Flows Lab",        icon: FlaskConical, beta: true },
   { path: "automations", label: "Automation Rules", icon: Zap },
   { path: "bookings",    label: "Bookings",         icon: CalendarCheck },
-  { path: "leads",       label: "Website Leads",    icon: Globe },
+  { path: "leads",       label: "Leads",            icon: UserPlus },
   { path: "widget",      label: "Website Widget",   icon: Globe },
 ];
 

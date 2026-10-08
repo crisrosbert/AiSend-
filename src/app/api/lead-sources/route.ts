@@ -19,7 +19,9 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('lead_sources')
-    .select('id, name, source_type, api_key, is_active, created_at, last_used_at')
+    // Deliberately NOT selecting meta_page_access_token: the Page token
+    // never needs to reach the browser.
+    .select('id, name, source_type, api_key, is_active, created_at, last_used_at, meta_page_id')
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

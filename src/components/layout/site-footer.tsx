@@ -160,7 +160,7 @@ export function SiteFooter() {
           <div className="lg:col-span-2 space-y-2">
             <h3 className="text-sm font-semibold mb-3" style={H3_STYLE}>Quick Links</h3>
             <ul className="space-y-2 text-neutral-400">
-              <li><a className="hover:text-[#fff] transition-colors duration-150" href="#">Blog</a></li>
+              <li><Link className="hover:text-[#fff] transition-colors duration-150" href="/blog">Blog</Link></li>
               <li><a className="hover:text-[#fff] transition-colors duration-150" href="#">FAQs</a></li>
               <li><a className="hover:text-[#fff] transition-colors duration-150" href="#">Help Center</a></li>
               <li><a className="hover:text-[#fff] transition-colors duration-150" href="#">Case Studies</a></li>

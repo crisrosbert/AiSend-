@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js'
 import { runAgent } from '@/lib/agent/engine'
 import { deliverAgentMedia } from '@/lib/whatsapp-agent/deliver-media'
 import { businessIdForAgent } from '@/lib/business/server'
+import { ingestLead } from '@/lib/leads/ingest'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _db: any = null
@@ -171,8 +172,19 @@ export async function handleAdLead(input: AdLeadInput): Promise<boolean> {
       })
       .eq('id', conversationId)
 
-    // 4. Upsert the lead into the ONE leads store, tagged by source.
-    //    meta_ads when we have a referral, else whatsapp.
+    // 4. Record the lead through the shared intake — this is what gives
+    //    a Click-to-WhatsApp lead the SAME dedupe-by-phone and
+    //    cross-source merge as every other channel (website form, Meta
+    //    Lead Form, Google Ads). Previously this upserted directly with
+    //    onConflict 'tenant_id,contact_id', which meant a second ad
+    //    click from someone WITHOUT a contact yet (contact_id null)
+    //    could never match the conflict target and silently duplicated;
+    //    phone-based dedupe in ingestLead() doesn't have that gap.
+    //
+    //    `ctwa_clid` and `source_url` used to be parsed off the Meta
+    //    referral and then thrown away — not written anywhere. They are
+    //    exactly what lets a merchant later reconcile this lead against
+    //    Meta Ads Manager spend, so they're captured now.
     const source = referral?.source_type === 'ad' || referral?.source_id
       ? 'meta_ads'
       : 'whatsapp'
@@ -182,31 +194,33 @@ export async function handleAdLead(input: AdLeadInput): Promise<boolean> {
     // says whose lead this is.
     const businessId = await businessIdForAgent(db(), agentId)
 
-    await db().from('leads').upsert(
-      {
-        tenant_id: tenantId,
-        business_id: businessId,
-        agent_id: agentId,
-        contact_id: contactId,
-        phone: customerPhone,
-        name: input.contactName ?? null,
-        source,
-        ad_id: referral?.source_id ?? null,
-        ad_headline: referral?.headline ?? null,
-        last_message: inboundText,
-        status: 'new',
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'tenant_id,contact_id' },
-    )
+    const ingestResult = await ingestLead({
+      tenantId,
+      businessId,
+      agentId,
+      contactId,
+      conversationId,
+      source,
+      name: input.contactName ?? null,
+      phone: customerPhone,
+      adId: referral?.source_id ?? null,
+      adHeadline: referral?.headline ?? null,
+      ctwaClid: referral?.ctwa_clid ?? null,
+      lastMessage: inboundText,
+      extra: referral?.source_url ? { source_url: referral.source_url } : undefined,
+      // The WhatsApp webhook already fires 'new_contact_created' for a
+      // brand-new contact; firing 'lead_created' too (which it does,
+      // inside ingestLead) is intentional — a merchant may have
+      // automations on either or both, and ad leads are exactly the
+      // case where "treat every source as a lead" matters most.
+    })
 
     // 5. If the agent flagged handoff, mark the lead hot for a human.
-    if (result?.handoffRequested) {
+    if (result?.handoffRequested && ingestResult) {
       await db()
         .from('leads')
         .update({ status: 'hot', updated_at: new Date().toISOString() })
-        .eq('tenant_id', tenantId)
-        .eq('contact_id', contactId)
+        .eq('id', ingestResult.leadId)
     }
 
     return true

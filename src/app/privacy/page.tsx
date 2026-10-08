@@ -17,12 +17,12 @@ export const metadata = {
  */
 export default function PrivacyPage() {
   return (
-    <LegalShell title="Privacy Policy" subtitle="Last updated: June 2026">
+    <LegalShell title="Privacy Policy" subtitle="Last updated: October 2026">
       <p>
         This Privacy Policy explains how <strong>AiSend</strong> (&quot;AiSend&quot;,
         &quot;we&quot;, &quot;us&quot;) collects, uses, shares, and protects information when you use our
         WhatsApp marketing and engagement platform (the &quot;Service&quot;) available at
-        ai-send-henna.vercel.app and related domains. By using the Service, you agree to this Policy.
+        app.performancemktg.net and related domains. By using the Service, you agree to this Policy.
       </p>
 
       <h2>1. Who we are</h2>
@@ -53,6 +53,31 @@ export default function PrivacyPage() {
         policies.
       </p>
 
+      <h3>Facebook Login, Lead Ads and ad-click data</h3>
+      <p>
+        If you choose &quot;Connect with Facebook&quot;, you authorise us, through Facebook Login, to
+        see the Facebook Pages you manage and to receive the leads submitted on those Pages&apos;
+        Lead Ad forms. We request only these permissions: <em>pages_show_list</em>,{' '}
+        <em>pages_read_engagement</em>, <em>pages_manage_metadata</em> and <em>leads_retrieval</em>.
+        We use them solely to (a) list your Pages so you can pick which to connect, (b) subscribe
+        the selected Page to lead notifications, and (c) fetch the details a person typed into
+        your lead form (for example name, phone number, email and answers to your form questions).
+        Page access tokens are stored encrypted. You can disconnect a Page at any time from the
+        Leads &rarr; Lead sources screen, which removes the subscription and deletes the stored
+        token.
+      </p>
+      <p>
+        When someone messages your WhatsApp number from a Click-to-WhatsApp ad, WhatsApp includes
+        ad reference details (such as the ad ID and headline). We save these with the lead so you
+        can see which ad produced it. We do not use Meta platform data for advertising to anyone,
+        build profiles for any purpose other than your own lead management, or sell it.
+      </p>
+      <h3>Optional integrations</h3>
+      <p>
+        If you enable the Google Sheets integration, new leads are appended to a spreadsheet you
+        own and have shared with our service account. We only write rows to that sheet.
+      </p>
+
       <h2>3. How we use information</h2>
       <ul>
         <li>To provide, operate, and maintain the Service.</li>
@@ -67,6 +92,7 @@ export default function PrivacyPage() {
       <p>We do not sell your personal data. We share information only with:</p>
       <ul>
         <li><strong>Meta / WhatsApp:</strong> to deliver messages through the Official WhatsApp Business API.</li>
+        <li><strong>Google (only if you enable the Google Sheets integration):</strong> to write lead rows to your spreadsheet.</li>
         <li><strong>Payment processors (Razorpay):</strong> to process transactions securely.</li>
         <li><strong>Infrastructure providers</strong> (e.g. hosting and database providers) who process data on our behalf under confidentiality obligations.</li>
         <li><strong>Authorities</strong> when required by law or to protect rights and safety.</li>
@@ -108,7 +134,7 @@ export default function PrivacyPage() {
       <h2>10. Contact us</h2>
       <p>
         For any privacy questions or requests, contact us at{' '}
-        <a href="mailto:crisrosbert@gmail.com">crisrosbert@gmail.com</a>. We aim to respond within a
+        <a href="mailto:admin@performancemktg.net">admin@performancemktg.net</a>. We aim to respond within a
         reasonable timeframe.
       </p>
 

@@ -8,22 +8,6 @@ export interface Profile {
   created_at: string;
 }
 
-export interface Conversation {
-  id: string;
-  user_id: string;
-  contact_id: string;
-  status: ConversationStatus;
-  assigned_agent_id?: string;
-  last_message_text?: string;
-  last_message_at?: string;
-  unread_count: number;
-  created_at: string;
-  updated_at: string;
-  contact?: Contact;
-  needs_attention?: boolean;   // ← add
-  handoff_reason?: string;     // ← add
-}
-
 export interface Contact {
   id: string;
   user_id: string;
@@ -248,7 +232,13 @@ export type AutomationTriggerType =
   | 'new_contact_created'
   | 'conversation_assigned'
   | 'tag_added'
-  | 'time_based';
+  | 'time_based'
+  // Fires from the unified lead intake (src/lib/leads/ingest.ts) for
+  // EVERY source — Meta Lead Forms, Click-to-WhatsApp ads, website
+  // forms, Google Ads — not just WhatsApp-native contacts. Lets a
+  // merchant build one "welcome + qualify" automation that covers every
+  // channel instead of one per source.
+  | 'lead_created';
 
 export type AutomationStepType =
   | 'send_message'

@@ -151,8 +151,8 @@ export default async function DataDeletionPage({
               <p style={{ margin: 0, color: '#40544f', lineHeight: 1.6, fontSize: 15 }}>
                 Open the link you were given when you made the request — it carries your
                 confirmation code. If you no longer have it, email{' '}
-                <a href="mailto:support@aisend.in" style={{ color: accent }}>
-                  support@aisend.in
+                <a href="mailto:admin@performancemktg.net" style={{ color: accent }}>
+                  admin@performancemktg.net
                 </a>{' '}
                 from the address on your account and we will look it up for you.
               </p>
@@ -166,8 +166,8 @@ export default async function DataDeletionPage({
               </h1>
               <p style={{ margin: 0, color: '#40544f', lineHeight: 1.6, fontSize: 15 }}>
                 Check the link was copied in full. If it still does not work, email{' '}
-                <a href="mailto:support@aisend.in" style={{ color: accent }}>
-                  support@aisend.in
+                <a href="mailto:admin@performancemktg.net" style={{ color: accent }}>
+                  admin@performancemktg.net
                 </a>{' '}
                 quoting the code and we will confirm the status by hand.
               </p>

@@ -72,6 +72,16 @@ export interface Conversation {
   created_at: string;
   updated_at: string;
   contact?: Contact;
+  /**
+   * Set when a conversation is flagged for a human — either the AI agent
+   * asked for a handoff, or it broke down and escalated (see
+   * src/lib/whatsapp-agent/handler.ts). Was already written to the
+   * `conversations` table and read in the inbox UI, but missing here,
+   * which broke the production type check the first time a component
+   * referenced it directly instead of through an `any`-typed row.
+   */
+  needs_attention?: boolean;
+  handoff_reason?: string | null;
 }
 
 export type SenderType = 'customer' | 'agent' | 'bot';

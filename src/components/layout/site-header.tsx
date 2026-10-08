@@ -90,7 +90,7 @@ export function SiteHeader() {
                 </span>
               </div>
             ))}
-            <a className="hover:text-[#1B6B4A] text-gray-800 font-medium transition-colors py-2 text-base" href="#">Blog</a>
+            <Link className="hover:text-[#1B6B4A] text-gray-800 font-medium transition-colors py-2 text-base" href="/blog">Blog</Link>
             <Link className="hover:text-[#1B6B4A] text-gray-800 font-medium transition-colors py-2 text-base" href="/contact">Contact</Link>
           </nav>
         </div>
@@ -138,7 +138,7 @@ export function SiteHeader() {
               {label}
             </span>
           ))}
-          <a className="block px-2 py-2.5 text-gray-800 font-medium text-base hover:text-[#1B6B4A]" href="#">Blog</a>
+          <Link className="block px-2 py-2.5 text-gray-800 font-medium text-base hover:text-[#1B6B4A]" href="/blog">Blog</Link>
           <Link className="block px-2 py-2.5 text-gray-800 font-medium text-base hover:text-[#1B6B4A]" href="/contact" onClick={() => setMobileOpen(false)}>
             Contact
           </Link>

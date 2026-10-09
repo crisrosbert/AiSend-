@@ -40,7 +40,7 @@ const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
   website_form: { label: "Website form", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   google_ads: { label: "Google Ads", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   website_widget: { label: "Website chatbot", cls: "bg-teal-50 text-teal-700 border-teal-200" },
-  whatsapp: { label: "WhatsApp", cls: "bg-green-50 text-green-700 border-green-200" },
+  whatsapp: { label: "WhatsApp Marketing", cls: "bg-green-50 text-green-700 border-green-200" },
 };
 
 function sourceInfo(source: string | null) {

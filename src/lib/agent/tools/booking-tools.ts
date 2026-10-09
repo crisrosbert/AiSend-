@@ -126,10 +126,26 @@ export async function bookAppointment(
       ].join(' ')
     }
 
-    await db()
+    // Only name the contact when it has no real name yet. The booking name
+    // lives on the appointment. Overwriting here renamed the whole WhatsApp
+    // chat whenever someone booked FOR another person ("Neetu" became
+    // "Amit Shah"), so the original customer vanished from the inbox.
+    const { data: contactRow } = await db()
       .from('contacts')
-      .update({ name: args.customerName.trim() })
+      .select('name, phone')
       .eq('id', args.contactId)
+      .maybeSingle()
+    const currentName = String(contactRow?.name ?? '').trim()
+    const looksLikePlaceholder =
+      !currentName ||
+      /^unknown$/i.test(currentName) ||
+      /^[+\d\s()-]{6,}$/.test(currentName)
+    if (looksLikePlaceholder) {
+      await db()
+        .from('contacts')
+        .update({ name: args.customerName.trim() })
+        .eq('id', args.contactId)
+    }
 
     // ── Show it in All leads ──
     // A booking request is the strongest lead signal there is, but it was
@@ -148,7 +164,10 @@ export async function bookAppointment(
         phone: args.customerPhone.trim(),
         interest: args.service?.trim() || 'Consultation',
         lastMessage: `Booking requested: ${args.service?.trim() || 'Consultation'}`,
-        extra: { appointment_id: data.id, appointment_at: slot.iso },
+        extra: {
+          appointment_id: data.id,
+          appointment_at: slot.iso,
+        },
       })
     } catch (err) {
       console.error('[booking-tools] lead capture failed (booking was saved):', err)

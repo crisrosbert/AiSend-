@@ -38,7 +38,10 @@ const KEY_SOURCE_TYPES = [
 const META_ERRORS: Record<string, string> = {
   not_configured: "Meta connection isn't switched on for this server yet (META_APP_ID / META_APP_SECRET are not set).",
   cancelled: "Facebook connection was cancelled. Press Connect to try again.",
-  invalid_state: "That connection attempt expired. Please press Connect again.",
+  invalid_state: "That connection attempt took longer than 10 minutes and expired. Please press Connect again and finish quickly.",
+  no_code: "Facebook returned without an authorisation code. If your Meta app uses Facebook Login for Business, set META_LOGIN_CONFIG_ID (a Configuration with the lead permissions) and redeploy.",
+  wrong_user: "You were signed in to a different account when you came back from Facebook. Sign in again and press Connect.",
+  bad_state: "The connection could not be verified (state mismatch). Check META_APP_SECRET is the same on this deployment, then press Connect again.",
   no_pages: "No Facebook Pages were shared. In the Facebook dialog, tick the Page that runs your lead ads.",
   subscribe_failed: "Meta wouldn't let us subscribe to that Page's leads. You need to be an admin of the Page with lead access.",
   exchange_failed: "Facebook sign-in failed.",

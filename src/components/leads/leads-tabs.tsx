@@ -5,10 +5,11 @@
 // redirects its index page, so sub-pages exist only at these paths.
 
 import Link from "next/link";
-import { Users, Globe, Plug } from "lucide-react";
+import { Users, Globe, Plug, MessageCircle } from "lucide-react";
 
 const TABS = [
   { id: "all", href: "/leads", label: "All leads", icon: Users },
+  { id: "whatsapp", href: "/leads/whatsapp", label: "WhatsApp Marketing", icon: MessageCircle },
   { id: "website", href: "/leads/website", label: "Website chats", icon: Globe },
   { id: "sources", href: "/leads/sources", label: "Lead sources", icon: Plug },
 ] as const;

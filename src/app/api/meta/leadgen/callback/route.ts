@@ -20,7 +20,7 @@ import {
   listManagedPages,
   redirectUriFor,
   subscribePageToLeadgen,
-  verifyState,
+  checkState,
 } from '@/lib/meta/leadgen-oauth'
 
 function backToSources(request: Request, params: Record<string, string>) {
@@ -44,8 +44,23 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.redirect(new URL('/login', request.url))
 
   const code = searchParams.get('code')
-  if (!code || !verifyState(searchParams.get('state'), user.id)) {
-    return backToSources(request, { meta: 'error', reason: 'invalid_state' })
+  const stateCheck = checkState(searchParams.get('state'), user.id)
+  if (!code || stateCheck !== 'ok') {
+    // Say which check failed — "expired" was hiding three different causes.
+    console.warn('[meta-leadgen] callback rejected:', {
+      hasCode: !!code,
+      stateCheck,
+      params: [...searchParams.keys()],
+      host: new URL(request.url).host,
+    })
+    const reason = !code
+      ? 'no_code'
+      : stateCheck === 'expired'
+        ? 'invalid_state'
+        : stateCheck === 'wrong_user'
+          ? 'wrong_user'
+          : 'bad_state'
+    return backToSources(request, { meta: 'error', reason })
   }
 
   try {

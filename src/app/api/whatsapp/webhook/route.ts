@@ -7,6 +7,7 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { runJourneysForInbound } from '@/lib/journeys/runner'
 import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
+import { ingestLead } from '@/lib/leads/ingest'
 import { handleWhatsAppMessage } from '@/lib/whatsapp-agent/handler'
 import { handleAiAgentMessage } from '@/lib/ai-agent/engine'
 import { handleInboundConsent } from '@/lib/optin/manager'
@@ -353,17 +354,26 @@ async function handleStatusUpdate(status: {
     console.error('Error updating broadcast recipient status:', recUpdateErr)
   }
 }
-async function flagBroadcastReplyIfAny(userId: string, contactId: string) {
+/**
+ * Marks the contact's latest broadcast as replied (once — only while the
+ * recipient is still sent/delivered/read) and returns the broadcast name,
+ * so the caller can record the reply as a WhatsApp Marketing lead.
+ * Returns null when this message is not a first reply to a broadcast.
+ */
+async function flagBroadcastReplyIfAny(
+  userId: string,
+  contactId: string,
+): Promise<{ broadcastName: string | null } | null> {
   try {
     const { data: recs, error } = await supabaseAdmin()
       .from('broadcast_recipients')
-      .select('id, status, broadcast_id, broadcasts!inner(user_id)')
+      .select('id, status, broadcast_id, broadcasts!inner(user_id, name)')
       .eq('contact_id', contactId)
       .eq('broadcasts.user_id', userId)
       .in('status', ['sent', 'delivered', 'read'])
       .order('created_at', { ascending: false })
       .limit(1)
-    if (error || !recs || recs.length === 0) return
+    if (error || !recs || recs.length === 0) return null
     const row = recs[0]
     const { error: updErr } = await supabaseAdmin()
       .from('broadcast_recipients')
@@ -371,9 +381,14 @@ async function flagBroadcastReplyIfAny(userId: string, contactId: string) {
       .eq('id', row.id)
     if (updErr) {
       console.error('Error marking broadcast recipient replied:', updErr)
+      return null
     }
+    const b = row.broadcasts as { name?: string } | { name?: string }[] | null
+    const broadcastName = (Array.isArray(b) ? b[0]?.name : b?.name) ?? null
+    return { broadcastName }
   } catch (err) {
     console.error('flagBroadcastReplyIfAny failed:', err)
+    return null
   }
 }
 async function lookupInternalIdByMetaId(
@@ -540,7 +555,7 @@ async function processMessage(
   if (convError) {
     console.error('Error updating conversation:', convError)
   }
-  await flagBroadcastReplyIfAny(userId, contactRecord.id)
+  const broadcastReply = await flagBroadcastReplyIfAny(userId, contactRecord.id)
   const inboundText = contentText ?? message.text?.body ?? ''
   // ── OPT-IN / OPT-OUT (compliance) ──
   // Honor STOP/START immediately. If the message was a consent keyword,
@@ -667,6 +682,57 @@ async function processMessage(
           console.error('[whatsapp-agent] dispatch failed:', err)
         }
       }
+    }
+  }
+
+  // ── AD LEAD CAPTURE (works with or without the ads agent) ──
+  // A Click-to-WhatsApp lead must land in Leads even when the merchant
+  // never switched the ads agent on, or a journey answered first.
+  // Previously the lead was only recorded inside handleAdLead(), so
+  // "zero setup, ad leads are captured automatically" was only true for
+  // merchants who had configured an ads agent. When the ads agent DID
+  // reply it already recorded the lead and returned above, so reaching
+  // this point with isAdLead means nobody has recorded it yet.
+  if (isAdLead && referral) {
+    try {
+      await ingestLead({
+        tenantId: userId,
+        businessId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        source: 'meta_ads',
+        name: contactName,
+        phone: senderPhone,
+        adId: referral.source_id ?? null,
+        adHeadline: referral.headline ?? null,
+        ctwaClid: referral.ctwa_clid ?? null,
+        lastMessage: inboundText,
+        extra: referral.source_url ? { source_url: referral.source_url } : undefined,
+      })
+    } catch (err) {
+      console.error('[leads] ad lead capture failed:', err)
+    }
+  }
+
+  // ── WHATSAPP MARKETING LEAD ──
+  // Someone answering a broadcast is a lead the merchant paid for. Only the
+  // FIRST reply counts (flagBroadcastReplyIfAny returns null afterwards), and
+  // a Click-to-WhatsApp ad lead is already recorded above, so skip those.
+  if (broadcastReply && !isAdLead) {
+    try {
+      await ingestLead({
+        tenantId: userId,
+        businessId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        source: 'whatsapp',
+        name: contactName,
+        phone: senderPhone,
+        campaign: broadcastReply.broadcastName,
+        lastMessage: inboundText,
+      })
+    } catch (err) {
+      console.error('[leads] broadcast reply lead capture failed:', err)
     }
   }
 

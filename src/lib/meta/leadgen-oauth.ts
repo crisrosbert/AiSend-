@@ -58,23 +58,36 @@ export function signState(userId: string): string {
   return `${payload}.${sig}`
 }
 
-export function verifyState(state: string | null, expectedUserId: string): boolean {
-  if (!state) return false
+export type StateCheck = 'ok' | 'missing' | 'bad_signature' | 'wrong_user' | 'expired'
+
+/**
+ * Same check as verifyState but says WHY it failed, so the callback can
+ * show a different message for "took too long" and "signed in as a
+ * different user" instead of one vague "expired".
+ */
+export function checkState(state: string | null, expectedUserId: string): StateCheck {
+  if (!state) return 'missing'
   const [payload, sig] = state.split('.')
-  if (!payload || !sig) return false
+  if (!payload || !sig) return 'bad_signature'
 
   const expected = crypto.createHmac('sha256', stateSecret()).update(payload).digest('base64url')
   const a = Buffer.from(sig)
   const b = Buffer.from(expected)
   // timingSafeEqual throws on unequal lengths, so compare lengths first.
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return 'bad_signature'
 
   try {
     const { u, t } = JSON.parse(Buffer.from(payload, 'base64url').toString())
-    return u === expectedUserId && typeof t === 'number' && Date.now() - t < STATE_TTL_MS
+    if (u !== expectedUserId) return 'wrong_user'
+    if (typeof t !== 'number' || Date.now() - t >= STATE_TTL_MS) return 'expired'
+    return 'ok'
   } catch {
-    return false
+    return 'bad_signature'
   }
+}
+
+export function verifyState(state: string | null, expectedUserId: string): boolean {
+  return checkState(state, expectedUserId) === 'ok'
 }
 
 export function redirectUriFor(requestUrl: string): string {
@@ -85,13 +98,22 @@ export function redirectUriFor(requestUrl: string): string {
 export function buildAuthUrl(redirectUri: string, state: string): string {
   const appId = process.env.META_APP_ID
   if (!appId) throw new Error('META_APP_ID is not configured')
+  // Facebook Login for Business apps don't take `scope`: permissions live in
+  // a Configuration created in the Meta dashboard, referenced by config_id.
+  // Classic Facebook Login apps keep using `scope`.
+  const configId = process.env.META_LOGIN_CONFIG_ID
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
     state,
-    scope: LEADGEN_SCOPES,
     response_type: 'code',
   })
+  if (configId) {
+    params.set('config_id', configId)
+    params.set('override_default_response_type', 'true')
+  } else {
+    params.set('scope', LEADGEN_SCOPES)
+  }
   return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`
 }
 

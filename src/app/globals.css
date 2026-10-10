@@ -70,7 +70,11 @@
 
   /* ─────────────────────────────────────────────────────────────────────
      SEMANTIC COLORS
-     ───────────────────────────────────────────────────────────────────── */
+     ─────────────────────────────────────────────────────────────────────
+     Used for category coding across the app — stat tile icons, activity
+     feed badges, chart series, pipeline stages. Any page that needs a
+     "second colour" picks from here instead of inventing its own hex.
+     ALWAYS edit here — pages inherit automatically. */
   --amber:       #BE8700;   /* premium, scheduled, warning */
   --amber-50:    #FBF2D9;
   --amber-200:   #F0DC9A;
@@ -79,9 +83,24 @@
   --rose-50:     #FCE9E7;
   --rose-200:    #F2BAB5;
 
-  --blue:        #2A6BC9;   /* informational */
+  --blue:        #2A6BC9;   /* informational, "new contacts" category */
   --blue-50:     #E5EEFB;
   --blue-200:    #BFD4F0;
+
+  --violet:      #6B4FA8;   /* "messages sent" / broadcast category */
+  --violet-50:   #F0ECF8;
+  --violet-200:  #D5C9ED;
+
+  --pink:        #B83C7A;   /* templates / design category */
+  --pink-50:     #FBEAF2;
+  --pink-200:   #EFC3DA;
+
+  --teal:        #0E7F7A;   /* pipelines / automation category */
+  --teal-50:     #DCF2F0;
+  --teal-200:    #A6D9D5;
+
+  --mint:        #4ADE80;   /* bright accent — step-complete dot, sidebar highlight */
+  --mint-50:     #E8F9ED;
 
   /* ─────────────────────────────────────────────────────────────────────
      SPACING SCALE (8px baseline grid)

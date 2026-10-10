@@ -63,7 +63,7 @@ export default function LeadSourcesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/lead-sources");
+      const res = await fetch("/api/lead-sources", { cache: "no-store" });
       const json = await res.json();
       setSources(json.lead_sources ?? []);
     } catch {

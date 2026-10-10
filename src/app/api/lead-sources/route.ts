@@ -10,6 +10,9 @@ import crypto from 'node:crypto'
 import { createClient } from '@/lib/supabase/server'
 import { currentBusinessId } from '@/lib/business/server'
 
+// Per-user data behind a session cookie: never let a browser or CDN reuse it.
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const supabase = await createClient()
   const {
@@ -41,12 +44,15 @@ export async function GET() {
     counts.set(e.source_id, c)
   }
 
-  return NextResponse.json({
-    lead_sources: (data ?? []).map((s) => ({
-      ...s,
-      clicks_30d: counts.get(s.id) ?? { call_click: 0, whatsapp_click: 0 },
-    })),
-  })
+  return NextResponse.json(
+    {
+      lead_sources: (data ?? []).map((s) => ({
+        ...s,
+        clicks_30d: counts.get(s.id) ?? { call_click: 0, whatsapp_click: 0 },
+      })),
+    },
+    { headers: { 'Cache-Control': 'no-store, max-age=0' } },
+  )
 }
 
 export async function POST(request: Request) {

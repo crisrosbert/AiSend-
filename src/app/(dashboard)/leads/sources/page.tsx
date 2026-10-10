@@ -190,6 +190,26 @@ export default function LeadSourcesPage() {
           </a>
         </div>
 
+        <details className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          <summary className="cursor-pointer font-semibold text-slate-600">Need help connecting?</summary>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li>
+              <b>No Facebook account?</b> Click Connect, then choose &quot;Create new account&quot; in the Facebook
+              window. You will come straight back here afterwards, and Facebook is only used to pick your Page.
+            </li>
+            <li>
+              <b>Not the Page admin?</b> Ask the admin to open this screen and connect, or ask them to add you as an
+              admin of the Page in Facebook first.
+            </li>
+            <li>
+              <b>Several Pages?</b> Pick the Pages you run ads from. Connect again any time to add more.
+            </li>
+            <li>
+              Facebook never sees your AiSend password, and you can disconnect a Page here whenever you like.
+            </li>
+          </ul>
+        </details>
+
         {metaPages.length > 0 && (
           <div className="mt-4 divide-y divide-[#e7ece9] rounded-xl border border-[#e7ece9]">
             {metaPages.map((s) => (

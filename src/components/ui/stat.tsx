@@ -125,7 +125,10 @@ export function HeroStat({ label, value, delta, sub, spark, aside, icon, classNa
           <span
             className="font-bold tabular-nums leading-none"
             style={{
-              fontSize: "clamp(36px, 4vw, 48px)",
+              // Matches the Design System v2 preview: 52px desktop, 36px
+              // phone — the hero number is the one biggest moment on the
+              // page, so we don't downshift it on 1366px laptops.
+              fontSize: "clamp(36px, 5vw, 52px)",
               letterSpacing: "-0.03em",
               color: "var(--ink)",
             }}

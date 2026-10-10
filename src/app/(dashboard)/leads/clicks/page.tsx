@@ -96,7 +96,8 @@ function targetLabel(kind: Kind, target: string | null): string {
   if (!target) return "—";
   if (kind === "call_click") return target.replace(/^tel:/i, "");
   const m = target.match(/(?:wa\.me\/|phone=)\+?(\d{7,15})/i);
-  return m ? `+${m[1]}` : target.replace(/^https?:\/\//i, "").slice(0, 40);
+  // A chat widget link often carries no number at all (api.whatsapp.com/send).
+  return m ? `+${m[1]}` : "WhatsApp widget";
 }
 
 function csvCell(v: unknown): string {

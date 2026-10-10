@@ -404,25 +404,26 @@ function RuleCard({
 /* ────────────────────────────── styles ────────────────────────────── */
 
 const css = `
+/* ============================================================================
+   AUTOMATIONS PAGE — fully themed from globals.css
+   ============================================================================
+   Previously redeclared --ink, --muted, --faint, --ground, --line locally.
+   Now inherits ALL semantic tokens from :root in globals.css.
+   Local aliases map legacy names to the global tokens so the many
+   "var(--muted)" / "var(--faint)" / "var(--ground)" / "var(--surface)"
+   references below keep working. Edit globals.css to retheme everywhere.
+   ============================================================================ */
 .au-rules{
-  /* Inherits --brand / --brand-deep / --brand-press / --brand-50 /
-     --brand-100 from :root in globals.css — see the note at the top of
-     this file for why buttons use the darkest tone rather than --brand
-     directly. */
-
-  --ink:#0b1f1a;
-  --muted:#5f7069;
-  --faint:#93a49d;
-  --ground:#f4f7f5;
-  --surface:#ffffff;
-  --line:#e2eae6;
-  --radius:16px;
-  font-family:"Plus Jakarta Sans",system-ui,sans-serif;
+  --muted:  var(--ink-2);
+  --faint:  var(--ink-3);
+  --ground: var(--canvas);
+  --radius: var(--radius-xl);
+  font-family:var(--font-sans);
   color:var(--ink);
   display:flex;flex-direction:column;gap:16px;padding-bottom:80px}
 @media(min-width:1024px){.au-rules{padding-bottom:16px}}
-.au-rules h1,.au-rules h2,.au-rules h3{font-family:"Sora","Plus Jakarta Sans",sans-serif;
-  letter-spacing:-.03em;margin:0}
+.au-rules h1,.au-rules h2,.au-rules h3{font-family:var(--font-display);
+  letter-spacing:-.03em;margin:0;color:var(--ink)}
 .ar-spin{animation:arSpin .8s linear infinite}
 @keyframes arSpin{to{transform:rotate(360deg)}}
 .ar-loading{display:flex;align-items:center;justify-content:center;gap:10px;height:220px;
@@ -442,9 +443,9 @@ const css = `
   font-family:inherit;font-size:13px;font-weight:700;padding:11px 18px;border-radius:11px;transition:.16s;
   white-space:nowrap;text-decoration:none}
 .ar-btn:disabled{opacity:.55;cursor:default;transform:none!important}
-.ar-btn-primary{background:var(--brand-press);color:#fff}
+.ar-btn-primary{background:var(--brand);color:#fff;box-shadow:var(--shadow-brand)}
 .ar-btn-primary:hover:not(:disabled){background:var(--brand-deep);transform:translateY(-1px);
-  box-shadow:0 6px 16px rgba(7,94,84,.24)}
+  box-shadow:var(--shadow-brand-hover)}
 .ar-btn-sm{padding:8px 14px;font-size:12.5px}
 .ar-icon-btn{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;flex-shrink:0;
   border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;transition:.15s}
@@ -455,11 +456,11 @@ const css = `
 .ar-counts{display:flex;gap:14px}
 .ar-count{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;color:var(--muted)}
 .ar-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block}
-.ar-dot.live{background:var(--brand);box-shadow:0 0 0 3px rgba(27,107,74,.18)}
-.ar-dot.off{background:#c3cfca}
+.ar-dot.live{background:var(--brand);box-shadow:0 0 0 3px rgba(0,133,90,.18)}
+.ar-dot.off{background:var(--line-strong)}
 .ar-search{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);
   border-radius:11px;padding:0 14px;max-width:300px;flex:1;transition:.15s}
-.ar-search:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px rgba(27,107,74,.16)}
+.ar-search:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px rgba(0,133,90,.16)}
 .ar-search svg{color:var(--faint);flex-shrink:0}
 .ar-search input{border:none;outline:none;background:none;font-family:inherit;font-size:13.5px;
   padding:10px 0;width:100%;color:var(--ink)}
@@ -477,7 +478,7 @@ const css = `
 .ar-tpl:hover{border-color:var(--brand);background:var(--brand-50);transform:translateY(-1px)}
 .ar-tpl-ic{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;flex-shrink:0;
   background:var(--brand-50);color:var(--brand-press)}
-.ar-tpl:hover .ar-tpl-ic{background:#fff}
+.ar-tpl:hover .ar-tpl-ic{background:var(--surface)}
 .ar-tpl-body{min-width:0}
 .ar-tpl-body strong{display:block;font-size:13.5px;font-weight:750;font-family:"Sora",sans-serif;
   letter-spacing:-.02em}
@@ -492,14 +493,14 @@ const css = `
 /* A live rule gets a green edge — state you can read across the grid
    without parsing any text. */
 .ar-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--brand)}
-.ar-card.paused::before{background:#dfe7e3}
-.ar-card:hover{border-color:#cfdad5;box-shadow:0 10px 30px rgba(11,31,26,.07);transform:translateY(-2px)}
-.ar-card.paused{background:#fcfdfc}
+.ar-card.paused::before{background:var(--line-strong)}
+.ar-card:hover{border-color:var(--line-strong);box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.ar-card.paused{background:var(--surface-2)}
 .ar-card.paused .ar-card-body h3{color:var(--muted)}
 .ar-card-top{display:flex;gap:12px;align-items:flex-start}
 .ar-ic{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;flex-shrink:0;
   background:var(--brand-50);color:var(--brand-press)}
-.ar-card.paused .ar-ic{background:#f1f5f3;color:var(--faint)}
+.ar-card.paused .ar-ic{background:var(--canvas);color:var(--faint)}
 .ar-card-body{flex:1;min-width:0}
 .ar-card-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .ar-card h3{font-size:14.5px;font-weight:750;line-height:1.3}
@@ -508,23 +509,24 @@ const css = `
 .ar-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;padding:3px 9px;
   border-radius:99px;white-space:nowrap;flex-shrink:0}
 .ar-pill.live{background:var(--brand-50);color:var(--brand-press)}
-.ar-pill.off{background:#f1f5f3;color:var(--faint)}
+.ar-pill.off{background:var(--canvas);color:var(--faint)}
 .ar-chips{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 8px;flex:1;align-content:flex-start}
 .ar-chip{font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:99px;white-space:nowrap}
-.ar-chip.trigger{background:var(--brand-100);color:#2f5233}
+/* Chip colours use globals.css semantic tokens — one source of truth */
+.ar-chip.trigger{background:var(--brand-100);color:var(--brand-press)}
 .ar-chip.runs{background:var(--brand-50);color:var(--brand-press)}
-.ar-chip.quiet{background:#fdf4e7;color:#a1660b}
+.ar-chip.quiet{background:var(--amber-50);color:var(--amber)}
 .ar-meta{font-size:11px;color:var(--faint);margin:0 0 14px}
 .ar-card-actions{display:flex;gap:8px;align-items:center}
 .ar-card-actions .ar-btn{flex:1}
 
 /* toggle */
-.ar-toggle{position:relative;width:42px;height:24px;border-radius:99px;background:#d5ded9;border:none;
+.ar-toggle{position:relative;width:42px;height:24px;border-radius:99px;background:var(--line-strong);border:none;
   cursor:pointer;transition:.2s;flex-shrink:0;padding:0}
 .ar-toggle.on{background:var(--brand)}
 .ar-toggle:focus-visible{outline:2px solid var(--brand-press);outline-offset:2px}
-.ar-knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;
-  transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.24)}
+.ar-knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--surface);
+  transition:.2s;box-shadow:var(--shadow-xs)}
 .ar-toggle.on .ar-knob{left:21px}
 
 /* empty */

@@ -23,6 +23,9 @@ interface LeadSource {
   name: string;
   source_type: string;
   api_key: string;
+  public_key: string | null;
+  allowed_domains: string[] | null;
+  clicks_30d?: { call_click: number; whatsapp_click: number };
   is_active: boolean;
   created_at: string;
   last_used_at: string | null;
@@ -53,6 +56,7 @@ export default function LeadSourcesPage() {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [sourceType, setSourceType] = useState("website_form");
+  const [domain, setDomain] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -99,11 +103,12 @@ export default function LeadSourcesPage() {
       const res = await fetch("/api/lead-sources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, source_type: sourceType }),
+        body: JSON.stringify({ name, source_type: sourceType, allowed_domains: domain }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Failed");
       setName("");
-      toast.success("API key created");
+      setDomain("");
+      toast.success("Website source created. Copy the script below onto that site.");
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create key");
@@ -134,6 +139,7 @@ export default function LeadSourcesPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const scriptOrigin = typeof window !== "undefined" ? window.location.origin : "https://your-app";
   const ingestUrl =
     typeof window !== "undefined" ? `${window.location.origin}/api/leads/ingest` : "/api/leads/ingest";
 
@@ -235,8 +241,8 @@ export default function LeadSourcesPage() {
           <div>
             <h2 className="text-sm font-bold text-slate-800">Website form, Google Ads &amp; other tools</h2>
             <p className="mt-1 max-w-md text-xs text-slate-500">
-              For whoever builds your website form or Google Ads lead form: create a key, then add a webhook that
-              sends the form to the URL below.
+              Add one line of script to each website (HTML, PHP, WordPress, anything) and every form on it lands in
+              All leads with where the visitor came from. Create one per website so you can tell them apart.
             </p>
           </div>
         </div>
@@ -248,6 +254,15 @@ export default function LeadSourcesPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder='e.g. "Clinic website contact form"'
+              className="w-full rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            />
+          </div>
+          <div className="sm:w-52">
+            <label className="mb-1 block text-xs font-semibold text-slate-600">Website domain</label>
+            <input
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              placeholder="clinic.com"
               className="w-full rounded-lg border border-[#e7ece9] bg-white px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
             />
           </div>
@@ -269,18 +284,18 @@ export default function LeadSourcesPage() {
             className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:opacity-60"
           >
             {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-            Create key
+            Create
           </button>
         </div>
 
         <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
           <div>
-            Send the form from your <strong>server</strong> (WordPress/Elementor &quot;Webhook&quot; action, Zapier, Make, or
-            Google&apos;s lead-form webhook) to{" "}
-            <code className="rounded bg-amber-100 px-1 py-0.5">{ingestUrl}</code> with the key in an{" "}
-            <code className="rounded bg-amber-100 px-1 py-0.5">x-api-key</code> header. Never put a key in browser
-            JavaScript — anyone viewing the page could copy it.
+            Adding the website domain locks the script to that site, so a copied key can&apos;t be used elsewhere. For
+            Google Ads lead forms, Zapier/Make or a call-tracking provider, use the secret key instead: send to{" "}
+            <code className="rounded bg-amber-100 px-1 py-0.5">{ingestUrl}</code> from a server with the key in an{" "}
+            <code className="rounded bg-amber-100 px-1 py-0.5">x-api-key</code> header, and never put the secret key in
+            browser JavaScript.
           </div>
         </div>
 
@@ -288,32 +303,63 @@ export default function LeadSourcesPage() {
           <div className="flex justify-center py-8"><Loader2 className="size-5 animate-spin text-emerald-500" /></div>
         ) : keySources.length > 0 ? (
           <div className="mt-4 divide-y divide-[#e7ece9] rounded-xl border border-[#e7ece9]">
-            {keySources.map((s) => (
-              <div key={s.id} className="flex items-center gap-3 p-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-800">{s.name}</p>
-                  <p className="text-xs text-slate-400">
-                    {KEY_SOURCE_TYPES.find((t) => t.value === s.source_type)?.label ?? s.source_type}
-                    {s.last_used_at ? ` · last used ${new Date(s.last_used_at).toLocaleDateString()}` : " · never used yet"}
-                  </p>
-                  <code className="mt-1 block truncate rounded bg-slate-50 px-2 py-1 text-[11px] text-slate-500">{s.api_key}</code>
+            {keySources.map((s) => {
+              const snippet = s.public_key
+                ? `<script src="${scriptOrigin}/aisend.js" data-key="${s.public_key}" async></script>`
+                : null;
+              return (
+                <div key={s.id} className="space-y-2 p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-800">{s.name}</p>
+                      <p className="text-xs text-slate-400">
+                        {KEY_SOURCE_TYPES.find((t) => t.value === s.source_type)?.label ?? s.source_type}
+                        {s.allowed_domains && s.allowed_domains.length > 0 ? ` · ${s.allowed_domains.join(", ")}` : " · any domain"}
+                        {s.last_used_at ? ` · last lead ${new Date(s.last_used_at).toLocaleDateString()}` : " · no leads yet"}
+                      </p>
+                      {s.clicks_30d && (s.clicks_30d.call_click > 0 || s.clicks_30d.whatsapp_click > 0) && (
+                        <p className="text-xs text-slate-500">
+                          Last 30 days: {s.clicks_30d.call_click} call taps · {s.clicks_30d.whatsapp_click} WhatsApp taps
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => copy(`${s.id}-secret`, s.api_key, "Secret key")}
+                      className="flex h-8 items-center gap-1.5 rounded-lg border border-[#e7ece9] px-2.5 text-[11px] font-semibold text-slate-500 hover:border-emerald-300 hover:text-emerald-600"
+                      title="Secret key for servers, Google Ads webhooks, Zapier"
+                    >
+                      {copiedId === `${s.id}-secret` ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                      Secret key
+                    </button>
+                    <button
+                      onClick={() => handleDelete(s)}
+                      className="flex size-8 items-center justify-center rounded-lg border border-[#e7ece9] text-slate-500 hover:border-red-300 hover:text-red-500"
+                      title="Revoke"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                  {snippet && (
+                    <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-2.5">
+                      <div className="flex items-start gap-2">
+                        <code className="min-w-0 flex-1 break-all text-[11px] text-slate-600">{snippet}</code>
+                        <button
+                          onClick={() => copy(`${s.id}-snippet`, snippet, "Script")}
+                          className="flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-emerald-500 px-2.5 text-[11px] font-bold text-white hover:bg-emerald-600"
+                        >
+                          {copiedId === `${s.id}-snippet` ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                          Copy script
+                        </button>
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-slate-500">
+                        Paste before <code>&lt;/head&gt;</code>. WordPress: Insert Headers &amp; Footers plugin. Shopify:
+                        theme.liquid. Works with any form builder (Ninja Forms, CF7, WPForms, Elementor, custom PHP) as long as it asks for a phone or email. A WhatsApp button gets a short &quot;(Ref ...)&quot; added to its message so the chat keeps its ad source.
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <button
-                  onClick={() => copy(s.id, s.api_key, "API key")}
-                  className="flex size-8 items-center justify-center rounded-lg border border-[#e7ece9] text-slate-500 hover:border-emerald-300 hover:text-emerald-600"
-                  title="Copy API key"
-                >
-                  {copiedId === s.id ? <Check className="size-4" /> : <Copy className="size-4" />}
-                </button>
-                <button
-                  onClick={() => handleDelete(s)}
-                  className="flex size-8 items-center justify-center rounded-lg border border-[#e7ece9] text-slate-500 hover:border-red-300 hover:text-red-500"
-                  title="Revoke key"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
       </section>

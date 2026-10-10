@@ -216,8 +216,15 @@ export default function DashboardPage() {
   // ────────────────────────────────────────────────────────────────────────
   // RENDER
   // ────────────────────────────────────────────────────────────────────────
+  //
+  // Container: full-width — content stretches edge-to-edge inside the main
+  // area beside the 72px sidebar. The old max-w-[1400px] + mx-auto left a
+  // visible gutter on ultrawide screens; dropping it matches the Design
+  // System v2 preview, where the content fills the main pane. Padding is
+  // asymmetric (less on the left so it butts right up against the sidebar,
+  // more on the right so the content doesn't crash into the window edge).
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-5 pb-20 pt-5 sm:px-6 lg:px-8 lg:pb-10">
+    <div className="w-full px-5 pb-20 pt-5 sm:px-7 lg:px-10 lg:pb-10">
       <ReferralConsumer />
 
       {/* Page header with live chip + "Last sync Xs ago" */}

@@ -166,21 +166,24 @@ export default function AnalyticsPage() {
             />
           </div>
 
+          {/* Chart series colours now use globals.css semantic tokens.
+              Edit --amber/--rose/--blue/--brand/--violet in globals.css
+              to retint every chart across the whole app. */}
           <Panel
             title="Chats"
             subtitle="per day"
             legend={[
-              { key: "user", label: "User messages", color: "#F2C14E", total: data.totals.user },
-              { key: "bot", label: "Chatbot messages", color: "#F78154", total: data.totals.bot },
-              { key: "business", label: "Business messages", color: "#4babda", total: data.totals.business },
+              { key: "user", label: "User messages", color: "var(--amber)", total: data.totals.user },
+              { key: "bot", label: "Chatbot messages", color: "var(--rose)", total: data.totals.bot },
+              { key: "business", label: "Business messages", color: "var(--blue)", total: data.totals.business },
             ]}
           >
             <LineChart
               days={data.days}
               series={[
-                { key: "user", color: "#F2C14E" },
-                { key: "bot", color: "#F78154" },
-                { key: "business", color: "#4babda" },
+                { key: "user", color: "var(--amber)" },
+                { key: "bot", color: "var(--rose)" },
+                { key: "business", color: "var(--blue)" },
               ]}
             />
           </Panel>
@@ -189,15 +192,15 @@ export default function AnalyticsPage() {
             title="Agent activity"
             subtitle="per day"
             legend={[
-              { key: "closed", label: "Closed", color: "#5FAD56", total: data.totals.closed },
-              { key: "intervened", label: "Intervened", color: "#a48ed2", total: data.totals.intervened },
+              { key: "closed", label: "Closed", color: "var(--brand)", total: data.totals.closed },
+              { key: "intervened", label: "Intervened", color: "var(--violet)", total: data.totals.intervened },
             ]}
           >
             <LineChart
               days={data.days}
               series={[
-                { key: "closed", color: "#5FAD56" },
-                { key: "intervened", color: "#a48ed2" },
+                { key: "closed", color: "var(--brand)" },
+                { key: "intervened", color: "var(--violet)" },
               ]}
             />
           </Panel>
@@ -208,10 +211,10 @@ export default function AnalyticsPage() {
             <Panel title="Campaign delivery" subtitle="campaigns started in this range" legend={[]}>
               <Funnel
                 steps={[
-                  { label: "Sent", value: data.broadcasts.sent, color: "#4babda" },
-                  { label: "Delivered", value: data.broadcasts.delivered, color: "#5FAD56" },
-                  { label: "Read", value: data.broadcasts.read, color: "#F2C14E" },
-                  { label: "Replied", value: data.broadcasts.replied, color: "#F78154" },
+                  { label: "Sent", value: data.broadcasts.sent, color: "var(--blue)" },
+                  { label: "Delivered", value: data.broadcasts.delivered, color: "var(--brand)" },
+                  { label: "Read", value: data.broadcasts.read, color: "var(--amber)" },
+                  { label: "Replied", value: data.broadcasts.replied, color: "var(--rose)" },
                 ]}
                 failed={data.broadcasts.failed}
               />
@@ -307,9 +310,9 @@ function LineChart({ days, series }: {
         {ticks.map((t) => (
           <g key={t}>
             <line x1={PAD.left} x2={VB_W - PAD.right} y1={y(t)} y2={y(t)}
-              stroke="#eef2f0" strokeDasharray="3 3" />
+              stroke="var(--line)" strokeDasharray="3 3" />
             <text x={PAD.left - 8} y={y(t)} textAnchor="end" dominantBaseline="middle"
-              fontSize="11" fill="#9aa8a0">{t}</text>
+              fontSize="11" fill="var(--ink-3)">{t}</text>
           </g>
         ))}
 
@@ -323,11 +326,11 @@ function LineChart({ days, series }: {
         ))}
 
         {/* Endpoints only — a tick per day is unreadable at 90 days. */}
-        <text x={PAD.left} y={VB_H - 6} fontSize="11" fill="#9aa8a0">
+        <text x={PAD.left} y={VB_H - 6} fontSize="11" fill="var(--ink-3)">
           {shortDate(days[0].date)}
         </text>
         {days.length > 1 && (
-          <text x={VB_W - PAD.right} y={VB_H - 6} textAnchor="end" fontSize="11" fill="#9aa8a0">
+          <text x={VB_W - PAD.right} y={VB_H - 6} textAnchor="end" fontSize="11" fill="var(--ink-3)">
             {shortDate(days[days.length - 1].date)}
           </text>
         )}
@@ -400,63 +403,74 @@ function formatDuration(seconds: number | null): string {
 }
 
 const css = `
+/* ============================================================================
+   ANALYTICS PAGE — fully themed from globals.css
+   ============================================================================
+   Previously hardcoded hex values throughout for ink, borders, backgrounds
+   and the active preset button (#10b981 — a different green). Now every
+   colour, border, and shadow references globals.css tokens so one edit
+   there retints the entire analytics page.
+
+   Chart series (line colours, funnel segments) use globals.css semantic
+   tokens — see --amber/--rose/--blue/--brand/--violet in :root.
+   ============================================================================ */
 .an { padding: 20px 24px 60px; max-width: 1100px; margin: 0 auto; }
 .an-head { display:flex; flex-wrap:wrap; gap:14px; align-items:flex-start;
   justify-content:space-between; margin-bottom:20px }
-.an-head h1 { font-size:20px; font-weight:700; margin:0; color:#0c1f17 }
-.an-sub { margin:3px 0 0; font-size:12.5px; color:#6b7c73 }
+.an-head h1 { font-size:20px; font-weight:700; margin:0; color:var(--ink); font-family:var(--font-display) }
+.an-sub { margin:3px 0 0; font-size:12.5px; color:var(--ink-2) }
 .an-range { display:flex; align-items:center; gap:6px; flex-wrap:wrap }
-.an-preset { border:1.5px solid #e7ece9; background:#fff; border-radius:9px;
-  padding:7px 11px; font-size:12.5px; font-weight:600; color:#5b6b63;
+.an-preset { border:1.5px solid var(--line); background:var(--surface); border-radius:9px;
+  padding:7px 11px; font-size:12.5px; font-weight:600; color:var(--ink-2);
   cursor:pointer; font-family:inherit; transition:.15s }
-.an-preset:hover { border-color:#cfd8d3 }
-.an-preset.on { background:#10b981; border-color:#10b981; color:#fff }
-.an-date { border:1.5px solid #e7ece9; border-radius:9px; padding:6px 9px;
-  font-size:12.5px; font-family:inherit; color:#0c1f17; background:#fff }
-.an-dash { color:#9aa8a0; font-size:12px }
-.an-error { display:flex; align-items:center; gap:8px; background:#fef2f2;
-  border:1px solid #fecaca; color:#b91c1c; border-radius:10px;
+.an-preset:hover { border-color:var(--line-strong) }
+.an-preset.on { background:var(--brand); border-color:var(--brand); color:#fff }
+.an-date { border:1.5px solid var(--line); border-radius:9px; padding:6px 9px;
+  font-size:12.5px; font-family:inherit; color:var(--ink); background:var(--surface) }
+.an-dash { color:var(--ink-3); font-size:12px }
+.an-error { display:flex; align-items:center; gap:8px; background:var(--rose-50);
+  border:1px solid var(--rose-200); color:var(--rose); border-radius:10px;
   padding:11px 14px; font-size:13px; margin-bottom:16px }
-.an-loading { display:flex; align-items:center; gap:9px; color:#6b7c73;
+.an-loading { display:flex; align-items:center; gap:9px; color:var(--ink-2);
   font-size:13.5px; padding:50px 0; justify-content:center }
 .an-spin { animation: an-rot 1s linear infinite }
 @keyframes an-rot { to { transform: rotate(360deg) } }
 
 .an-kpis { display:grid; gap:12px; margin-bottom:18px;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)) }
-.an-k { background:#fff; border:1px solid #e7ece9; border-radius:14px; padding:15px 16px }
+.an-k { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:15px 16px }
 .an-k-top { display:flex; align-items:center; gap:7px; font-size:12px;
-  font-weight:600; color:#6b7c73 }
-.an-k-val { font-size:27px; font-weight:700; color:#0c1f17; margin:7px 0 2px;
-  letter-spacing:-.02em; font-variant-numeric: tabular-nums }
-.an-k-val.good { color:#059669 }
-.an-k-foot { font-size:11.5px; color:#8a978f; line-height:1.4 }
+  font-weight:600; color:var(--ink-2) }
+.an-k-val { font-size:27px; font-weight:700; color:var(--ink); margin:7px 0 2px;
+  letter-spacing:-.02em; font-variant-numeric: tabular-nums; font-family:var(--font-display) }
+.an-k-val.good { color:var(--brand-deep) }
+.an-k-foot { font-size:11.5px; color:var(--ink-3); line-height:1.4 }
 
-.an-p { background:#fff; border:1px solid #e7ece9; border-radius:14px;
+.an-p { background:var(--surface); border:1px solid var(--line); border-radius:14px;
   padding:18px 20px 12px; margin-bottom:16px }
 .an-p-head { display:flex; align-items:baseline; gap:6px }
-.an-p-head h2 { font-size:15px; font-weight:700; margin:0; color:#0c1f17 }
-.an-p-sub { font-size:12px; color:#8a978f }
+.an-p-head h2 { font-size:15px; font-weight:700; margin:0; color:var(--ink); font-family:var(--font-display) }
+.an-p-sub { font-size:12px; color:var(--ink-3) }
 .an-legend { display:flex; flex-wrap:wrap; gap:22px; margin:14px 0 4px }
 .an-leg { display:flex; align-items:flex-start; gap:7px }
 .an-dot { width:9px; height:9px; border-radius:50%; margin-top:5px; flex-shrink:0 }
-.an-leg-label { font-size:11.5px; color:#6b7c73; font-weight:600 }
-.an-leg-total { font-size:17px; font-weight:700; color:#0c1f17;
-  font-variant-numeric: tabular-nums }
+.an-leg-label { font-size:11.5px; color:var(--ink-2); font-weight:600 }
+.an-leg-total { font-size:17px; font-weight:700; color:var(--ink);
+  font-variant-numeric: tabular-nums; font-family:var(--font-display) }
 
 .an-lc { margin-top:6px }
-.an-empty { color:#8a978f; font-size:13px; padding:40px 0; text-align:center }
+.an-empty { color:var(--ink-3); font-size:13px; padding:40px 0; text-align:center }
 
 .an-f { padding:6px 0 10px }
 .an-f-row { display:flex; align-items:center; gap:12px; margin-bottom:9px }
-.an-f-label { width:78px; font-size:12.5px; color:#5b6b63; font-weight:600; flex-shrink:0 }
-.an-f-track { flex:1; height:22px; background:#f4f7f5; border-radius:6px; overflow:hidden }
+.an-f-label { width:78px; font-size:12.5px; color:var(--ink-2); font-weight:600; flex-shrink:0 }
+.an-f-track { flex:1; height:22px; background:var(--canvas); border-radius:6px; overflow:hidden }
 .an-f-bar { height:100%; border-radius:6px; transition:width .3s ease }
 .an-f-val { width:96px; text-align:right; font-size:13px; font-weight:700;
-  color:#0c1f17; font-variant-numeric: tabular-nums; flex-shrink:0 }
-.an-f-pct { display:inline-block; width:44px; font-size:11.5px; font-weight:600; color:#8a978f }
+  color:var(--ink); font-variant-numeric: tabular-nums; flex-shrink:0 }
+.an-f-pct { display:inline-block; width:44px; font-size:11.5px; font-weight:600; color:var(--ink-3) }
 .an-f-failed { display:flex; align-items:center; gap:5px; margin:10px 0 0;
-  font-size:11.5px; color:#b45309 }
+  font-size:11.5px; color:var(--amber) }
 
 @media (max-width: 640px) {
   .an { padding: 16px 14px 50px }

@@ -8,6 +8,7 @@ import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { runJourneysForInbound } from '@/lib/journeys/runner'
 import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
 import { ingestLead } from '@/lib/leads/ingest'
+import { linkWebsiteWhatsAppLead } from '@/lib/leads/website-whatsapp'
 import { handleWhatsAppMessage } from '@/lib/whatsapp-agent/handler'
 import { handleAiAgentMessage } from '@/lib/ai-agent/engine'
 import { handleInboundConsent } from '@/lib/optin/manager'
@@ -714,11 +715,32 @@ async function processMessage(
     }
   }
 
+  // ── WEBSITE WHATSAPP LEAD ──
+  // The chat button on the merchant's website adds "(Ref ABC123)" to the
+  // message. Linking it back to the click gives the lead its Google Ads /
+  // UTM / site source. A Click-to-WhatsApp ad lead is already recorded above.
+  let websiteLead = false
+  if (!isAdLead && inboundText) {
+    try {
+      websiteLead = await linkWebsiteWhatsAppLead({
+        tenantId: userId,
+        businessId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        name: contactName,
+        phone: senderPhone,
+        text: inboundText,
+      })
+    } catch (err) {
+      console.error('[leads] website whatsapp lead failed:', err)
+    }
+  }
+
   // ── WHATSAPP MARKETING LEAD ──
   // Someone answering a broadcast is a lead the merchant paid for. Only the
   // FIRST reply counts (flagBroadcastReplyIfAny returns null afterwards), and
   // a Click-to-WhatsApp ad lead is already recorded above, so skip those.
-  if (broadcastReply && !isAdLead) {
+  if (broadcastReply && !isAdLead && !websiteLead) {
     try {
       await ingestLead({
         tenantId: userId,

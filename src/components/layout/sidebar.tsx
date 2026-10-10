@@ -125,7 +125,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           open ? "translate-x-0" : "-translate-x-full",
           "lg:static lg:z-0 lg:w-[72px] lg:translate-x-0 lg:transition-none",
         )}
-        style={{ background: "var(--brand-teal-dark, #075E54)" }}
+        style={{ background: "var(--brand-teal-dark)" }}
         aria-label="Primary navigation"
       >
         {/* ── Logo / Brand ── */}
@@ -137,7 +137,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           >
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl"
-              style={{ background: "linear-gradient(135deg,#22c55e,#059669)" }}
+              style={{ background: "linear-gradient(135deg,var(--brand),var(--brand-deep))" }}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                 <path
@@ -174,14 +174,15 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                       "group relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 transition-all duration-150",
                       "lg:flex-col",
                       active
-                        ? "bg-emerald-500/15 text-emerald-400"
+                        ? "text-white"
                         : "text-white/40 hover:bg-white/5 hover:text-white/80",
                     )}
+                    style={active ? { background: "rgba(0,168,107,.14)" } : undefined}
                   >
                     {active && (
                       <span
                         className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full"
-                        style={{ background: "#22c55e" }}
+                        style={{ background: "#4ADE80" }}
                       />
                     )}
 
@@ -189,12 +190,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                       <item.icon
                         className={cn(
                           "h-[18px] w-[18px] shrink-0 transition-colors",
-                          active ? "text-emerald-400" : "group-hover:text-white/80",
+                          active ? "" : "group-hover:text-white/80",
                         )}
+                        style={active ? { color: "#4ADE80" } : undefined}
                         strokeWidth={active ? 2.2 : 1.8}
                       />
                       {showBadge && (
-                        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-0.5 text-[9px] font-bold text-white">
+                        <span
+                          className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[9px] font-bold text-white"
+                          style={{ background: "var(--brand)" }}
+                        >
                           {totalUnread > 99 ? "99+" : totalUnread}
                         </span>
                       )}
@@ -210,8 +215,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                         "text-center font-medium leading-none",
                         "hidden lg:block",
                         "text-[9.5px] tracking-wide",
-                        active ? "text-emerald-400" : "text-white/40 group-hover:text-white/70",
+                        active ? "" : "text-white/40 group-hover:text-white/70",
                       )}
+                      style={active ? { color: "#4ADE80" } : undefined}
                     >
                       {item.label}
                     </span>
@@ -242,22 +248,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     title={item.label}
                     className={cn(
                       "group relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 transition-all duration-150",
-                      active
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "text-white/40 hover:bg-white/5 hover:text-white/80",
+                      active ? "text-white" : "text-white/40 hover:bg-white/5 hover:text-white/80",
                     )}
+                    style={active ? { background: "rgba(0,168,107,.14)" } : undefined}
                   >
                     {active && (
                       <span
                         className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full"
-                        style={{ background: "#22c55e" }}
+                        style={{ background: "#4ADE80" }}
                       />
                     )}
                     <item.icon
                       className={cn(
                         "h-[18px] w-[18px] shrink-0 transition-colors",
-                        active ? "text-emerald-400" : "group-hover:text-white/80",
+                        active ? "" : "group-hover:text-white/80",
                       )}
+                      style={active ? { color: "#4ADE80" } : undefined}
                       strokeWidth={active ? 2.2 : 1.8}
                     />
                     <span className="hidden text-[9.5px] font-medium tracking-wide text-white/40 group-hover:text-white/70 lg:block">
@@ -281,7 +287,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 )}
                 <AvatarFallback
                   className="text-xs font-bold"
-                  style={{ background: "#059669", color: "#fff" }}
+                  style={{ background: "linear-gradient(135deg,var(--brand),var(--brand-deep))", color: "#fff" }}
                 >
                   {initial}
                 </AvatarFallback>
@@ -296,7 +302,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               side="right"
               sideOffset={8}
               className="min-w-52 border-white/10 text-slate-200"
-              style={{ background: "var(--brand-teal-dark, #075E54)" }}
+              style={{ background: "var(--brand-teal-dark)" }}
             >
               <div className="px-3 py-2 border-b border-white/5">
                 <p className="text-sm font-semibold text-white truncate">

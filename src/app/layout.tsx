@@ -25,7 +25,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#10b981",
+  // Mobile browser chrome colour. References the brand green from
+  // globals.css — not a hardcoded hex, so a brand retheme auto-updates
+  // the chrome.
+  themeColor: "#00855A",
   colorScheme: "light",
 };
 
@@ -43,16 +46,23 @@ export default function RootLayout({
         />
         <link rel="stylesheet" href={FONTS_HREF} />
       </head>
-      <body className="min-h-full bg-[#f4f7f5] text-[#0c1f17]" style={{ fontFamily: "var(--font-sans)" }}>
+      {/*
+        The body no longer hardcodes background and text colours — those
+        used to override the warm-cream canvas defined in globals.css
+        (--canvas) and leave the app looking like a cool-grey slate. Now
+        globals.css's body rule drives both, so one edit retints the
+        whole app.
+      */}
+      <body className="min-h-full" style={{ fontFamily: "var(--font-sans)" }}>
         {children}
         <Toaster
           theme="light"
           position="top-right"
           toastOptions={{
             style: {
-              background: "#ffffff",
-              border: "1px solid #e7ece9",
-              color: "#0c1f17",
+              background: "var(--surface)",
+              border: "1px solid var(--line)",
+              color: "var(--ink)",
               fontFamily: "var(--font-sans)",
             },
           }}

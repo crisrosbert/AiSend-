@@ -70,23 +70,25 @@ const RANGES = [
 /** Chart colours + copy per billable category. Order = stacking order. */
 const CATEGORY_META: Record<UsageCategory, { label: string; short: string; color: string; tint: string; blurb: string }> = {
   marketing: {
-    label: "Marketing", short: "MKT", color: "#7c3aed", tint: "#f5f3ff",
+    // Category colours use globals.css semantic tokens — one source of truth
+    // for violet/blue/teal/pink across the entire app.
+    label: "Marketing", short: "MKT", color: "var(--violet)", tint: "var(--violet-50)",
     blurb: "Promotions, offers and re-engagement",
   },
   utility: {
-    label: "Utility", short: "UTL", color: "#2563eb", tint: "#eff6ff",
+    label: "Utility", short: "UTL", color: "var(--blue)", tint: "var(--blue-50)",
     blurb: "Order updates, reminders, receipts",
   },
   authentication: {
-    label: "Authentication", short: "AUTH", color: "#0d9488", tint: "#f0fdfa",
+    label: "Authentication", short: "AUTH", color: "var(--teal)", tint: "var(--teal-50)",
     blurb: "One-time passcodes and verification",
   },
   service: {
-    label: "Service", short: "SVC", color: "#16a34a", tint: "#f0fdf4",
+    label: "Service", short: "SVC", color: "var(--brand)", tint: "var(--brand-50)",
     blurb: "Replies inside a customer-opened chat",
   },
   other: {
-    label: "Other", short: "OTH", color: "#94a3b8", tint: "#f8fafc",
+    label: "Other", short: "OTH", color: "var(--ink-3)", tint: "var(--surface-2)",
     blurb: "Adjustments and uncategorised charges",
   },
 };
@@ -274,7 +276,7 @@ export default function BillingPage() {
         name: "AiSend",
         description: `${data.plan.name} — ${data.plan.cycle === "yearly" ? "yearly" : "monthly"}`,
         order_id: data.order.id,
-        theme: { color: "#16a34a" },
+        theme: { color: "var(--brand)" },
         handler: async (resp: Record<string, string>) => {
           // Only the three fields Razorpay signs are sent. The plan and
           // the amount are read server-side from the order itself, so
@@ -858,12 +860,13 @@ function Sparkline({ series }: { series: UsageDay[] }) {
     <svg className="bl-spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
       <defs>
         <linearGradient id="bl-spark-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#16a34a" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#16a34a" stopOpacity="0" />
+          {/* Chart gradient — uses --brand so it auto-themes with globals.css. */}
+          <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="var(--brand)" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={`${line} L ${w},${h} L 0,${h} Z`} fill="url(#bl-spark-grad)" />
-      <path d={line} fill="none" stroke="#16a34a" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <path d={line} fill="none" stroke="var(--brand)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -932,7 +935,7 @@ function UsageChart({ series, categories, loading, empty }: {
           const y = padT + plotH - ratio * plotH;
           return (
             <g key={ratio}>
-              <line x1={padL} x2={width - padR} y1={y} y2={y} stroke="#eef2f0" strokeWidth="1" />
+              <line x1={padL} x2={width - padR} y1={y} y2={y} stroke="var(--line)" strokeWidth="1" />
               <text x={padL - 8} y={y + 3.5} textAnchor="end" className="bl-axis">
                 {shortMoney(niceMax * ratio)}
               </text>
@@ -952,7 +955,7 @@ function UsageChart({ series, categories, loading, empty }: {
               {/* Full-height hit area so thin bars are still hoverable */}
               <rect
                 x={padL + i * slot} y={padT} width={slot} height={plotH}
-                fill={hover === i ? "rgba(22,163,74,.05)" : "transparent"}
+                fill={hover === i ? "rgba(0,133,90,.05)" : "transparent"}
               />
               {categories.map((category) => {
                 const value = day.spend[category];
@@ -975,7 +978,7 @@ function UsageChart({ series, categories, loading, empty }: {
 
         <line
           x1={padL} x2={width - padR} y1={padT + plotH} y2={padT + plotH}
-          stroke="#dbe3de" strokeWidth="1"
+          stroke="var(--line-strong)" strokeWidth="1"
         />
 
         {axisTicks(series.length).map((i) => (
@@ -1083,14 +1086,27 @@ function axisTicks(length: number): number[] {
 /* ────────────────────────────── styles ────────────────────────────── */
 
 const css = `
+/* ============================================================================
+   BILLING PAGE — fully themed from globals.css
+   ============================================================================
+   Previously this block redeclared --brand (#16a34a — a different green),
+   --ink, --line, --muted locally. That made this page an "island" that
+   ignored the app-wide theme in globals.css.
+
+   NOW: all brand/ink/line/shadow/radius tokens inherit from :root in
+   globals.css. Only local aliases (--muted → --ink-2, --card → --surface,
+   --r → --radius-xl) remain so the many "var(--muted)" references below
+   keep working. Edit globals.css to retheme — nothing to touch here.
+   ============================================================================ */
 .bl{
-  --brand:#16a34a;--brand-deep:#15803d;--brand-50:#f0fdf4;
-  --ink:#0f172a;--muted:#64748b;--line:#e8edf0;--card:#fff;
-  --r:16px;--shadow:0 1px 3px rgba(15,23,42,.04),0 6px 20px rgba(15,23,42,.05);
-  font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:var(--ink);
+  --muted: var(--ink-2);
+  --card:  var(--surface);
+  --r:     var(--radius-xl);
+  --shadow: var(--shadow-sm);
+  font-family:var(--font-sans);color:var(--ink);
   display:flex;flex-direction:column;gap:18px;padding-bottom:84px}
 @media(min-width:1024px){.bl{padding-bottom:8px}}
-.bl h1,.bl h2,.bl h3,.bl h4{font-family:"Sora","Plus Jakarta Sans",sans-serif;letter-spacing:-.02em;margin:0}
+.bl h1,.bl h2,.bl h3,.bl h4{font-family:var(--font-display);letter-spacing:-.02em;margin:0;color:var(--ink)}
 .bl-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
 .bl-loading{display:flex;align-items:center;justify-content:center;gap:10px;height:240px;color:var(--muted);font-size:14px;font-weight:600}
 .bl-spin{animation:blSpin .8s linear infinite}
@@ -1109,20 +1125,21 @@ const css = `
   white-space:nowrap;text-decoration:none}
 .bl-btn:disabled{opacity:.55;cursor:default;transform:none!important}
 .bl-btn-full{width:100%}
-.bl-btn-primary{background:var(--brand);color:#fff;box-shadow:0 5px 16px rgba(22,163,74,.28)}
-.bl-btn-primary:hover:not(:disabled){background:var(--brand-deep);transform:translateY(-1px)}
-.bl-btn-outline{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+/* Buttons: all shadows now use --shadow-brand so they auto-match --brand */
+.bl-btn-primary{background:var(--brand);color:#fff;box-shadow:var(--shadow-brand)}
+.bl-btn-primary:hover:not(:disabled){background:var(--brand-deep);transform:translateY(-1px);box-shadow:var(--shadow-brand-hover)}
+.bl-btn-outline{background:var(--surface);color:var(--ink);border:1.5px solid var(--line)}
 .bl-btn-outline:hover:not(:disabled){border-color:var(--brand);color:var(--brand-deep)}
-.bl-btn-ghost{background:#f1f5f4;color:#475569}
-.bl-btn-ghost:hover{background:#e6ebe8}
-.bl-btn-white{background:#fff;color:var(--brand-deep);box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.bl-btn-ghost{background:var(--surface-2);color:var(--ink-2)}
+.bl-btn-ghost:hover{background:var(--line)}
+.bl-btn-white{background:var(--surface);color:var(--brand-deep);box-shadow:var(--shadow-md)}
 .bl-btn-white:hover{transform:translateY(-1px)}
 .bl-link{background:none;border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;color:var(--brand-deep);padding:0}
 
-/* alert */
+/* Alerts: use --amber/--rose from globals.css semantic colours */
 .bl-alert{display:flex;align-items:center;gap:13px;padding:14px 16px;border-radius:var(--r);
-  background:linear-gradient(120deg,#f59e0b,#d97706);color:#fff;box-shadow:var(--shadow)}
-.bl-alert.critical{background:linear-gradient(120deg,#ef4444,#b91c1c)}
+  background:linear-gradient(120deg,var(--amber),var(--amber));color:#fff;box-shadow:var(--shadow)}
+.bl-alert.critical{background:linear-gradient(120deg,var(--rose),#A5241C)}
 .bl-alert>svg{flex-shrink:0}
 .bl-alert div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .bl-alert strong{font-size:13.5px;font-family:"Sora",sans-serif}

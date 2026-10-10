@@ -4,81 +4,134 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================================
-   AISEND THEME
+   AISEND THEME · V2 (10 Oct 2026)
    ============================================================================
-   HOW TO CHANGE THE APP'S COLOR THEME
-   ------------------------------------
-   Edit ONLY the ":root" block right below this comment. Every color used
-   anywhere in the app (buttons, links, focus rings, badges, the sidebar's
-   active-item highlight, etc.) is built from these variables — nothing
-   else in this file needs to change.
+   HOW TO RETHEME THE WHOLE APP
+   -----------------------------
+   Edit ONLY the ":root" block. Every button, link, badge, focus ring, and
+   sidebar highlight is built from these variables — nothing else here needs
+   to change.
 
-   The palette below is AiSend's own deep-forest-green + mint brand
-   (moved off WhatsApp's stock green). To use a different color, replace
-   the --brand-* values with your new color and its darker/lighter
-   shades — everything else updates automatically.
+   The palette is AiSend's refined green: a confident signal-green (#00855A)
+   over a warm cream canvas, with ink text in a dark green-tinted near-black.
+   To use a different brand color, replace --brand with your hue and the
+   deep/press shades will auto-cascade.
 
-   ONE THING THIS FILE CANNOT REACH: a few components set a gradient
-   directly in their own .tsx file with a hardcoded hex value (mostly the
-   left sidebar background and a handful of card gradients), because CSS
-   variables can't reach into inline React styles. Those are a separate,
-   small find-and-replace job — ask for it by name if you want them
-   folded into this same palette.
+   LEGACY COMPATIBILITY
+   --------------------
+   The app was built in three passes using three different color stacks
+   (slate / violet / emerald). Rather than hunt every component, those
+   classes are redirected via the "Legacy class remapping" section at the
+   bottom of this file. This is why editing :root is enough to re-theme
+   the whole app.
    ============================================================================ */
 
 :root {
-  /* ---- Brand green (AiSend's own palette — deep forest + mint) ----
-     --brand        = primary buttons, links, the active nav rail
-     --brand-deep   = hover state
-     --brand-press  = active/pressed state (mouse held down)
-     --brand-50/100/200 = light tints, used for badges and soft backgrounds */
-  --brand:       #1B6B4A;   /* deep emerald */
-  --brand-deep:  #14523A;   /* hover — same hue, darker */
-  --brand-press: #0F3F2C;   /* pressed — darker still */
-  --brand-50:    #EAF6EF;
-  --brand-100:   #CFEBDC;
-  --brand-200:   #9DD8B7;
+  /* ─────────────────────────────────────────────────────────────────────
+     BRAND
+     ─────────────────────────────────────────────────────────────────────
+     --brand       → primary buttons, links, active nav, hero numbers
+     --brand-deep  → hover state
+     --brand-press → active/pressed state
+     --brand-50/100/200/300 → light tints (badges, soft bgs, borders) */
+  --brand:        #00855A;   /* signal green — confident, decisive */
+  --brand-deep:   #06603F;   /* hover */
+  --brand-press:  #054A32;   /* pressed */
+  --brand-50:     #E8F4EE;   /* softest tint — soft backgrounds */
+  --brand-100:    #CDE8DA;   /* badge bg */
+  --brand-200:    #B9DBC9;   /* badge border */
+  --brand-300:    #87C4A6;   /* accent dot */
 
-  /* ---- Accent tints ----
-     Fresh highlights used sparingly — active-state dots, stat
-     numbers on dark surfaces, secondary badges. */
-  --mint: #6FD9A0;
-  --lime: #D7E38A;
+  /* ─────────────────────────────────────────────────────────────────────
+     DARK SURFACES (sidebar, header-on-dark)
+     ───────────────────────────────────────────────────────────────────── */
+  --brand-teal:      #163828;   /* elevated dark surface */
+  --brand-teal-dark: #0E2B20;   /* sidebar background */
 
-  /* ---- Dark surface (sidebar / header-on-dark) ----
-     Not wired into every component yet — kept here so any dark
-     header/sidebar look can be switched to it later without hunting
-     for the hex value again. */
-  --brand-teal:      #1E4F3B;
-  --brand-teal-dark: #0E2B20;
+  /* ─────────────────────────────────────────────────────────────────────
+     TEXT (ink scale — dark green-tinted neutrals, not blue slate)
+     ───────────────────────────────────────────────────────────────────── */
+  --ink:        #0E1F18;   /* primary text, headings */
+  --ink-soft:   #2A3B33;   /* secondary heading */
+  --ink-2:      #475A51;   /* body secondary */
+  --ink-3:      #86958F;   /* captions, metadata */
+  --ink-4:      #B5BFBA;   /* placeholder, muted */
+  --ink-muted:  #86958F;   /* alias for backward compat */
 
-  /* ---- Text ---- */
-  --ink:       #10261D;   /* primary text */
-  --ink-soft:  #46584f;   /* secondary text */
-  --ink-muted: #7c8a83;   /* placeholder / tertiary text */
+  /* ─────────────────────────────────────────────────────────────────────
+     SURFACES
+     ───────────────────────────────────────────────────────────────────── */
+  --canvas:       #F7F5EF;   /* page background — warm cream */
+  --surface:      #FFFFFF;   /* cards, panels, modals */
+  --surface-2:    #FAF8F2;   /* alt rows, soft bands */
+  --soft:         #F6F4EC;   /* input trays, hover rows (legacy alias) */
+  --line:         #E8E5DA;   /* hairline border — warm */
+  --line-strong:  #D4CFBE;   /* stronger divider */
 
-  /* ---- Surfaces ---- */
-  --line:    #E6E4D9;   /* hairline borders (warm) */
-  --surface: #ffffff;   /* cards, panels, the sidebar */
-  --canvas:  #F8F6F0;   /* page background behind cards (warm cream) */
-  --soft:    #F6F4EC;   /* soft muted panels — hover rows, input trays */
+  /* ─────────────────────────────────────────────────────────────────────
+     SEMANTIC COLORS
+     ───────────────────────────────────────────────────────────────────── */
+  --amber:       #BE8700;   /* premium, scheduled, warning */
+  --amber-50:    #FBF2D9;
+  --amber-200:   #F0DC9A;
 
-  /* ---- Elevation (box-shadow) ---- */
-  --shadow-xs:    0 1px 2px rgba(16,38,29,.05);
-  --shadow-sm:    0 1px 3px rgba(16,38,29,.06), 0 1px 2px rgba(16,38,29,.04);
-  --shadow-md:    0 4px 12px rgba(16,38,29,.07), 0 2px 4px rgba(16,38,29,.04);
-  --shadow-lg:    0 12px 32px rgba(16,38,29,.10), 0 4px 8px rgba(16,38,29,.05);
-  --shadow-brand: 0 8px 20px rgba(27,107,74,.28);
+  --rose:        #C9342A;   /* destructive, errors */
+  --rose-50:     #FCE9E7;
+  --rose-200:    #F2BAB5;
 
-  /* ---- Layout ---- */
-  --radius: 0.75rem;
+  --blue:        #2A6BC9;   /* informational */
+  --blue-50:     #E5EEFB;
+  --blue-200:    #BFD4F0;
 
-  /* ---- Fonts ---- */
+  /* ─────────────────────────────────────────────────────────────────────
+     SPACING SCALE (8px baseline grid)
+     Use these over arbitrary values. If you need something off-grid,
+     question whether you've reached for the wrong size.
+     ───────────────────────────────────────────────────────────────────── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-7:  32px;
+  --space-8:  40px;
+  --space-9:  48px;
+  --space-10: 64px;
+
+  /* ─────────────────────────────────────────────────────────────────────
+     ELEVATION (restrained — no shadow stacks)
+     xs = inline chips; sm = cards; md = elevated panels; lg = modals;
+     brand = primary CTA.
+     ───────────────────────────────────────────────────────────────────── */
+  --shadow-xs:    0 1px 2px rgba(14,31,24,.04);
+  --shadow-sm:    0 1px 2px rgba(14,31,24,.05);
+  --shadow-md:    0 4px 12px rgba(14,31,24,.07);
+  --shadow-lg:    0 20px 50px rgba(14,31,24,.18), 0 4px 10px rgba(14,31,24,.06);
+  --shadow-brand: 0 2px 6px rgba(0,133,90,.28);
+  --shadow-brand-hover: 0 4px 12px rgba(0,133,90,.34);
+
+  /* ─────────────────────────────────────────────────────────────────────
+     RADIUS SCALE
+     Use these so corners stay consistent — big surfaces 14-16, cards 12,
+     buttons/inputs 9, pills 999, tiny chips 6.
+     ───────────────────────────────────────────────────────────────────── */
+  --radius-xs: 6px;
+  --radius-sm: 9px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+  --radius:    12px;     /* default (shadcn-compatible) */
+
+  /* ─────────────────────────────────────────────────────────────────────
+     FONTS
+     ───────────────────────────────────────────────────────────────────── */
   --font-display: 'Sora', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-sans:    'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
-/* Wires the tokens above into Tailwind's own theme (bg-background, etc). */
+/* Wires the tokens above into Tailwind's own theme. */
 @theme inline {
   --color-background: var(--canvas);
   --color-foreground: var(--ink);
@@ -89,7 +142,7 @@
 }
 
 /* ============================================================================
-   BASE ELEMENTS
+   BASE
    ============================================================================ */
 
 * { box-sizing: border-box; }
@@ -97,116 +150,125 @@
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
   background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
   letter-spacing: -0.005em;
   min-height: 100vh;
 }
 
+/* Headings use display family with tight tracking */
 h1, h2, h3, h4, .font-display {
   font-family: var(--font-display);
-  letter-spacing: -0.022em;
   color: var(--ink);
+  letter-spacing: -0.022em;
+  line-height: 1.15;
 }
 
-h1 { font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem); font-weight: 700; }
-h2 { font-weight: 700; }
+h1 { font-size: clamp(1.625rem, 1.3rem + 1.2vw, 2rem); font-weight: 700; letter-spacing: -0.025em; }
+h2 { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.022em; }
+h3 { font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.015em; }
+h4 { font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.01em; }
+
+/* All numbers tabular by default — tables, stats, prices stay aligned */
+.tabular, [class*="tabular-nums"] { font-variant-numeric: tabular-nums; }
 
 /* ============================================================================
    LEGACY CLASS REMAPPING
    ============================================================================
-   The codebase was built in three passes and still mixes three different
-   sets of Tailwind color classes across components:
-     - bg-slate-900/800/700... (from an original dark theme)
-     - bg-violet-500/600...    (from an earlier purple brand)
-     - bg-emerald-500/600...   (the current green brand)
-   Rather than hunt down and rewrite every component that uses one of
-   these, every one of them is redirected here to the SAME --brand
-   variables above. This is why editing :root at the top of this file is
-   enough to re-theme the whole app without touching component files.
+   The codebase mixes three old color stacks (slate / violet / emerald).
+   Rather than hunt down every component, every one of them is redirected
+   HERE to the same --brand variables above. Editing :root at the top
+   therefore re-themes the whole app without touching component files.
    ============================================================================ */
 
 /* ---- Old dark-theme backgrounds → light surfaces ---- */
 .bg-slate-950 { background-color: var(--canvas) !important; }
 .bg-slate-900 { background-color: var(--surface) !important; }
 .bg-slate-800 { background-color: var(--surface) !important; }
-.bg-slate-700 { background-color: #f1f5f4 !important; }
+.bg-slate-700 { background-color: var(--surface-2) !important; }
 .bg-slate-600 { background-color: var(--line) !important; }
-.bg-slate-500 { background-color: #d8e0dc !important; }
+.bg-slate-500 { background-color: var(--line-strong) !important; }
 
-.bg-slate-950\/50, .bg-slate-950\/70 { background-color: rgba(16,38,29,.45) !important; }
+.bg-slate-950\/50, .bg-slate-950\/70 { background-color: rgba(14,31,24,.42) !important; }
 .bg-slate-900\/40, .bg-slate-900\/50, .bg-slate-900\/60, .bg-slate-900\/80, .bg-slate-900\/95 { background-color: var(--surface) !important; }
-.bg-slate-800\/30, .bg-slate-800\/40, .bg-slate-800\/50, .bg-slate-800\/60, .bg-slate-800\/70, .bg-slate-800\/80 { background-color: var(--soft) !important; }
-.bg-slate-700\/40, .bg-slate-700\/50 { background-color: #f1f5f4 !important; }
-.bg-slate-600\/20 { background-color: #eef2f0 !important; }
+.bg-slate-800\/30, .bg-slate-800\/40, .bg-slate-800\/50, .bg-slate-800\/60, .bg-slate-800\/70, .bg-slate-800\/80 { background-color: var(--surface-2) !important; }
+.bg-slate-700\/40, .bg-slate-700\/50 { background-color: var(--soft) !important; }
+.bg-slate-600\/20 { background-color: var(--line) !important; }
 .bg-slate-500\/10 { background-color: var(--canvas) !important; }
 
-.hover\:bg-slate-800:hover, .hover\:bg-slate-800\/60:hover { background-color: #f1f5f4 !important; }
+.hover\:bg-slate-800:hover, .hover\:bg-slate-800\/60:hover { background-color: var(--surface-2) !important; }
 .hover\:bg-slate-800\/30:hover { background-color: var(--soft) !important; }
 .hover\:bg-slate-700:hover { background-color: var(--line) !important; }
-.focus\:bg-slate-800:focus, .focus\:bg-slate-800\/60:focus { background-color: #f1f5f4 !important; }
+.focus\:bg-slate-800:focus, .focus\:bg-slate-800\/60:focus { background-color: var(--surface-2) !important; }
 
-/* ---- Old dark-theme text → dark-on-light text ---- */
+/* ---- Old dark-theme text → ink scale ---- */
 .text-white     { color: var(--ink) !important; }
 .text-slate-100 { color: var(--ink) !important; }
-.text-slate-200 { color: #1a2b23 !important; }
-.text-slate-300 { color: #334155 !important; }
-.text-slate-400 { color: var(--ink-muted) !important; }
-.text-slate-500 { color: #6b7c73 !important; }
-.text-slate-600 { color: #8a978f !important; }
+.text-slate-200 { color: var(--ink-soft) !important; }
+.text-slate-300 { color: var(--ink-2) !important; }
+.text-slate-400 { color: var(--ink-3) !important; }
+.text-slate-500 { color: var(--ink-2) !important; }
+.text-slate-600 { color: var(--ink-3) !important; }
 .hover\:text-white:hover { color: var(--ink) !important; }
 
 .placeholder\:text-slate-500::placeholder,
-.placeholder\:text-slate-600::placeholder { color: #9aa8a0 !important; }
+.placeholder\:text-slate-600::placeholder { color: var(--ink-4) !important; }
 
 /* ---- Old dark-theme borders / rings / dividers ---- */
-.border-slate-500 { border-color: #cfd8d3 !important; }
-.border-slate-600 { border-color: #dde4e0 !important; }
+.border-slate-500 { border-color: var(--line-strong) !important; }
+.border-slate-600 { border-color: var(--line-strong) !important; }
 .border-slate-700 { border-color: var(--line) !important; }
-.border-slate-800 { border-color: #eef2f0 !important; }
-.divide-slate-800 > * + * { border-color: #eef2f0 !important; }
+.border-slate-800 { border-color: var(--line) !important; }
+.divide-slate-800 > * + * { border-color: var(--line) !important; }
 .ring-slate-700 { --tw-ring-color: var(--line) !important; }
-.ring-slate-800 { --tw-ring-color: #eef2f0 !important; }
-.ring-white\/10 { --tw-ring-color: rgba(16,38,29,.08) !important; }
+.ring-slate-800 { --tw-ring-color: var(--line) !important; }
+.ring-white\/10 { --tw-ring-color: rgba(14,31,24,.08) !important; }
 
-/* ---- Violet AND emerald (both legacy brand colors) → the one --brand ---- */
+/* ---- Both legacy brand colors (violet AND emerald) → the one --brand ---- */
 .bg-violet-500, .bg-emerald-500 { background-color: var(--brand) !important; }
 .bg-violet-600, .bg-emerald-600 { background-color: var(--brand-deep) !important; }
-.bg-violet-700 { background-color: var(--brand-press) !important; }
+.bg-violet-700                  { background-color: var(--brand-press) !important; }
 .hover\:bg-violet-600:hover, .hover\:bg-emerald-600:hover,
-.hover\:bg-violet-700:hover { background-color: var(--brand-deep) !important; }
+.hover\:bg-violet-700:hover    { background-color: var(--brand-deep) !important; }
 .hover\:bg-violet-500:hover, .hover\:bg-emerald-500:hover { background-color: var(--brand) !important; }
-.bg-violet-400 { background-color: var(--brand-200) !important; }
-.bg-violet-50  { background-color: var(--brand-50) !important; }
-.bg-violet-200 { background-color: var(--brand-100) !important; }
-.bg-violet-300 { background-color: var(--brand-200) !important; }
-.bg-violet-500\/5  { background-color: var(--brand-50) !important; }
-.bg-violet-500\/10 { background-color: var(--brand-50) !important; }
-.bg-violet-500\/20 { background-color: var(--brand-100) !important; }
+.bg-violet-400                  { background-color: var(--brand-300) !important; }
+.bg-violet-50                   { background-color: var(--brand-50) !important; }
+.bg-violet-200                  { background-color: var(--brand-100) !important; }
+.bg-violet-300                  { background-color: var(--brand-200) !important; }
+.bg-violet-500\/5               { background-color: var(--brand-50) !important; }
+.bg-violet-500\/10              { background-color: var(--brand-50) !important; }
+.bg-violet-500\/20              { background-color: var(--brand-100) !important; }
 .hover\:bg-violet-500\/10:hover { background-color: var(--brand-50) !important; }
-.hover\:bg-violet-400:hover { background-color: var(--brand-200) !important; }
+.hover\:bg-violet-400:hover     { background-color: var(--brand-300) !important; }
 
-.text-violet-500, .text-violet-400,
-.text-emerald-500, .text-emerald-600 { color: var(--brand-deep) !important; }
-.text-violet-600 { color: var(--brand-press) !important; }
-.text-violet-300 { color: var(--brand-deep) !important; }
-.text-violet-200, .text-violet-50 { color: var(--brand-press) !important; }
-.hover\:text-violet-400:hover { color: var(--brand-press) !important; }
+/* Bright emerald used elsewhere (sidebar/active states) — unify */
+.bg-emerald-400                 { background-color: var(--brand) !important; }
+.bg-emerald-500\/10, .bg-emerald-500\/15, .bg-emerald-500\/20 { background-color: var(--brand-50) !important; }
+.text-emerald-400, .text-emerald-500, .text-emerald-600 { color: var(--brand-deep) !important; }
+
+.text-violet-500, .text-violet-400 { color: var(--brand-deep) !important; }
+.text-violet-600                   { color: var(--brand-press) !important; }
+.text-violet-300                   { color: var(--brand-deep) !important; }
+.text-violet-200, .text-violet-50  { color: var(--brand-press) !important; }
+.hover\:text-violet-400:hover      { color: var(--brand-press) !important; }
 
 .border-emerald-500, .border-violet-500, .border-violet-600 { border-color: var(--brand) !important; }
-.border-violet-400 { border-color: var(--brand-200) !important; }
+.border-violet-400                 { border-color: var(--brand-200) !important; }
 .focus-visible\:border-violet-500:focus-visible { border-color: var(--brand) !important; }
-.outline-violet-400 { outline-color: var(--brand-200) !important; }
+.outline-violet-400                { outline-color: var(--brand-200) !important; }
 
 .ring-emerald-500, .ring-violet-500 { --tw-ring-color: var(--brand) !important; }
-.ring-violet-500\/20 { --tw-ring-color: rgba(27,107,74,.2) !important; }
-.focus-visible\:ring-violet-500\/20:focus-visible { --tw-ring-color: rgba(27,107,74,.2) !important; }
+.ring-violet-500\/20                { --tw-ring-color: rgba(0,133,90,.18) !important; }
+.focus-visible\:ring-violet-500\/20:focus-visible { --tw-ring-color: rgba(0,133,90,.18) !important; }
 
-/* Spinners use the same border trick, so the "loading" color follows too. */
+/* Spinners */
 .border-violet-500 { border-color: var(--brand) !important; }
 .border-t-transparent { border-top-color: transparent !important; }
 
@@ -214,17 +276,17 @@ h2 { font-weight: 700; }
    COMPONENT TREATMENTS
    ============================================================================ */
 
-/* ---- Cards: soft elevation + hairline border, gentle hover lift ---- */
+/* ---- Cards: hairline + light shadow, lift on hover ---- */
 .bg-white { background-color: var(--surface) !important; }
 [class*="rounded-"][class*="border"].bg-white,
 .card, [data-slot="card"] {
   border-color: var(--line) !important;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow .2s ease, transform .2s ease;
+  transition: box-shadow .2s ease, border-color .2s ease, transform .2s ease;
 }
 [data-slot="card"]:hover { box-shadow: var(--shadow-md); }
 
-/* ---- Primary buttons: weighty, confident, tactile ---- */
+/* ---- Primary buttons: weighty, tactile, two-stop gradient ---- */
 button.bg-violet-600, button.bg-violet-500,
 button.bg-emerald-600, button.bg-emerald-500,
 .btn-primary {
@@ -236,8 +298,8 @@ button.bg-emerald-600, button.bg-emerald-500,
 }
 button.bg-violet-600:hover, button.bg-violet-500:hover,
 button.bg-emerald-600:hover, button.bg-emerald-500:hover {
-  filter: brightness(1.03);
-  box-shadow: 0 10px 26px rgba(27,107,74,.32) !important;
+  filter: brightness(1.04);
+  box-shadow: var(--shadow-brand-hover) !important;
 }
 button.bg-violet-600:active, button.bg-violet-500:active,
 button.bg-emerald-600:active, button.bg-emerald-500:active {
@@ -245,43 +307,37 @@ button.bg-emerald-600:active, button.bg-emerald-500:active {
   filter: brightness(.97);
 }
 
-/* ---- Danger buttons: destructive actions stay red regardless of brand ---- */
+/* ---- Danger buttons: destructive actions stay red ---- */
 button.ag-btn-danger {
-  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%) !important;
+  background: linear-gradient(180deg, var(--rose) 0%, #A5241C 100%) !important;
   color: #fff !important;
-  box-shadow: 0 4px 10px rgba(239,68,68,.25) !important;
+  box-shadow: 0 2px 6px rgba(201,52,42,.28) !important;
   font-weight: 600;
   transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
 }
 button.ag-btn-danger:hover {
   filter: brightness(1.05);
-  box-shadow: 0 10px 26px rgba(239,68,68,.35) !important;
+  box-shadow: 0 4px 12px rgba(201,52,42,.34) !important;
 }
 button.ag-btn-danger:active {
   transform: translateY(1px);
   filter: brightness(.95);
 }
 
-/* ---- Inputs: clean, calm focus ring in the brand color ---- */
+/* ---- Inputs: clean, calm focus in brand color ---- */
 input, textarea, select {
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 input:focus-visible, textarea:focus-visible, select:focus-visible {
   border-color: var(--brand) !important;
-  box-shadow: 0 0 0 3px rgba(27,107,74,.18) !important;
+  box-shadow: 0 0 0 3px rgba(0,133,90,.16) !important;
   outline: none !important;
 }
 
-/* ---- Badges/pills ---- */
+/* ---- Badges/pills baseline ---- */
 [class*="rounded-full"][class*="border"] { font-weight: 600; }
 
-/* ---- Sidebar ----
-   The main nav (aria-label="Primary navigation" in sidebar.tsx) is a
-   DARK sidebar by design — its own inline style sets --brand-teal-dark
-   as the background, and its text is white/opacity-based. A rule used
-   to force it white with !important here, which is why the sidebar
-   went blank: white icons on a white background are invisible. Only
-   a shadow belongs here; the background is the component's call. */
+/* ---- Sidebar: dark teal, own gradient — only shadow belongs here ---- */
 aside[aria-label="Primary navigation"] {
   box-shadow: var(--shadow-md);
 }
@@ -292,20 +348,26 @@ aside[aria-label="Primary navigation"] {
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d3ddd7; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #b9c7c0; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
 
-::selection { background: rgba(27,107,74,.22); color: var(--brand-press); }
+::selection { background: rgba(0,133,90,.22); color: var(--brand-press); }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
-@keyframes fade-in { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:none; } }
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
 .animate-fade-in { animation: fade-in .3s ease forwards; }
 
+@keyframes pulse-ring {
+  0%   { transform: scale(.8); opacity: .5; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.animate-pulse-ring { animation: pulse-ring 1.8s ease-out infinite; }
+
 /* ============================================================================
-   MOBILE RESPONSIVENESS HARDENING
-   Generic safeguards so dense desktop layouts don't overflow on phones.
-   Page components keep their own responsive classes; these are the
-   safety net. Nothing in this section is color — no theme edits needed.
+   MOBILE RESPONSIVENESS SAFETY NET
    ============================================================================ */
 
 @media (max-width: 640px) {
@@ -321,8 +383,8 @@ aside[aria-label="Primary navigation"] {
 
   [role="dialog"] { max-width: calc(100vw - 1.5rem) !important; }
 
-  h1 { font-size: 1.375rem; }
-  .text-3xl, .text-4xl { font-size: 1.5rem !important; }
+  h1 { font-size: 1.5rem; }
+  .text-3xl, .text-4xl { font-size: 1.625rem !important; }
 }
 
 @media (pointer: coarse) {

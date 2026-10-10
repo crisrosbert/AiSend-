@@ -180,6 +180,17 @@
       }
     }
 
+    // Custom forms often name the phone box "field_2" or "text-3" with no
+    // hint at all. Fall back to the VALUE: a short field that is only
+    // digits/spaces/+/- with 10-13 digits is a phone number.
+    if (!out.phone) {
+      for (var p = 0; p < list.length; p++) {
+        var pv = String(list[p].value == null ? '' : list[p].value).trim();
+        var pd = pv.replace(/\D/g, '');
+        if (/^\+?[\d\s().-]{10,20}$/.test(pv) && pd.length >= 10 && pd.length <= 13) { out.phone = pv; break; }
+      }
+    }
+
     out.name = (first || last) ? (first + ' ' + last).trim() : full;
     return (out.phone || out.email) ? out : null;
   }

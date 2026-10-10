@@ -1,166 +1,134 @@
-"use client"
+// src/components/dashboard/activity-feed.tsx
+//
+// WHAT: One-column vertical feed of activity items (new chats, broadcasts
+// finished, leads captured, AI escalations). Used on the Dashboard's
+// "Live activity" panel and reused later on Inbox.
+//
+// WHY A COMPONENT: The old dashboard rendered this inline with page-local
+// `cwa-activity-row` CSS. Lifting it into a shared component means the
+// style lives in one place and the layout is reusable across pages.
+//
+// DESIGN SYSTEM CONTRACT:
+// - Rows use hairline bottom borders from --line (last row has none).
+// - Avatar gradient uses --brand → --brand-deep so one brand change in
+//   globals.css recolours every avatar on the feed.
+// - Relative times come from date-fns `formatDistanceToNow` so the feed
+//   stays accurate without a client timer.
+// - When `items` is empty, the component renders the `emptyState` block
+//   instead of an empty <ul> — never leaves the panel visually blank.
 
-import Link from 'next/link'
-import { useState } from 'react'
-import {
-  MessageSquare,
-  UserPlus,
-  Briefcase,
-  Radio,
-  Zap,
-  Inbox,
-} from 'lucide-react'
-import type { ComponentType } from 'react'
-import type { ActivityItem, ActivityKind } from '@/lib/dashboard/types'
-import { cn } from '@/lib/utils'
-import { EmptyState } from './empty-state'
-import { Skeleton } from './skeleton'
+"use client";
 
-interface ActivityFeedProps {
-  items: ActivityItem[] | null
-  loading: boolean
+import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
+import { MessageSquare, Users, Target, Radio, Bot, Inbox } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { ActivityItem, ActivityKind } from "@/lib/dashboard/types";
+
+const KIND_ICON: Record<ActivityKind, React.ReactNode> = {
+  message: <MessageSquare size={14} />,
+  contact: <Users size={14} />,
+  deal: <Target size={14} />,
+  broadcast: <Radio size={14} />,
+  automation: <Bot size={14} />,
+};
+
+// Gradient per kind — all drawn from globals.css tokens, so a brand
+// change in :root re-tints the whole feed with zero code changes here.
+const KIND_GRADIENT: Record<ActivityKind, string> = {
+  message:    "linear-gradient(135deg,var(--brand),var(--brand-deep))",
+  contact:    "linear-gradient(135deg,var(--blue),#1A4D9C)",
+  deal:       "linear-gradient(135deg,var(--amber),#8A6300)",
+  broadcast:  "linear-gradient(135deg,var(--violet),#4D3680)",
+  automation: "linear-gradient(135deg,var(--teal),#065C58)",
+};
+
+export interface ActivityFeedEmptyState {
+  title: string;
+  body: string;
+  cta?: { label: string; href: string };
 }
 
-const PAGE_SIZES = [5, 10, 20, 50] as const
-type PageSize = (typeof PAGE_SIZES)[number]
-
-interface KindTheme {
-  icon: ComponentType<{ className?: string }>
-  /** Tailwind classes for the round icon badge + label color. */
-  badge: string
+export interface ActivityFeedProps {
+  items: ActivityItem[];
+  emptyState: ActivityFeedEmptyState;
 }
 
-const KIND_THEME: Record<ActivityKind, KindTheme> = {
-  message: { icon: MessageSquare, badge: 'bg-blue-500/10 text-blue-400' },
-  contact: { icon: UserPlus, badge: 'bg-violet-500/10 text-violet-400' },
-  deal: { icon: Briefcase, badge: 'bg-violet-500/10 text-violet-400' },
-  broadcast: { icon: Radio, badge: 'bg-amber-500/10 text-amber-400' },
-  automation: { icon: Zap, badge: 'bg-rose-500/10 text-rose-400' },
-}
-
-export function ActivityFeed({ items, loading }: ActivityFeedProps) {
-  // Start at 5 — a quick scan of the most recent events without
-  // dominating vertical real estate. User expands explicitly via the
-  // footer control when they want deeper history.
-  const [pageSize, setPageSize] = useState<PageSize>(5)
-
-  const totalLoaded = items?.length ?? 0
-  const visible = items?.slice(0, pageSize) ?? []
-  // A size option is "useful" if picking it would reveal rows the
-  // smaller option doesn't already show. With PAGE_SIZES=[5,10,20,50]:
-  // "10" is useful only once we've loaded ≥6 items, "20" once ≥11, etc.
-  // The smallest option is always enabled.
-  const isSizeUseful = (size: PageSize, i: number) =>
-    i === 0 || totalLoaded > PAGE_SIZES[i - 1]
+export function ActivityFeed({ items, emptyState }: ActivityFeedProps) {
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2 px-5 py-10 text-center">
+        <div
+          className="mb-1 flex h-14 w-14 items-center justify-center rounded-2xl"
+          style={{ background: "var(--brand-50)", color: "var(--brand-deep)" }}
+        >
+          <Inbox size={24} strokeWidth={1.6} />
+        </div>
+        <h5
+          className="text-[15px] font-semibold text-[color:var(--ink)]"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          {emptyState.title}
+        </h5>
+        <p className="max-w-[280px] text-[13px] leading-relaxed text-[color:var(--ink-2)]">
+          {emptyState.body}
+        </p>
+        {emptyState.cta && (
+          <Button
+            size="sm"
+            variant="default"
+            render={<Link href={emptyState.cta.href} />}
+            className="mt-2"
+          >
+            {emptyState.cta.label}
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900">
-      <header className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-        <h2 className="text-sm font-semibold text-white">Recent Activity</h2>
-        <Link
-          href="/inbox"
-          className="text-xs font-medium text-violet-400 hover:text-violet-300"
-        >
-          View all →
-        </Link>
-      </header>
-
-      {loading || !items ? (
-        <div className="space-y-2 p-5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
-        </div>
-      ) : items.length === 0 ? (
-        <div className="p-5">
-          <EmptyState
-            icon={Inbox}
-            title="No activity yet"
-            hint="Activity from messages, deals, broadcasts, and automations will appear here."
-          />
-        </div>
-      ) : (
-        <>
-          <ul className="divide-y divide-slate-800">
-            {visible.map((it, i) => {
-              const theme = KIND_THEME[it.kind]
-              const Icon = theme.icon
-              // Alternating row background for scanability — dark-theme
-              // translation of the spec's white / #f9fafb stripes.
-              const stripe = i % 2 === 0 ? 'bg-transparent' : 'bg-slate-900/40'
-              const row = (
-                <div className="flex items-center gap-3 px-5 py-2.5">
-                  <span
-                    className={cn(
-                      'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full',
-                      theme.badge,
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-slate-200">
-                    {it.text}
-                  </span>
-                  <span className="flex-shrink-0 text-xs text-slate-500 tabular-nums">
-                    {relativeTime(it.at)}
-                  </span>
-                </div>
-              )
-              return (
-                <li key={it.id} className={cn(stripe, 'transition-colors hover:bg-slate-800/40')}>
-                  {it.href ? (
-                    <Link href={it.href} className="block">
-                      {row}
-                    </Link>
-                  ) : (
-                    row
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-          <footer className="flex items-center justify-between border-t border-slate-800 px-5 py-3 text-xs">
-            <span className="text-slate-500 tabular-nums">
-              Showing {visible.length} of {totalLoaded}
-              {totalLoaded === 50 ? '+' : ''}
-            </span>
-            <div className="flex items-center gap-1">
-              <span className="mr-1 text-slate-500">Show</span>
-              {PAGE_SIZES.map((size, i) => {
-                const disabled = !isSizeUseful(size, i)
-                return (
-                  <button
-                    key={size}
-                    type="button"
-                    onClick={() => setPageSize(size)}
-                    disabled={disabled}
-                    className={cn(
-                      'rounded-md px-2 py-1 font-medium tabular-nums transition-colors',
-                      pageSize === size
-                        ? 'bg-slate-700 text-white'
-                        : 'text-slate-400 hover:bg-slate-800 hover:text-white',
-                      disabled && 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-slate-400',
-                    )}
-                  >
-                    {size}
-                  </button>
-                )
-              })}
-            </div>
-          </footer>
-        </>
-      )}
-    </section>
-  )
+    <ul className="divide-y" style={{ borderColor: "var(--line)" }}>
+      {items.map((item) => (
+        <li key={item.id} style={{ borderColor: "var(--line)" }}>
+          <ActivityRow item={item} />
+        </li>
+      ))}
+    </ul>
+  );
 }
 
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime()
-  if (Number.isNaN(then)) return ''
-  const diffSec = Math.round((Date.now() - then) / 1000)
-  if (diffSec < 60) return `${Math.max(1, diffSec)}s ago`
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`
-  if (diffSec < 2_592_000) return `${Math.floor(diffSec / 86400)}d ago`
-  return new Date(iso).toLocaleDateString()
+function ActivityRow({ item }: { item: ActivityItem }) {
+  const content = (
+    <div className="flex items-start gap-3 px-5 py-3">
+      <div
+        className="mt-0.5 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-full text-white"
+        style={{ background: KIND_GRADIENT[item.kind] }}
+        aria-hidden
+      >
+        {KIND_ICON[item.kind]}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] leading-tight text-[color:var(--ink)]">
+          {item.text}
+        </p>
+        <p className="mt-1 text-[11.5px] text-[color:var(--ink-3)]">
+          {formatDistanceToNow(new Date(item.at), { addSuffix: true })}
+        </p>
+      </div>
+    </div>
+  );
+  // When the row has a target, make the whole thing clickable without
+  // breaking screen-reader semantics — <a> wraps the content block.
+  if (item.href) {
+    return (
+      <Link
+        href={item.href}
+        className="block hover:bg-[color:var(--surface-2)]"
+      >
+        {content}
+      </Link>
+    );
+  }
+  return content;
 }

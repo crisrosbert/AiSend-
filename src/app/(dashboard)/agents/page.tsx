@@ -1303,33 +1303,34 @@ function Toggle({ label, on, set }: { label: string; on: boolean; set: (v: boole
   );
 }
 
-/* ────────────────────────────── styles ──────────────────────────────
-   Scoped under .ag so nothing here leaks into the rest of the app.
-   The accent is the same dark WhatsApp teal (#075E54) already used a
-   few rules down for .ag-channel-ic, now promoted to the page's
-   primary accent instead of the bright lime it used to be. Because
-   the accent went from light to dark, every place that filled a solid
-   background with it now uses white text on top instead of dark ink
-   — kept the variable NAMES ("--lime") to avoid a page-wide rename,
-   only the values (and the text-color pairing) changed.             */
+/* ============================================================================
+   AGENTS PAGE — fully themed from globals.css
+   ============================================================================
+   Previously the page defined its OWN brand called "--lime" (#075E54,
+   WhatsApp's dark teal) with its own --ink / --muted / --line / --ground.
+   The page became visually disconnected from the rest of the app.
 
+   NOW: --lime (and its soft/deep variants) are mapped to the single app
+   brand in globals.css. The variable NAMES are kept so none of the
+   many "var(--lime)" references below need renaming. Edit --brand in
+   globals.css and every "lime" fill, chip, outline on this page retints
+   with the rest of the app.
+   ============================================================================ */
 const css = `
 .ag{
-  --lime:#075E54;          /* primary accent — solid fills use WHITE text on top */
-  --lime-deep:#054942;     /* hover / pressed */
-  --lime-soft:#e7f8ef;     /* tinted fills, chips — stays light, dark text on top */
-  --ink:#0f1115;           /* near-black, slightly cool */
-  --muted:#6b7280;
-  --faint:#9aa1ab;
-  --ground:#eff1f4;        /* cool light grey page ground */
-  --surface:#ffffff;
-  --line:#e4e7ec;
-  --radius:18px;
-  font-family:"Plus Jakarta Sans",system-ui,sans-serif;
+  /* All aliases → globals.css. Change globals.css to retheme everywhere. */
+  --lime:      var(--brand);
+  --lime-deep: var(--brand-deep);
+  --lime-soft: var(--brand-50);
+  --muted:     var(--ink-2);
+  --faint:     var(--ink-3);
+  --ground:    var(--canvas);
+  --radius:    var(--radius-xl);
+  font-family:var(--font-sans);
   color:var(--ink);
   display:flex;flex-direction:column;gap:18px;padding-bottom:80px}
 @media(min-width:1024px){.ag{padding-bottom:16px}}
-.ag h1,.ag h2,.ag h3{font-family:"Sora","Plus Jakarta Sans",sans-serif;letter-spacing:-.03em;margin:0}
+.ag h1,.ag h2,.ag h3{font-family:var(--font-display);letter-spacing:-.03em;margin:0;color:var(--ink)}
 .ag-spin{animation:agSpin .8s linear infinite}
 @keyframes agSpin{to{transform:rotate(360deg)}}
 .ag-loading{display:flex;align-items:center;justify-content:center;gap:10px;height:220px;
@@ -1362,15 +1363,15 @@ const css = `
 .ag-tab{border:none;background:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;
   color:var(--muted);padding:9px 17px;border-radius:99px;transition:.15s;display:inline-flex;align-items:center;gap:7px}
 .ag-tab:hover{color:var(--ink)}
-.ag-tab.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(15,17,21,.08)}
-.ag-count{font-size:11px;font-weight:800;background:var(--lime-soft);color:#075E54;padding:1px 7px;border-radius:99px}
+.ag-tab.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-xs)}
+.ag-count{font-size:11px;font-weight:800;background:var(--lime-soft);color:var(--brand-press);padding:1px 7px;border-radius:99px}
 .ag-tab.on .ag-count{background:var(--lime);color:#fff}
 
 /* filters */
 .ag-filters{display:flex;flex-direction:column;gap:11px}
 .ag-search{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);
   border-radius:99px;padding:0 16px;max-width:340px;transition:.15s}
-.ag-search:focus-within{border-color:var(--lime);box-shadow:0 0 0 3px rgba(7,94,84,.22)}
+.ag-search:focus-within{border-color:var(--lime);box-shadow:0 0 0 3px rgba(0,133,90,.18)}
 .ag-search svg{color:var(--faint);flex-shrink:0}
 .ag-search input{border:none;outline:none;background:none;font-family:inherit;font-size:13.5px;
   padding:11px 0;width:100%;color:var(--ink)}
@@ -1386,10 +1387,10 @@ const css = `
 @media(min-width:1100px){.ag-grid{grid-template-columns:repeat(3,1fr)}}
 .ag-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;
   display:flex;flex-direction:column;transition:.18s}
-.ag-card:hover{border-color:#d3d9e0;box-shadow:0 10px 30px rgba(15,17,21,.07);transform:translateY(-2px)}
+.ag-card:hover{border-color:var(--line-strong);box-shadow:var(--shadow-md);transform:translateY(-2px)}
 .ag-card-top{display:flex;gap:12px;align-items:flex-start}
 .ag-ic{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;flex-shrink:0;
-  background:var(--lime-soft);color:#075E54}
+  background:var(--lime-soft);color:var(--brand-press)}
 .ag-ic-emoji{font-size:19px;background:var(--lime-soft)}
 .ag-card-body{flex:1;min-width:0}
 .ag-card-title-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -1401,7 +1402,7 @@ const css = `
 .ag-pill.off{background:var(--ground);color:var(--faint)}
 .ag-chips{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 16px;flex:1;align-content:flex-start}
 .ag-chip{font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:99px;
-  background:var(--lime-soft);color:#075E54;white-space:nowrap}
+  background:var(--lime-soft);color:var(--brand-press);white-space:nowrap}
 .ag-card-actions{display:flex;gap:7px;align-items:center}
 .ag-card-actions .ag-btn{flex:1}
 
@@ -1409,12 +1410,12 @@ const css = `
 .ag-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:52px 20px;
   background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
 .ag-empty-ic{display:grid;place-items:center;width:56px;height:56px;border-radius:17px;
-  background:var(--lime-soft);color:#075E54;margin-bottom:4px}
+  background:var(--lime-soft);color:var(--brand-press);margin-bottom:4px}
 .ag-empty h3{font-size:16px;font-weight:750}
 .ag-empty p{font-size:13px;color:var(--muted);max-width:330px;line-height:1.55;margin:0 0 10px}
 
 /* drawer */
-.ag-overlay{position:fixed;inset:0;z-index:50;background:rgba(15,17,21,.4);display:flex;justify-content:flex-end;
+.ag-overlay{position:fixed;inset:0;z-index:50;background:rgba(14,31,24,.4);display:flex;justify-content:flex-end;
   backdrop-filter:blur(2px)}
 .ag-drawer{width:100%;max-width:440px;height:100%;overflow-y:auto;background:var(--surface);padding:22px;
   box-shadow:-14px 0 44px rgba(15,17,21,.18)}

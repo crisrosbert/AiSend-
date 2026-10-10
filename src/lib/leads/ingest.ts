@@ -239,6 +239,11 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
     if (!existing.contact_id && contactId) update.contact_id = contactId
     if (input.consent !== undefined && input.consent !== null) update.consent = input.consent
     if (input.lastMessage) update.last_message = clean(input.lastMessage, 500)
+    // Merge, don't replace: a booking's details must not erase the ad
+    // click details an earlier touch stored, and vice versa.
+    if (input.extra && Object.keys(input.extra).length) {
+      update.extra = { ...((existing.extra as Record<string, unknown> | null) ?? {}), ...input.extra }
+    }
     if (existing.business_id == null && input.businessId) update.business_id = input.businessId
     if (existing.agent_id == null && input.agentId) update.agent_id = input.agentId
 

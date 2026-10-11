@@ -27,6 +27,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TrendingUp, Clock, Users, Inbox, Loader2, AlertCircle } from "lucide-react";
+import { PageHead } from "@/components/ui/page-head";
 
 interface DayPoint {
   date: string;
@@ -98,33 +99,35 @@ export default function AnalyticsPage() {
   );
 
   return (
-    <div className="an">
+    // Full-width container matches the dashboard shell; <style>{css}</style>
+    // still applies the per-panel inline rules — see the file footer. Only
+    // the header moved to the shared <PageHead> design-system component.
+    <div className="an w-full px-5 pb-20 pt-5 sm:px-7 lg:px-10 lg:pb-10">
       <style>{css}</style>
 
-      <header className="an-head">
-        <div>
-          <h1>Analytics</h1>
-          <p className="an-sub">How much your agent handled, and what it produced.</p>
-        </div>
-
-        <div className="an-range">
-          {PRESETS.map((p) => (
-            <button
-              key={p.days}
-              type="button"
-              className={activePreset === p.days ? "an-preset on" : "an-preset"}
-              onClick={() => applyPreset(p.days)}
-            >
-              {p.label}
-            </button>
-          ))}
-          <input type="date" className="an-date" value={from} max={to}
-            onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
-          <span className="an-dash">→</span>
-          <input type="date" className="an-date" value={to} min={from} max={today()}
-            onChange={(e) => setTo(e.target.value)} aria-label="To date" />
-        </div>
-      </header>
+      <PageHead
+        title="Analytics"
+        subtitle={`${from} → ${to} · how much your agent handled, and what it produced`}
+        actions={
+          <div className="an-range flex flex-wrap items-center gap-2">
+            {PRESETS.map((p) => (
+              <button
+                key={p.days}
+                type="button"
+                className={activePreset === p.days ? "an-preset on" : "an-preset"}
+                onClick={() => applyPreset(p.days)}
+              >
+                {p.label}
+              </button>
+            ))}
+            <input type="date" className="an-date" value={from} max={to}
+              onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
+            <span className="an-dash">→</span>
+            <input type="date" className="an-date" value={to} min={from} max={today()}
+              onChange={(e) => setTo(e.target.value)} aria-label="To date" />
+          </div>
+        }
+      />
 
       {error && <div className="an-error"><AlertCircle size={15} /> {error}</div>}
 

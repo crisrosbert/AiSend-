@@ -26,6 +26,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifySignedRequest, newConfirmationCode } from '@/lib/meta/signed-request'
+import { findTenantByFacebookId } from '@/lib/meta/tenant-lookup'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _db: any = null
@@ -67,9 +68,10 @@ export async function POST(request: Request) {
     const metaUserId = verified.payload.userId
     const confirmationCode = newConfirmationCode()
 
-    // Which of our tenants is this person? A Facebook sign-in stores the
-    // provider id against the Supabase user, so that is what we match.
-    const tenantId = await findTenantByFacebookId(metaUserId)
+    // Which of our tenants is this person? Matched first by the Meta user
+    // id saved when they completed Embedded Signup (covers e-mail-signup
+    // clients), then by a Facebook-login identity in auth.
+    const tenantId = await findTenantByFacebookId(db(), metaUserId)
 
     const { error } = await db().from('data_deletion_requests').insert({
       meta_user_id: metaUserId,
@@ -96,49 +98,6 @@ export async function POST(request: Request) {
   } catch (err) {
     console.error('[data-deletion] unhandled:', err)
     return NextResponse.json({ error: 'Could not record request' }, { status: 500 })
-  }
-}
-
-/**
- * Find the tenant behind a Facebook user id.
- *
- * Supabase keeps OAuth identities in the auth schema, which PostgREST
- * does not expose, so this goes through the admin API and pages until
- * it finds a match.
- *
- * Fine at the scale this launches at, and honest about not being fine
- * forever: past a few thousand accounts, store the provider id on
- * `profiles` at sign-up and look it up directly.
- */
-async function findTenantByFacebookId(metaUserId: string): Promise<string | null> {
-  try {
-    const PER_PAGE = 1000
-    for (let page = 1; page <= 20; page++) {
-      const { data, error } = await db().auth.admin.listUsers({ page, perPage: PER_PAGE })
-      if (error) {
-        console.error('[data-deletion] listUsers failed:', error.message)
-        return null
-      }
-
-      const users = data?.users ?? []
-      for (const user of users) {
-        const identities = user.identities ?? []
-        for (const identity of identities) {
-          if (
-            identity.provider === 'facebook' &&
-            String(identity.id) === metaUserId
-          ) {
-            return user.id
-          }
-        }
-      }
-
-      if (users.length < PER_PAGE) break
-    }
-    return null
-  } catch (err) {
-    console.error('[data-deletion] tenant lookup failed:', err)
-    return null
   }
 }
 

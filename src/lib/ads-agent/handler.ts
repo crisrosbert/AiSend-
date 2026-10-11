@@ -15,6 +15,7 @@ import { runAgent } from '@/lib/agent/engine'
 import { deliverAgentMedia } from '@/lib/whatsapp-agent/deliver-media'
 import { businessIdForAgent } from '@/lib/business/server'
 import { ingestLead } from '@/lib/leads/ingest'
+import { GRAPH_BASE_URL } from '@/lib/meta/graph-version'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _db: any = null
@@ -65,7 +66,7 @@ async function sendWhatsAppText(
 ): Promise<string | null> {
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+      `${GRAPH_BASE_URL}/${phoneNumberId}/messages`,
       {
         method: 'POST',
         headers: {

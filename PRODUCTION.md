@@ -20,7 +20,7 @@ Everything in this repo already passes `typecheck`, `lint` (0 errors),
 
 1. Create a project at supabase.com.
 2. Open the SQL editor and run every file in `supabase/migrations/`
-   **in order** (001 → 009). They create all tables, indexes, RLS
+   **in order** (001 → 010). They create all tables, indexes, RLS
    policies, and the avatars storage bucket.
 3. From **Project Settings → API**, copy:
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
@@ -47,11 +47,20 @@ Required:
 | `ENCRYPTION_KEY` | 64 hex chars (32 bytes) for AES-256-GCM token encryption. Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `META_APP_SECRET` | Verifies HMAC-SHA256 signatures on inbound webhooks |
 
+Required for the self-serve **Connect WhatsApp** button (Embedded Signup):
+
+| Variable | Purpose |
+|---|---|
+| `META_APP_ID` + `NEXT_PUBLIC_META_APP_ID` | Meta App ID (same value in both; the second is for the browser) |
+| `NEXT_PUBLIC_META_CONFIG_ID` | Embedded Signup configuration ID |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | Platform webhook verify token — paste the same value into the Meta dashboard. No default; unset means webhook verification fails |
+
 Recommended:
 
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_SITE_URL` | Canonical https URL of this deployment |
+| `NEXT_PUBLIC_META_GRAPH_VERSION` | Graph API version for all Meta calls, e.g. `v23.0`. Change it here (not in code) when Meta retires a version |
 
 Optional:
 
@@ -70,13 +79,47 @@ token becomes unreadable and users must reconnect their numbers.
    App Secret (→ `META_APP_SECRET`).
 2. Configure the webhook:
    - Callback URL: `https://YOUR_DOMAIN/api/whatsapp/webhook`
-   - Verify token: whatever you set in the app's WhatsApp settings UI
+   - Verify token: the value of `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
    - Subscribe to `messages` and `message_template_status_update`
 3. Each user connects their number in **Settings → WhatsApp** (manual
-   token entry, or Embedded Signup if you configure
-   `NEXT_PUBLIC_META_APP_ID` / config ID in
-   `src/components/settings/connect-whatsapp.tsx`).
-4. Tokens are encrypted at rest with AES-256-GCM before hitting the DB.
+   token entry, or one-click Embedded Signup once
+   `NEXT_PUBLIC_META_APP_ID` and `NEXT_PUBLIC_META_CONFIG_ID` are set).
+4. Tokens and each number's two-step PIN are encrypted at rest with
+   AES-256-GCM before hitting the DB.
+
+### 4a. Meta dashboard go-live checklist (manual — code cannot do these)
+
+Embedded Signup only works for your own admins/testers until all of
+these are done in the Meta app dashboard. Menu names shift between
+Meta UI versions; look for the setting by name.
+
+- [ ] **App is in Live mode** (toggle at the top of the app dashboard).
+  Meta blocks Live mode until the app has a Privacy Policy URL, an app
+  icon, a category, and a data-deletion method (next items).
+- [ ] **Data Deletion Request URL** set to
+  `https://YOUR_DOMAIN/api/meta/data-deletion`
+  (App settings → Basic, and/or Facebook Login → Settings).
+- [ ] **Deauthorize Callback URL** set to
+  `https://YOUR_DOMAIN/api/meta/deauthorize`
+  (Facebook Login → Settings).
+- [ ] **Webhook callback URL** set to
+  `https://YOUR_DOMAIN/api/whatsapp/webhook` with the verify token from
+  `WHATSAPP_WEBHOOK_VERIFY_TOKEN` (WhatsApp → Configuration). Also
+  subscribe to `account_update` — it announces when a client removes
+  your app (not handled in code yet).
+- [ ] **Embedded Signup configuration** created; its ID is
+  `NEXT_PUBLIC_META_CONFIG_ID`. Add your domain under the Facebook SDK's
+  allowed domains for JavaScript.
+- [ ] **Business Verification** complete and **Advanced Access** granted
+  for `whatsapp_business_management` and `whatsapp_business_messaging`
+  (App Review).
+- [ ] **Smoke test after any Graph version change**: send a message,
+  sync templates, and connect a number via Embedded Signup.
+
+After the first Embedded Signup, check the deployment logs for
+`[embedded-signup] recorded Meta user id via …`. If you instead see
+`could not learn Meta user id`, deletion requests from that client
+cannot be matched automatically — tell the maintainers.
 
 ---
 

@@ -24,6 +24,8 @@ import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
 import { useBusiness } from '@/hooks/use-business';
+import { PageHead } from '@/components/ui/page-head';
+import { StatCard } from '@/components/ui/stat';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
@@ -286,39 +288,74 @@ export default function ContactsPage() {
   const rangeEnd = Math.min((page + 1) * pageSize, totalCount);
   const activeFilterCount = (tagFilter ? 1 : 0) + (optOutFilter !== 'active' ? 1 : 0);
 
+  // ──────────────────────────────────────────────────────────────────────
+  // Design System v2: PageHead + StatCard row (replaces the old gradient
+  // hero banner). Business logic unchanged — only the top chrome moved
+  // to shared components so the whole app reads as one system.
+  // ──────────────────────────────────────────────────────────────────────
+  const activeCount = Math.max(0, totalCount - optedOutCount);
+  const optOutPct = totalCount > 0 ? Math.round((optedOutCount / totalCount) * 100) : 0;
+
   return (
-    <div className="space-y-5">
-      {/* ── Audience overview — real numbers first, shortcuts second.
-          Deliberately not a "here's what to try next" nudge panel: the
-          hero is what your audience actually looks like right now. */}
-      <div className="overflow-hidden rounded-2xl border border-[#d1fae5] bg-gradient-to-br from-white to-emerald-50 p-5 shadow-sm">
-        <div className="flex flex-wrap items-center gap-6">
-          <StatChip icon={Users} label="Total contacts" value={totalCount} />
-          <div className="hidden h-9 w-px bg-[#d1fae5] sm:block" />
-          <StatChip icon={ShieldCheck} label="Active" value={Math.max(0, totalCount - optedOutCount)} />
-          <div className="hidden h-9 w-px bg-[#d1fae5] sm:block" />
-          <StatChip icon={ShieldOff} label="Opted out" value={optedOutCount} warn={optedOutCount > 0} />
+    <div className="w-full px-5 pb-20 pt-5 sm:px-7 lg:px-10 lg:pb-10">
+      {/* Page header */}
+      <PageHead
+        title="Contacts"
+        subtitle={`${totalCount.toLocaleString("en-IN")} total · ${activeCount.toLocaleString("en-IN")} active · manage your WhatsApp audience`}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload size={14} /> Import
+            </Button>
+            <Button onClick={openAddForm}>
+              <Plus size={14} /> Add contact
+            </Button>
+          </>
+        }
+      />
 
-          <button
-            onClick={() => setImportOpen(true)}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50"
+      {/* KPI row — 4 up */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Total contacts"
+          value={totalCount.toLocaleString("en-IN")}
+          icon={<Users size={12} aria-hidden />}
+        />
+        <StatCard
+          label="Active"
+          value={activeCount.toLocaleString("en-IN")}
+          icon={<ShieldCheck size={12} aria-hidden />}
+        />
+        <StatCard
+          label="Opted out"
+          value={optedOutCount.toLocaleString("en-IN")}
+          icon={<ShieldOff size={12} aria-hidden />}
+          delta={optedOutCount > 0 ? { label: `${optOutPct}%`, tone: "down" } : undefined}
+        />
+        <StatCard
+          label="Tags"
+          value={allTags.length.toLocaleString("en-IN")}
+          icon={<Filter size={12} aria-hidden />}
+        />
+      </div>
+
+      {/* Shortcut row — kept from the old design, now with token-driven styles */}
+      <div className="mb-5 flex flex-wrap gap-2">
+        {NEXT_ACTIONS.map((action) => (
+          <Link
+            key={action.label}
+            href={action.href}
+            className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors"
+            style={{
+              borderColor: "var(--line)",
+              background: "var(--surface)",
+              color: "var(--ink-2)",
+            }}
           >
-            <Upload className="size-3.5" /> Import CSV / Excel
-          </button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-[#d1fae5] pt-4">
-          {NEXT_ACTIONS.map((action) => (
-            <Link
-              key={action.label}
-              href={action.href}
-              className="inline-flex items-center gap-1.5 rounded-full border border-[#e7ece9] bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-emerald-300 hover:text-emerald-700"
-            >
-              <action.icon className="size-3.5" />
-              {action.label}
-            </Link>
-          ))}
-        </div>
+            <action.icon className="size-3.5" />
+            {action.label}
+          </Link>
+        ))}
       </div>
 
       {/* ── Toolbar ── */}

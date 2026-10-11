@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
+import { GRAPH_VERSION } from '@/lib/meta/graph-version'
 import { Card, CardContent } from '@/components/ui/card'
 
 /**
@@ -23,7 +24,7 @@ import { Card, CardContent } from '@/components/ui/card'
  * is correct and goes live unchanged once Meta approves.
  */
 
-type FBLoginResponse = { authResponse?: { code?: string } }
+type FBLoginResponse = { authResponse?: { code?: string; signedRequest?: string } }
 type FBSdk = {
   init: (opts: Record<string, unknown>) => void
   login: (
@@ -74,7 +75,7 @@ export function ConnectWhatsApp({ onConnected }: { onConnected?: () => void }) {
       setSdkReady(true)
     } else {
       window.fbAsyncInit = () => {
-        window.FB?.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: 'v21.0' })
+        window.FB?.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: GRAPH_VERSION })
         setSdkReady(true)
       }
       const id = 'facebook-jssdk'
@@ -107,7 +108,7 @@ export function ConnectWhatsApp({ onConnected }: { onConnected?: () => void }) {
           // User closed the popup or denied — not an error worth a toast.
           return
         }
-        exchange(code)
+        exchange(code, response.authResponse?.signedRequest)
       },
       {
         config_id: CONFIG_ID,
@@ -118,13 +119,16 @@ export function ConnectWhatsApp({ onConnected }: { onConnected?: () => void }) {
     )
   }
 
-  async function exchange(code: string) {
+  async function exchange(code: string, signedRequest?: string) {
     try {
       const res = await fetch('/api/whatsapp/embedded-signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code,
+          // Lets the server learn which Facebook user signed up (verified
+          // server-side against our app secret; ignored if absent).
+          signed_request: signedRequest,
           waba_id: sessionInfo.current.waba_id,
           phone_number_id: sessionInfo.current.phone_number_id,
         }),

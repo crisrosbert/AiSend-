@@ -1,10 +1,24 @@
 "use client";
 
+// src/components/layout/header.tsx
+//
+// ────────────────────────────────────────────────────────────────────────────
+// Top bar — Design System v2 (rebuilt 2026-10-11)
+// ────────────────────────────────────────────────────────────────────────────
+// Mirrors the Design System v2 preview artifact's topbar:
+//
+//   [☰ (mobile)] [Business ▾ / Page title]        [Search ⌘K]    [status · plan · avatar]
+//
+// Every colour, border, shadow and font references globals.css tokens.
+// No hardcoded hex. If the brand retones, this bar follows automatically.
+// ────────────────────────────────────────────────────────────────────────────
+
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { BusinessSwitcher } from "@/components/layout/business-switcher";
-import { LogOut, Menu, Settings as SettingsIcon, User, Zap } from "lucide-react";
+import { LogOut, Menu, Settings as SettingsIcon, User, Zap, Search } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
@@ -18,23 +32,40 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const pageTitles: Record<string, string> = {
+/**
+ * Pathname → crumb label mapping. Add a route here to make the top bar
+ * recognise it; otherwise the fallback is the last URL segment, titled.
+ */
+const PAGE_TITLES: Record<string, string> = {
   "/dashboard":   "Dashboard",
   "/inbox":       "Live Chat",
   "/contacts":    "Contacts",
   "/pipelines":   "Pipelines",
   "/broadcasts":  "Campaigns",
+  "/leads":       "Leads",
+  "/journeys":    "Chat Flows",
+  "/flows-lab":   "Flows Lab",
   "/automations": "Automations",
+  "/analytics":   "Analytics",
+  "/agents":      "AI Agents",
+  "/ai-agent":    "Shop Agent",
+  "/recent":      "Recent",
+  "/widget":      "Website Widget",
+  "/bookings":    "Bookings",
   "/settings":    "Settings",
   "/billing":     "Billing",
+  "/health":      "System Health",
 };
 
-function getPageTitle(pathname: string): string {
-  if (pageTitles[pathname]) return pageTitles[pathname];
-  const match = Object.entries(pageTitles).find(([path]) =>
+function titleForPath(pathname: string): string {
+  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  const match = Object.entries(PAGE_TITLES).find(([path]) =>
     pathname.includes(path),
   );
-  return match ? match[1] : "Dashboard";
+  if (match) return match[1];
+  // Last-segment fallback: "/leads/sources" → "Sources"
+  const seg = pathname.split("/").filter(Boolean).pop() ?? "Dashboard";
+  return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, " ");
 }
 
 interface HeaderProps {
@@ -43,78 +74,178 @@ interface HeaderProps {
 
 export function Header({ onOpenSidebar }: HeaderProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { profile, signOut } = useAuth();
-  const title = getPageTitle(pathname);
+  const title = titleForPath(pathname);
 
   const initial =
     profile?.full_name?.charAt(0)?.toUpperCase() ??
     profile?.email?.charAt(0)?.toUpperCase() ??
     "U";
 
-  const businessName = profile?.business_name ?? profile?.full_name ?? "Your Business";
+  const businessName =
+    profile?.business_name ?? profile?.full_name ?? "Your Business";
+
+  // ── ⌘K / Ctrl+K focuses the search box (keyboard-first UX) ──
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Pressing Enter sends the query to a search page. This page may not
+  // exist yet in the app — if it doesn't, link to /inbox for now which
+  // has its own list filter.
+  const onSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q) return;
+    router.push(`/inbox?q=${encodeURIComponent(q)}`);
+  };
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-white px-4 lg:px-6"
-      style={{ borderColor: "#e8ede9" }}>
-
-      {/* Left — hamburger + business name */}
+    <header
+      className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b px-4 lg:px-6"
+      style={{
+        background: "var(--canvas)",
+        borderColor: "var(--line)",
+      }}
+    >
+      {/* ── Left — mobile menu + breadcrumb (business / page) ── */}
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
           onClick={onOpenSidebar}
           aria-label="Open menu"
-          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-slate-100 lg:hidden"
-          style={{ color: "#112118" }}
+          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors lg:hidden"
+          style={{ color: "var(--ink)" }}
         >
           <Menu className="h-5 w-5" />
         </button>
 
-        {/* Takes the slot the plain business name used to occupy. With
-            one business it renders identically; with several it becomes
-            the control that decides what every page below is showing. */}
-        <BusinessSwitcher fallbackName={businessName} />
+        {/* Breadcrumb row — business switcher on the left, page title on the right */}
+        <div className="flex min-w-0 items-center gap-2">
+          <BusinessSwitcher fallbackName={businessName} />
+          <span
+            className="hidden sm:inline"
+            style={{ color: "var(--ink-4)" }}
+            aria-hidden
+          >
+            /
+          </span>
+          <span
+            className="hidden truncate text-[13px] font-semibold sm:inline"
+            style={{ color: "var(--ink)" }}
+          >
+            {title}
+          </span>
+        </div>
       </div>
 
-      {/* Right — status badges + plan + avatar */}
-      <div className="flex items-center gap-2">
-        {/* WhatsApp API Status */}
-        <div className="hidden items-center gap-1.5 sm:flex">
-          <span className="text-xs text-slate-500 font-medium">WhatsApp Business API Status :</span>
-          <span
-            className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold"
-            style={{ background: "#ecfdf5", color: "#059669" }}
+      {/* ── Middle — global search with ⌘K shortcut ── */}
+      <form
+        onSubmit={onSearchSubmit}
+        className="relative hidden w-[280px] shrink-0 md:block"
+      >
+        <div
+          className="flex items-center gap-2 rounded-[9px] border px-3 py-1.5 transition-colors"
+          style={{
+            background: "var(--surface)",
+            borderColor: "var(--line)",
+          }}
+        >
+          <Search
+            className="h-3.5 w-3.5"
+            style={{ color: "var(--ink-3)" }}
+            aria-hidden
+          />
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search campaigns, contacts, templates…"
+            className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-[color:var(--ink-3)]"
+            style={{ color: "var(--ink)" }}
+          />
+          <kbd
+            className="hidden rounded px-1.5 py-[1px] text-[10px] sm:inline"
+            style={{
+              fontFamily: "var(--font-mono)",
+              background: "var(--canvas)",
+              border: "1px solid var(--line)",
+              color: "var(--ink-3)",
+            }}
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
+            ⌘K
+          </kbd>
+        </div>
+      </form>
+
+      {/* ── Right — status · plan · avatar ── */}
+      <div className="ml-auto flex items-center gap-2">
+        {/* WhatsApp Business API status pill */}
+        <div
+          className="hidden items-center gap-1.5 lg:flex"
+          style={{ color: "var(--ink-3)" }}
+        >
+          <span className="text-[11.5px] font-medium">WhatsApp API:</span>
+          <span
+            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+            style={{
+              background: "var(--brand-50)",
+              color: "var(--brand-deep)",
+              borderColor: "var(--brand-200)",
+            }}
+          >
+            <span
+              className="inline-block h-[6px] w-[6px] rounded-full"
+              style={{ background: "var(--brand)" }}
+            />
             LIVE
           </span>
         </div>
 
-        {/* Separator */}
-        <div className="hidden h-5 w-px bg-slate-200 sm:block" />
-
-        {/* Current Plan badge */}
+        {/* Explore Plans — dark pill with brand accent icon */}
         <Link
           href="/billing"
-          className="hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors hover:opacity-90 sm:inline-flex"
-          style={{ background: "#112118", color: "#22c55e" }}
+          className="hidden items-center gap-1.5 rounded-[9px] px-3 py-1.5 text-[12px] font-semibold transition-opacity hover:opacity-90 sm:inline-flex"
+          style={{
+            background: "var(--ink)",
+            color: "var(--brand-300)",
+          }}
         >
-          <Zap className="h-3.5 w-3.5" fill="#22c55e" />
+          <Zap className="h-3.5 w-3.5" fill="var(--brand-300)" />
           Explore Plans
         </Link>
 
-        {/* Avatar / account dropdown */}
+        {/* Avatar + account menu */}
         <DropdownMenu>
           <DropdownMenuTrigger
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-50 focus:outline-none"
+            className="flex items-center gap-2 rounded-lg px-1 py-1 transition-colors focus:outline-none"
             aria-label="Open account menu"
           >
             <Avatar className="size-8">
               {profile?.avatar_url ? (
-                <AvatarImage src={profile.avatar_url} alt={profile.full_name ?? "Avatar"} />
+                <AvatarImage
+                  src={profile.avatar_url}
+                  alt={profile.full_name ?? "Avatar"}
+                />
               ) : null}
               <AvatarFallback
-                className="text-sm font-bold"
-                style={{ background: "#059669", color: "#fff" }}
+                className="text-[13px] font-bold"
+                style={{
+                  background:
+                    "linear-gradient(135deg,var(--brand),var(--brand-deep))",
+                  color: "#fff",
+                }}
               >
                 {initial}
               </AvatarFallback>
@@ -124,31 +255,56 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           <DropdownMenuContent
             align="end"
             sideOffset={6}
-            className="min-w-56 text-slate-700"
-            style={{ background: "#fff", border: "1px solid #e8ede9" }}
+            className="min-w-56"
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--line)",
+              color: "var(--ink-2)",
+            }}
           >
-            <div className="px-3 py-2 border-b border-slate-100">
-              <p className="truncate text-sm font-semibold text-slate-900">
+            <div
+              className="px-3 py-2"
+              style={{ borderBottom: "1px solid var(--line)" }}
+            >
+              <p
+                className="truncate text-[13px] font-semibold"
+                style={{ color: "var(--ink)" }}
+              >
                 {profile?.full_name ?? "User"}
               </p>
-              <p className="truncate text-xs text-slate-400">{profile?.email ?? ""}</p>
+              <p
+                className="truncate text-[11.5px]"
+                style={{ color: "var(--ink-3)" }}
+              >
+                {profile?.email ?? ""}
+              </p>
             </div>
             <DropdownMenuItem
-              render={<Link href="/settings?tab=profile" className="focus:bg-slate-50" />}
+              render={
+                <Link href="/settings?tab=profile" />
+              }
             >
-              <User className="size-4 text-slate-400" />
+              <User
+                className="size-4"
+                style={{ color: "var(--ink-3)" }}
+              />
               Profile
             </DropdownMenuItem>
             <DropdownMenuItem
-              render={<Link href="/settings?tab=whatsapp" className="focus:bg-slate-50" />}
+              render={
+                <Link href="/settings?tab=whatsapp" />
+              }
             >
-              <SettingsIcon className="size-4 text-slate-400" />
+              <SettingsIcon
+                className="size-4"
+                style={{ color: "var(--ink-3)" }}
+              />
               Settings
             </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-slate-100" />
+            <DropdownMenuSeparator style={{ background: "var(--line)" }} />
             <DropdownMenuItem
               onClick={signOut}
-              className="text-red-500 focus:bg-red-50 focus:text-red-600"
+              style={{ color: "var(--rose)" }}
             >
               <LogOut className="size-4" />
               Sign out

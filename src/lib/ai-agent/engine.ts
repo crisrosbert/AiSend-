@@ -68,6 +68,7 @@ import {
 } from './cart'
 import { initiateCheckout, processDeliveryAddress, processPaymentChoice } from './checkout'
 import type { RetrievedProduct } from './retriever'
+import { GRAPH_BASE_URL } from '@/lib/meta/graph-version'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ export interface AiAgentInput {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const WA_API_URL = 'https://graph.facebook.com/v21.0'
+const WA_API_URL = GRAPH_BASE_URL
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -43,6 +43,7 @@
 
 import type { RetrievedProduct } from './retriever'
 import { sendCarouselTemplate, type CarouselCard } from '@/lib/whatsapp/meta-api'
+import { GRAPH_BASE_URL } from '@/lib/meta/graph-version'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ export interface CarouselConfig {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const WA_API_URL = 'https://graph.facebook.com/v21.0'
+const WA_API_URL = GRAPH_BASE_URL
 const MAX_PRODUCTS = 3          // Max different products to show per query
 const MAX_IMAGES_PER_PRODUCT = 4 // Max images per product (carousel cards)
 

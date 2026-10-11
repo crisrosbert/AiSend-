@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { GRAPH_BASE_URL } from '@/lib/meta/graph-version'
 
 /**
  * Sync message templates from Meta → local message_templates table.
@@ -30,8 +31,7 @@ import { decrypt } from '@/lib/whatsapp/encryption'
  *     manually.
  */
 
-const META_API_VERSION = 'v21.0'
-const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
+const META_API_BASE = GRAPH_BASE_URL
 
 interface MetaTemplateComponent {
   type: string

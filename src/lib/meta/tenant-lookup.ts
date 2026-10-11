@@ -33,6 +33,26 @@ export async function findTenantByFacebookId(
 ): Promise<string | null> {
   if (!metaUserId) return null
 
+  // 1) The Meta user id recorded when this person completed Embedded
+  //    Signup. This is the only way to find a client who registered with
+  //    e-mail + password, and it is a direct indexed lookup.
+  try {
+    const { data, error } = await db
+      .from('whatsapp_config')
+      .select('user_id')
+      .eq('meta_user_id', metaUserId)
+      .limit(1)
+    if (error) {
+      // e.g. migration 010 not applied yet — fall through to the scan.
+      console.error('[meta/tenant-lookup] connection lookup failed:', error.message)
+    } else if (data && data.length > 0 && data[0].user_id) {
+      return String(data[0].user_id)
+    }
+  } catch (err) {
+    console.error('[meta/tenant-lookup] connection lookup threw:', err)
+  }
+
+  // 2) Facebook-login users: match the provider identity in auth.
   try {
     const PER_PAGE = 1000
     const MAX_PAGES = 20 // 20,000 accounts; a bound, not a target

@@ -28,8 +28,9 @@
 //     mode it works for the app's own admins/testers — enough to demo.
 
 import crypto from 'node:crypto'
+import { GRAPH_BASE_URL, GRAPH_VERSION } from './graph-version'
 
-export const GRAPH = 'https://graph.facebook.com/v21.0'
+export const GRAPH = GRAPH_BASE_URL
 
 export const LEADGEN_SCOPES = [
   'pages_show_list',
@@ -114,7 +115,7 @@ export function buildAuthUrl(redirectUri: string, state: string): string {
   } else {
     params.set('scope', LEADGEN_SCOPES)
   }
-  return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`
+  return `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${params.toString()}`
 }
 
 async function graphJson(url: string, init?: RequestInit): Promise<Record<string, unknown>> {

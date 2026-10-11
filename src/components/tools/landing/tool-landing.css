@@ -322,12 +322,19 @@
 .tl-review blockquote { margin: 0; flex: 1; font-size: 16.5px; color: var(--tl-ink); }
 .tl-review figcaption b { display: block; font-size: 15px; color: var(--tl-ink); }
 .tl-review figcaption span { font-size: 13.5px; color: var(--tl-muted); }
-.tl-invite { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding: 36px 28px; background: #fff; border: 1px dashed var(--tl-mint-line); border-radius: 22px; }
+.tl-invite { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding: 36px 28px; background: #fff; border: 1px dashed var(--tl-mint-line); border-radius: 22px; }
+/* Wide screens: one full-width row (icon, text, button) so it lines up with the sections around it. */
+@media (min-width: 761px) {
+  .tl-invite { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'icon title btn' 'icon text btn'; align-items: center; justify-items: start; column-gap: 24px; row-gap: 4px; padding: 30px 36px; text-align: left; }
+  .tl-invite > .tl-icon { grid-area: icon; }
+  .tl-invite > h3 { grid-area: title; align-self: end; }
+  .tl-invite > p { grid-area: text; align-self: start; }
+  .tl-invite > a { grid-area: btn; }
+}
 
 /* ── related articles ───────────────────────────────────── */
-.tl-posts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
-@media (max-width: 960px) { .tl-posts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .tl-posts { grid-template-columns: minmax(0, 1fr); } }
+/* auto-fit: two posts share the whole row, three or more wrap into columns of at least 320px. */
+.tl-posts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 22px; }
 .tl-post { display: flex; flex-direction: column; background: #fff; border: 1px solid var(--tl-line); border-radius: 18px; overflow: hidden; box-shadow: var(--tl-shadow); text-decoration: none; transition: border-color .15s ease; }
 .tl-post:hover { border-color: var(--tl-mint-line); }
 .tl-post__band { position: relative; height: 120px; display: flex; align-items: flex-end; padding: 14px 18px; background: linear-gradient(135deg, #1B6B4A, #14523A); color: #fff; overflow: hidden; }

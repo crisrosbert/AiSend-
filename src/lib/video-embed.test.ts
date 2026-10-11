@@ -65,6 +65,50 @@ describe('parseVideoUrl — Vimeo', () => {
   })
 })
 
+describe('parseVideoUrl — Instagram Reels and posts', () => {
+  const REEL = 'C8xYzAbCdEf'
+
+  it('accepts every common shape of a Reel link and embeds it as a reel', () => {
+    for (const input of [
+      `https://www.instagram.com/reel/${REEL}/`,
+      `https://instagram.com/reel/${REEL}`,
+      `https://www.instagram.com/reel/${REEL}/?igsh=MWQxZG5ibjA1`,
+      `https://www.instagram.com/reels/${REEL}/`,
+      `https://www.instagram.com/some.creator_1/reel/${REEL}/`,
+      `https://www.instagram.com/reel/${REEL}/embed`,
+    ]) {
+      expect(parseVideoUrl(input), input).toEqual({
+        kind: 'iframe',
+        provider: 'instagram',
+        src: `https://www.instagram.com/reel/${REEL}/embed`,
+      })
+    }
+  })
+
+  it('embeds a regular video post as a post', () => {
+    expect(parseVideoUrl(`https://www.instagram.com/p/${REEL}/`)).toEqual({
+      kind: 'iframe',
+      provider: 'instagram',
+      src: `https://www.instagram.com/p/${REEL}/embed`,
+    })
+  })
+
+  it('rejects Instagram pages that are not a single reel or post', () => {
+    expect(parseVideoUrl('https://www.instagram.com/some.creator/').kind).toBe('none')
+    expect(parseVideoUrl('https://www.instagram.com/reels/').kind).toBe('none')
+    expect(parseVideoUrl('https://www.instagram.com/explore/').kind).toBe('none')
+    expect(parseVideoUrl('https://www.instagram.com/').kind).toBe('none')
+  })
+
+  it('does not trust a lookalike host or a smuggled id', () => {
+    expect(parseVideoUrl(`https://instagram.com.evil.example/reel/${REEL}/`).kind).toBe('none')
+    expect(parseVideoUrl(`https://notinstagram.com/reel/${REEL}/`).kind).toBe('none')
+    expect(parseVideoUrl(`https://evil.example/instagram.com/reel/${REEL}/`).kind).toBe('none')
+    expect(parseVideoUrl('https://www.instagram.com/reel/..%2F..%2Fx/').kind).toBe('none')
+    expect(parseVideoUrl('https://www.instagram.com/reel/ab/').kind).toBe('none')
+  })
+})
+
 describe('parseVideoUrl — direct files', () => {
   it('accepts https links to real video files', () => {
     for (const input of [

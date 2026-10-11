@@ -13,6 +13,8 @@ export interface UseCase {
   text: string
   /** Message loaded into the generator. */
   message: string
+  /** Extra settings for tools with more than one field (see PresetDetail). */
+  data?: Readonly<Record<string, string>>
 }
 
 export function UseCases({
@@ -26,8 +28,8 @@ export function UseCases({
   cases: readonly UseCase[]
   actionLabel: string
 }) {
-  function use(message: string) {
-    dispatchPreset(message)
+  function use(message: string, data?: Readonly<Record<string, string>>) {
+    dispatchPreset(message, data)
     const target = document.getElementById('generator')
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     target?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
@@ -46,7 +48,7 @@ export function UseCases({
               <span className="tl-icon"><Icon name={c.icon} size={22} /></span>
               <h3>{c.title}</h3>
               <p>{c.text}</p>
-              <button type="button" className="tl-card__go" onClick={() => use(c.message)}>
+              <button type="button" className="tl-card__go" onClick={() => use(c.message, c.data)}>
                 {actionLabel}
                 <Icon name="arrowRight" size={17} />
                 <span className="sr-only"> for {c.title}</span>

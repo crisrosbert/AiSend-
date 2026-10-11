@@ -221,6 +221,34 @@ export const TOOLS_RAIL = {
   viewAllLabel: 'View all free tools',
   tools: [
     {
+      href: '/tools/whatsapp-qr-code',
+      name: 'WhatsApp QR code generator',
+      text: 'Turn your number into a QR code with your colours and logo, and download it as PNG or SVG.',
+      tag: 'QR code',
+      icon: 'qr',
+    },
+    {
+      href: '/tools/whatsapp-template-generator',
+      name: 'Message template generator',
+      text: 'Write a template and check it against the common reasons for rejection.',
+      tag: 'Templates',
+      icon: 'file',
+    },
+    {
+      href: '/tools/whatsapp-chat-widget',
+      name: 'Chat button for websites',
+      text: 'Design a floating chat button with a welcome popup and copy the code.',
+      tag: 'Website',
+      icon: 'globe',
+    },
+    {
+      href: '/tools/whatsapp-roi-calculator',
+      name: 'WhatsApp ROI calculator',
+      text: 'Compare the return from WhatsApp, SMS and email campaigns.',
+      tag: 'Calculator',
+      icon: 'calc',
+    },
+    {
       href: '/tools/whatsapp-text-formatter',
       name: 'WhatsApp text formatter',
       text: 'Add bold, italic, strikethrough and bullets, with a live chat preview.',

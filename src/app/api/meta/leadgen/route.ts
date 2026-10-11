@@ -34,6 +34,7 @@ import { createClient } from '@supabase/supabase-js'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { ingestLead } from '@/lib/leads/ingest'
+import { GRAPH_BASE_URL } from '@/lib/meta/graph-version'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _db: any = null
@@ -119,7 +120,7 @@ async function processLeadgenEvent(change: LeadgenChange) {
     // Page tokens are stored encrypted (written by the connect callback).
     const pageToken = decrypt(source.meta_page_access_token)
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${leadgen_id}?access_token=${encodeURIComponent(pageToken)}`,
+      `${GRAPH_BASE_URL}/${leadgen_id}?access_token=${encodeURIComponent(pageToken)}`,
     )
     const json = await res.json()
     if (!res.ok || !json?.field_data) {

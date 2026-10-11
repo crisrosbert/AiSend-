@@ -35,10 +35,19 @@ export function teamWhatsAppLink(message: string): string {
 
 /**
  * Browser event used by the "where to use it" cards to load a ready-made
- * message into the generator without the two components knowing each other.
+ * starting point into the tool without the two components knowing each other.
  */
 export const PRESET_EVENT = 'wlg:preset'
 
-export function dispatchPreset(message: string): void {
-  window.dispatchEvent(new CustomEvent(PRESET_EVENT, { detail: { message } }))
+/** What a card hands to the tool on the same page. */
+export interface PresetDetail {
+  /** Ready-written text: a first message, a template body, a scenario name. */
+  message: string
+  /** Extra settings for tools with more than one field, as plain strings. */
+  data?: Readonly<Record<string, string>>
+}
+
+export function dispatchPreset(message: string, data?: Readonly<Record<string, string>>): void {
+  const detail: PresetDetail = { message, data }
+  window.dispatchEvent(new CustomEvent<PresetDetail>(PRESET_EVENT, { detail }))
 }

@@ -52,11 +52,14 @@
 }
 
 /* ── layout ─────────────────────────────────────────────── */
-.tl-wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+/* Same 1280px shell as the site header (max-w-7xl), so the page edges line up with the nav. */
+.tl-wrap { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+@media (max-width: 900px) { .tl-wrap { padding: 0 24px; } }
+@media (max-width: 520px) { .tl-wrap { padding: 0 18px; } }
 .tl-section { padding: 72px 0; }
 .tl-section--tint { background: linear-gradient(180deg, var(--tl-mint) 0%, #ffffff 100%); }
 .tl-section--tight { padding: 28px 0; }
-.lp .tl .tl-head { max-width: 640px; margin: 0 auto 40px; text-align: center; }
+.lp .tl .tl-head { max-width: 780px; margin: 0 auto 44px; text-align: center; }
 .lp .tl .tl-head--left { margin-left: 0; text-align: left; }
 .lp .tl .tl-h2 { font-size: clamp(27px, 3.4vw, 40px); line-height: 1.12; font-weight: 700; }
 .lp .tl .tl-sub { margin-top: 12px; font-size: 17px; }
@@ -258,7 +261,7 @@
 .tl-banner::before, .tl-banner::after { content: ''; position: absolute; border-radius: 50%; background: rgba(255, 255, 255, 0.06); pointer-events: none; }
 .tl-banner::before { width: 260px; height: 260px; right: -70px; top: -120px; }
 .tl-banner::after { width: 160px; height: 160px; left: 36%; bottom: -100px; }
-.tl-banner__text { position: relative; z-index: 1; display: flex; align-items: center; gap: 22px; max-width: 700px; }
+.tl-banner__text { position: relative; z-index: 1; display: flex; align-items: center; gap: 22px; max-width: 860px; }
 .tl-banner__icon { flex: none; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.28); }
 .lp .tl .tl-banner h2 { color: #fff; font-size: clamp(22px, 2.8vw, 30px); line-height: 1.2; font-weight: 700; }
 .tl-banner p { margin-top: 8px !important; color: rgba(255, 255, 255, 0.86); font-size: 16px; }
@@ -319,7 +322,7 @@
 .tl-review blockquote { margin: 0; flex: 1; font-size: 16.5px; color: var(--tl-ink); }
 .tl-review figcaption b { display: block; font-size: 15px; color: var(--tl-ink); }
 .tl-review figcaption span { font-size: 13.5px; color: var(--tl-muted); }
-.tl-invite { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding: 36px 28px; background: #fff; border: 1px dashed var(--tl-mint-line); border-radius: 22px; }
+.tl-invite { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding: 36px 28px; background: #fff; border: 1px dashed var(--tl-mint-line); border-radius: 22px; }
 
 /* ── related articles ───────────────────────────────────── */
 .tl-posts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
@@ -338,7 +341,7 @@
 .tl-center { display: flex; justify-content: center; margin-top: 30px; }
 
 /* ── FAQ ────────────────────────────────────────────────── */
-.tl-faq { max-width: 860px; margin: 0 auto; padding: 38px 36px 42px; background: var(--tl-mint); border: 1px solid var(--tl-mint-line); border-radius: 28px; }
+.tl-faq { margin: 0 auto; padding: 40px 44px 44px; background: var(--tl-mint); border: 1px solid var(--tl-mint-line); border-radius: 28px; }
 @media (max-width: 620px) { .tl-faq { padding: 26px 16px 30px; border-radius: 22px; } }
 .lp .tl .tl-faq h2 { margin-bottom: 20px; font-size: clamp(25px, 3vw, 34px); font-weight: 700; }
 .tl-q { margin-top: 10px; background: #fff; border-radius: 14px; border: 1px solid transparent; }
@@ -392,7 +395,7 @@
 
 /* ── the generator ──────────────────────────────────────── */
 .tl-toolwrap { scroll-margin-top: 120px; }
-.tl-tool { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 28px; align-items: start; scroll-margin-top: 120px; }
+.tl-tool { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 30vw, 390px); gap: 28px; align-items: start; scroll-margin-top: 120px; }
 @media (max-width: 900px) { .tl-tool { grid-template-columns: minmax(0, 1fr); } }
 .tl-toolcard { background: #fff; border: 1px solid var(--tl-line); border-radius: 22px; padding: 30px; box-shadow: var(--tl-shadow-lift); min-width: 0; }
 @media (max-width: 520px) { .tl-toolcard { padding: 22px 18px; } }
@@ -446,7 +449,7 @@
 @media (prefers-reduced-motion: reduce) { .tl-dotbtn { transition: none; } }
 
 /* ── long-form guide ────────────────────────────────────── */
-.tl-guide { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 56px; align-items: start; max-width: 1020px; margin: 0 auto; }
+.tl-guide { display: grid; grid-template-columns: 256px minmax(0, 1fr); gap: 56px; align-items: start; }
 @media (max-width: 900px) { .tl-guide { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
 .tl-toc { position: sticky; top: 120px; padding: 18px 16px 14px; background: var(--tl-mint); border: 1px solid var(--tl-mint-line); border-radius: 16px; }
 @media (max-width: 900px) { .tl-toc { position: static; } }
@@ -455,7 +458,8 @@
 .tl-toc a { display: block; padding: 6px 8px; border-radius: 8px; font-size: 14.5px; line-height: 1.35; color: var(--tl-body); text-decoration: none; }
 .tl-toc a:hover { background: #fff; color: var(--tl-brand-deep); }
 
-.tl-article { min-width: 0; max-width: 700px; font-size: 17px; line-height: 1.75; }
+.tl-article { min-width: 0; font-size: 17px; line-height: 1.75; }
+@media (min-width: 1100px) { .tl-article { font-size: 18px; } .tl-article table { font-size: 15.5px; } }
 .tl-article > section + section { margin-top: 52px; }
 .lp .tl .tl-article h3 { font-size: clamp(23px, 2.6vw, 29px); line-height: 1.2; font-weight: 700; color: var(--tl-ink); scroll-margin-top: 120px; }
 .lp .tl .tl-article h4 { margin-top: 28px; font-size: 18.5px; line-height: 1.3; font-weight: 700; color: var(--tl-ink); }
@@ -621,7 +625,7 @@
 @media (max-width: 520px) { .tl-sample { flex-wrap: wrap; } .tl-sample .tl-input { flex: 1 1 160px; } }
 
 /* ── chat button generator ──────────────────────────────── */
-.tl-tool--wide { grid-template-columns: minmax(0, 1fr) 500px; }
+.tl-tool--wide { grid-template-columns: minmax(0, 1fr) clamp(420px, 38vw, 540px); }
 @media (max-width: 1180px) { .tl-tool--wide { grid-template-columns: minmax(0, 1fr); } .tl-tool--wide .tl-prevcol { max-width: 560px; } }
 .tl-sublabel--first { margin-top: 0; }
 .lp .tl .tl-warn--first { margin-top: 0; margin-bottom: 12px; }

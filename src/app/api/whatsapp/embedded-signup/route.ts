@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { encrypt } from '@/lib/whatsapp/encryption'
+import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
+import { choosePin, registerPhoneNumber } from '@/lib/whatsapp/registration-pin'
 import { currentBusinessId } from '@/lib/business/server'
+import { GRAPH_BASE_URL } from '@/lib/meta/graph-version'
+import { resolveSignupMetaUserId } from '@/lib/meta/signup-user'
 
 /**
  * Embedded Signup — token exchange + auto-connect.
@@ -17,7 +20,10 @@ import { currentBusinessId } from '@/lib/business/server'
  *   2. Save the client's waba_id, phone_number_id, and (encrypted)
  *      token into THIS user's whatsapp_config row.
  *   3. Subscribe our app to the client's WABA so webhooks flow.
- *   4. Register the phone number on Cloud API so it can send.
+ *   4. Record which Facebook user signed up (meta_user_id), so Meta's
+ *      deauthorize / data-deletion callbacks can find this client.
+ *   5. Register the phone number on Cloud API so it can send, using a
+ *      random per-number two-step PIN that is stored encrypted.
  *
  * Requires env: META_APP_ID, META_APP_SECRET.
  *
@@ -26,7 +32,7 @@ import { currentBusinessId } from '@/lib/business/server'
  * route returns Meta's error, which the UI surfaces.
  */
 
-const GRAPH = 'https://graph.facebook.com/v21.0'
+const GRAPH = GRAPH_BASE_URL
 
 export async function POST(request: Request) {
   try {
@@ -49,10 +55,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { code, waba_id, phone_number_id } = body as {
+    const { code, waba_id, phone_number_id, signed_request } = body as {
       code?: string
       waba_id?: string
       phone_number_id?: string
+      signed_request?: string
     }
 
     if (!code) {
@@ -97,39 +104,54 @@ export async function POST(request: Request) {
       subscribeWarning = 'Could not subscribe app to WABA (network).'
     }
 
-    // 3) Register the phone number on Cloud API. Newer Embedded Signup
-    //    flows auto-register; we attempt it and ignore "already
-    //    registered" responses. A PIN of 000000 is the documented
-    //    default for cloud-hosted numbers without 2FA set.
-    try {
-      await fetch(`${GRAPH}/${phone_number_id}/register`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ messaging_product: 'whatsapp', pin: '000000' }),
-      })
-    } catch {
-      // non-fatal — number may already be registered
+    // 3) Learn which Facebook user completed the signup. Meta's deauthorize
+    //    and data-deletion callbacks identify a person ONLY by this id, so
+    //    without it an e-mail-signup client's deletion request would match
+    //    nobody. Best effort: never blocks the connection.
+    const signupUser = await resolveSignupMetaUserId({
+      signedRequest: signed_request,
+      accessToken,
+      appId,
+      appSecret,
+      graphBase: GRAPH,
+    })
+    if (signupUser.userId !== null) {
+      console.log('[embedded-signup] recorded Meta user id via', signupUser.source)
+    } else {
+      console.warn('[embedded-signup] could not learn Meta user id:', signupUser.reason)
     }
 
-    // 4) Persist into this user's config (encrypted token + verify token).
-    const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'clickstream2026'
-    const encToken = encrypt(accessToken)
-    const encVerify = encrypt(verifyToken)
-
-    const { data: existing } = await supabase
+    // 4) Save the connection, THEN register the number.
+    //
+    //    Meta keeps whatever two-step PIN we register with, and only we know
+    //    it — so the PIN is written to the database first and can never be
+    //    lost. Each number gets its own random PIN; reconnecting the same
+    //    number reuses its stored PIN (a new one would be rejected). The
+    //    client's access token is stored encrypted. Embedded Signup clients
+    //    share the platform webhook, which the GET handshake verifies against
+    //    WHATSAPP_WEBHOOK_VERIFY_TOKEN directly — so no per-client verify
+    //    token is stored (and there is no built-in default).
+    const { data: existing, error: lookupError } = await supabase
       .from('whatsapp_config')
-      .select('id')
+      .select('id, phone_number_id, two_step_pin')
       .eq('user_id', user.id)
       .maybeSingle()
+    if (lookupError) {
+      return NextResponse.json({ error: lookupError.message }, { status: 500 })
+    }
+
+    const sameNumber = existing?.phone_number_id === phone_number_id
+    const { pin, reused: pinReused } = choosePin(sameNumber ? existing?.two_step_pin : null, decrypt)
 
     const row = {
       phone_number_id,
       waba_id,
-      access_token: encToken,
-      verify_token: encVerify,
+      access_token: encrypt(accessToken),
+      verify_token: null,
+      two_step_pin: encrypt(pin),
+      // Only written when learned, so a reconnect that cannot resolve the id
+      // does not erase the one recorded earlier.
+      ...(signupUser.userId ? { meta_user_id: signupUser.userId } : {}),
       status: 'connected',
       connected_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -149,11 +171,29 @@ export async function POST(request: Request) {
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    // 5) Newer Embedded Signup flows auto-register the number, so a rejection
+    // here is not fatal — but it must not be silent, and a brand-new PIN that
+    // Meta did not accept must not stay on file as if it were the real one.
+    let registerWarning: string | null = null
+    const registration = await registerPhoneNumber({
+      graphBase: GRAPH,
+      phoneNumberId: phone_number_id,
+      accessToken,
+      pin,
+    })
+    if (!registration.ok) {
+      console.warn('[embedded-signup] register failed:', registration.error)
+      registerWarning = `Number registration did not complete: ${registration.error}`
+      if (!pinReused) {
+        await supabase.from('whatsapp_config').update({ two_step_pin: null }).eq('user_id', user.id)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       waba_id,
       phone_number_id,
-      warning: subscribeWarning,
+      warning: [subscribeWarning, registerWarning].filter(Boolean).join(' ') || null,
     })
   } catch (error) {
     console.error('Embedded Signup exchange error:', error)

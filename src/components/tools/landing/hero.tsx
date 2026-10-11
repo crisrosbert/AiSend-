@@ -1,7 +1,13 @@
+import type { ReactNode } from 'react'
 import { Icon } from './icons'
 import { teamWhatsAppLink } from '@/lib/tools/landing-config'
 
 interface ToolHeroProps {
+  /**
+   * The picture on the right. Leave it out for the phone showing a chat that
+   * started from a link; pass your own for tools about something else.
+   */
+  stage?: ReactNode
   badge: string
   title: string
   lead: string
@@ -28,6 +34,7 @@ export function ToolHero({
   secondaryLabel,
   whatsappMessage,
   proof,
+  stage,
 }: ToolHeroProps) {
   return (
     <section className="tl-hero gradient-hero-bg">
@@ -64,58 +71,65 @@ export function ToolHero({
             </ul>
           </div>
 
-          <div className="tl-stage" aria-hidden="true">
-            <svg className="tl-curve" viewBox="0 0 480 470" preserveAspectRatio="xMidYMid meet">
-              <defs>
-                <marker id="tl-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-                  <path d="M1 1 9 5 1 9" fill="none" stroke="#1B6B4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </marker>
-              </defs>
-              <path d="M170 388 C 290 420, 372 350, 352 262" markerEnd="url(#tl-arrow)" />
-            </svg>
-
-            <div className="tl-chip tl-chip--a">
-              <Icon name="phone" size={18} />
-              +91 98765 43210
-            </div>
-            <div className="tl-chip tl-chip--b tl-chip--mono">
-              <Icon name="link" size={17} />
-              wa.me/919876543210
-            </div>
-
-            <div className="tl-phone">
-              <div className="tl-phone__head">
-                <span className="tl-phone__avatar">
-                  <Icon name="store" size={17} />
-                </span>
-                <div>
-                  <div className="tl-phone__name">Your business</div>
-                  <div className="tl-phone__status">online</div>
-                </div>
-              </div>
-              <div className="tl-phone__body">
-                <span className="tl-day">Today</span>
-                <div className="tl-bubble">
-                  Hi! I&apos;d like to know more about your services.
-                  <div className="tl-bubble__meta">
-                    10:42 <Icon name="ticks" size={14} strokeWidth={2.2} />
-                  </div>
-                </div>
-                <div className="tl-bubble tl-bubble--in">
-                  Hello! Thanks for getting in touch. How can we help?
-                  <div className="tl-bubble__meta">10:42</div>
-                </div>
-              </div>
-              <div className="tl-phone__foot">
-                <span className="tl-phone__input">Message</span>
-                <span className="tl-phone__send">
-                  <Icon name="send" size={16} />
-                </span>
-              </div>
-            </div>
-          </div>
+          {stage ?? <PhoneStage />}
         </div>
       </div>
     </section>
+  )
+}
+
+/** Default picture: a phone showing a chat that started from a link. */
+function PhoneStage() {
+  return (
+    <div className="tl-stage" aria-hidden="true">
+      <svg className="tl-curve" viewBox="0 0 480 470" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="tl-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M1 1 9 5 1 9" fill="none" stroke="#1B6B4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </marker>
+        </defs>
+        <path d="M170 388 C 290 420, 372 350, 352 262" markerEnd="url(#tl-arrow)" />
+      </svg>
+
+      <div className="tl-chip tl-chip--a">
+        <Icon name="phone" size={18} />
+        +91 98765 43210
+      </div>
+      <div className="tl-chip tl-chip--b tl-chip--mono">
+        <Icon name="link" size={17} />
+        wa.me/919876543210
+      </div>
+
+      <div className="tl-phone">
+        <div className="tl-phone__head">
+          <span className="tl-phone__avatar">
+            <Icon name="store" size={17} />
+          </span>
+          <div>
+            <div className="tl-phone__name">Your business</div>
+            <div className="tl-phone__status">online</div>
+          </div>
+        </div>
+        <div className="tl-phone__body">
+          <span className="tl-day">Today</span>
+          <div className="tl-bubble">
+            Hi! I&apos;d like to know more about your services.
+            <div className="tl-bubble__meta">
+              10:42 <Icon name="ticks" size={14} strokeWidth={2.2} />
+            </div>
+          </div>
+          <div className="tl-bubble tl-bubble--in">
+            Hello! Thanks for getting in touch. How can we help?
+            <div className="tl-bubble__meta">10:42</div>
+          </div>
+        </div>
+        <div className="tl-phone__foot">
+          <span className="tl-phone__input">Message</span>
+          <span className="tl-phone__send">
+            <Icon name="send" size={16} />
+          </span>
+        </div>
+      </div>
+    </div>
   )
 }

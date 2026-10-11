@@ -427,7 +427,7 @@ export function WhatsAppConfig() {
             <div className="space-y-1.5">
               <Label className="text-sm font-semibold text-slate-700">Webhook Verify Token</Label>
               <Input
-                placeholder="Your custom verify token (e.g. clickstream2026)"
+                placeholder="A long random string only you know"
                 value={verifyToken}
                 onChange={(e) => setVerifyToken(e.target.value)}
                 className="border-[#e7ece9] bg-white text-[#0c1f17] placeholder:text-slate-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"

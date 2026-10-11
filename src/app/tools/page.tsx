@@ -7,7 +7,7 @@ import '../(marketing)/landing.css'
 export const metadata: Metadata = {
   title: 'Free WhatsApp Tools',
   description:
-    'Free WhatsApp tools for businesses — link generators, QR codes, and more. No signup required.',
+    'Free WhatsApp tools for businesses: link and QR code generators, a template checker, a website chat button and an ROI calculator. No signup required.',
   robots: { index: true, follow: true },
   alternates: { canonical: 'https://app.performancemktg.net/tools' },
 }
@@ -27,9 +27,27 @@ const TOOLS = [
   },
   {
     href: '/tools/whatsapp-qr-code',
-    name: 'WhatsApp QR Code',
-    desc: 'Download a scannable QR code for your WhatsApp number.',
+    name: 'WhatsApp QR Code Generator',
+    desc: 'Make a scannable QR code in your colours, with a logo, and download it as PNG or SVG.',
     tag: 'Print-ready',
+  },
+  {
+    href: '/tools/whatsapp-template-generator',
+    name: 'WhatsApp Template Generator',
+    desc: 'Write a message template, preview it as a chat bubble and check it against the common reasons for rejection.',
+    tag: 'Approval checker',
+  },
+  {
+    href: '/tools/whatsapp-chat-widget',
+    name: 'WhatsApp Chat Button for Websites',
+    desc: 'Design a floating chat button with a welcome popup, preview it live and copy one block of code.',
+    tag: 'Website widget',
+  },
+  {
+    href: '/tools/whatsapp-roi-calculator',
+    name: 'WhatsApp vs SMS vs Email ROI Calculator',
+    desc: 'Compare profit, return and break-even for the same campaign on three channels, using your own numbers.',
+    tag: 'Calculator',
   },
   {
     href: '/tools/whatsapp-text-formatter',

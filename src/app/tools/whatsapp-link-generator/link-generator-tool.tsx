@@ -8,212 +8,249 @@
 // saved anywhere. That's not just simpler, it's the point — a visitor
 // should be able to trust a "free tool" page with their number, and a
 // page that quietly phones home with it would deserve the opposite.
+//
+// The link appears as soon as the number is valid (no extra "generate"
+// click), and the preview shows what the visitor will really see: the
+// message waiting in the chat box, NOT already sent — a pre-filled
+// message is never sent until the person taps send themselves.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import QRCode from 'qrcode'
 import Link from 'next/link'
+import { COUNTRIES, buildWhatsAppLink } from '@/lib/tools/wa-link'
+import { PRESET_EVENT } from '@/lib/tools/landing-config'
+import { Icon } from '@/components/tools/landing/icons'
 
-const COUNTRIES = [
-  { code: '91', label: '🇮🇳 India (+91)' },
-  { code: '55', label: '🇧🇷 Brazil (+55)' },
-  { code: '62', label: '🇮🇩 Indonesia (+62)' },
-  { code: '234', label: '🇳🇬 Nigeria (+234)' },
-  { code: '60', label: '🇲🇾 Malaysia (+60)' },
-  { code: '20', label: '🇪🇬 Egypt (+20)' },
-  { code: '92', label: '🇵🇰 Pakistan (+92)' },
-  { code: '880', label: '🇧🇩 Bangladesh (+880)' },
-  { code: '971', label: '🇦🇪 UAE (+971)' },
-  { code: '966', label: '🇸🇦 Saudi Arabia (+966)' },
-  { code: '27', label: '🇿🇦 South Africa (+27)' },
-  { code: '63', label: '🇵🇭 Philippines (+63)' },
-  { code: '52', label: '🇲🇽 Mexico (+52)' },
-  { code: '1', label: '🇺🇸 US / Canada (+1)' },
-  { code: '44', label: '🇬🇧 UK (+44)' },
+const QUICK_MESSAGES = [
+  { label: 'Pricing', text: 'Hi! Could you share your pricing and plans?' },
+  { label: 'Book a demo', text: "Hi! I'd like to book a demo." },
+  { label: 'Order enquiry', text: 'Hi! I have a question about my order.' },
+  { label: 'Support', text: 'Hi! I need some help with something.' },
 ]
 
-function digitsOnly(value: string): string {
-  return value.replace(/\D/g, '')
+const PHONE_PROBLEMS: Record<'too-short' | 'too-long', string> = {
+  'too-short': 'That number looks too short. Check the country code and the digits.',
+  'too-long': 'That number looks too long. Check the country code, and remove any digits you typed twice.',
 }
+
+// The share sheet exists on phones and some browsers. Read once, and report
+// "no" while rendering on the server so the first paint matches.
+const noSubscription = () => () => {}
+const supportsShare = () => typeof navigator.share === 'function'
+const serverSupportsShare = () => false
 
 export function LinkGeneratorTool() {
   const [countryCode, setCountryCode] = useState('91')
   const [phone, setPhone] = useState('')
-  const [message, setMessage] = useState('Hi! I found you on WhatsApp and wanted to reach out.')
+  const [message, setMessage] = useState("Hi! I'd like to know more about your services.")
   const [copied, setCopied] = useState(false)
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
-  const [qrError, setQrError] = useState(false)
+  const [qr, setQr] = useState<{ link: string; url: string } | null>(null)
+  const canShare = useSyncExternalStore(noSubscription, supportsShare, serverSupportsShare)
+  const linkBox = useRef<HTMLDivElement>(null)
+  const messageBox = useRef<HTMLTextAreaElement>(null)
 
-  const phoneDigits = digitsOnly(phone)
-  const isValidPhone = phoneDigits.length >= 6 && phoneDigits.length <= 14
+  const result = useMemo(
+    () => buildWhatsAppLink({ countryCode, phone, message }),
+    [countryCode, phone, message],
+  )
+  const link = result.ok ? result.link : ''
+  // A QR drawn for an older link is never shown for the current one.
+  const qrDataUrl = qr && qr.link === link ? qr.url : null
+  const phoneProblem = !result.ok && result.reason !== 'empty' ? PHONE_PROBLEMS[result.reason] : null
 
-  const link = useMemo(() => {
-    if (!isValidPhone) return ''
-    const params = message.trim() ? `?text=${encodeURIComponent(message.trim())}` : ''
-    return `https://wa.me/${countryCode}${phoneDigits}${params}`
-  }, [countryCode, phoneDigits, isValidPhone, message])
+  // Cards further down the page load a ready-made message into the box.
+  useEffect(() => {
+    const onPreset = (e: Event) => {
+      const next = (e as CustomEvent<{ message?: string }>).detail?.message
+      if (typeof next === 'string') {
+        setMessage(next)
+        messageBox.current?.focus({ preventScroll: true })
+      }
+    }
+    window.addEventListener(PRESET_EVENT, onPreset)
+    return () => window.removeEventListener(PRESET_EVENT, onPreset)
+  }, [])
 
-  async function handleGenerate() {
+  // QR is drawn at 4x its on-screen size so the downloaded PNG prints sharply.
+  useEffect(() => {
     if (!link) return
-    setQrError(false)
+    let stale = false
+    QRCode.toDataURL(link, { width: 512, margin: 2, color: { dark: '#0c1f17', light: '#ffffff' } })
+      .then((url) => { if (!stale) setQr({ link, url }) })
+      .catch(() => { if (!stale) setQr(null) })
+    return () => { stale = true }
+  }, [link])
+
+  async function copy() {
+    if (!link) return
     try {
-      const dataUrl = await QRCode.toDataURL(link, {
-        width: 220,
-        margin: 1,
-        color: { dark: '#0c1f17', light: '#ffffff' },
-      })
-      setQrDataUrl(dataUrl)
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
     } catch {
-      setQrError(true)
+      // Clipboard blocked (older browser, insecure context): select the link
+      // so Ctrl+C / long-press still works.
+      const box = linkBox.current
+      if (box) {
+        const range = document.createRange()
+        range.selectNodeContents(box)
+        const selection = window.getSelection()
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+      }
     }
   }
 
-  function handleCopy() {
+  function share() {
     if (!link) return
-    navigator.clipboard.writeText(link).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
+    navigator.share({ title: 'Chat with me on WhatsApp', url: link }).catch(() => {
+      /* the person closed the share sheet */
     })
   }
 
+  const shownNumber = phone.trim() ? `${phone.trim().startsWith('+') ? '' : `+${countryCode} `}${phone.trim()}` : `+${countryCode} …`
+
   return (
-    <div className="wlg-grid">
-      <style>{`
-        .wlg-grid { display: grid; grid-template-columns: 1fr 340px; gap: 32px; align-items: start; }
-        @media (max-width: 860px) { .wlg-grid { grid-template-columns: 1fr; } }
-
-        .wlg-card { min-width: 0; background: #fff; border: 1px solid #e6ece9; border-radius: 18px; padding: 28px; box-shadow: 0 8px 24px -14px rgba(11,35,26,.12); }
-        .wlg-label { display: block; font-size: 13px; font-weight: 700; color: #0c1f17; margin-bottom: 6px; }
-        .wlg-row { display: flex; gap: 10px; }
-        .wlg-select, .wlg-input, .wlg-textarea {
-          width: 100%; border: 1.5px solid #e2e8e4; border-radius: 10px; padding: 11px 13px;
-          font-size: 14.5px; font-family: inherit; color: #0c1f17; background: #fbfdfc; outline: none;
-        }
-        .wlg-select:focus, .wlg-input:focus, .wlg-textarea:focus { border-color: #25D366; background: #fff; }
-        .wlg-select { flex: 0 0 168px; }
-        .wlg-textarea { resize: vertical; min-height: 76px; }
-        .wlg-hint { font-size: 12px; color: #8a978f; margin-top: 5px; }
-        .wlg-field { margin-top: 18px; }
-        .wlg-field:first-child { margin-top: 0; }
-
-        .wlg-btn {
-          margin-top: 22px; width: 100%; border: none; border-radius: 12px; padding: 14px;
-          background: linear-gradient(180deg, #25D366, #1DA851); color: #04150f; font-weight: 800; font-size: 15px;
-          cursor: pointer; box-shadow: 0 10px 24px -10px rgba(29,168,81,.55);
-        }
-        .wlg-btn:disabled { opacity: .45; cursor: default; box-shadow: none; }
-
-        .wlg-result { margin-top: 20px; border-top: 1px solid #eef2f0; padding-top: 20px; }
-        .wlg-linkrow { display: flex; gap: 8px; align-items: center; min-width: 0; }
-        .wlg-linkbox {
-          flex: 1; min-width: 0; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: #0f4a35;
-          background: #f0faf3; border: 1px solid #cdeee5; border-radius: 9px; padding: 10px 12px;
-          overflow-x: auto; white-space: nowrap;
-        }
-        .wlg-copybtn {
-          flex-shrink: 0; border: 1px solid #cdeee5; background: #fff; color: #0f6e37; font-weight: 700;
-          font-size: 13px; border-radius: 9px; padding: 10px 14px; cursor: pointer;
-        }
-        .wlg-qr { margin-top: 16px; display: flex; align-items: center; gap: 14px; }
-        .wlg-qr img { border-radius: 10px; border: 1px solid #eef2f0; }
-
-        /* phone preview */
-        .wlg-phone { background: #fff; border: 1px solid #e6ece9; border-radius: 22px; overflow: hidden; box-shadow: 0 8px 24px -14px rgba(11,35,26,.12); }
-        .wlg-phone-head { background: #075E54; color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 10px; }
-        .wlg-phone-avatar { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.18); flex-shrink: 0; }
-        .wlg-phone-body {
-          min-height: 220px; padding: 14px;
-          background-color: #E9FBEF;
-          background-image: radial-gradient(rgba(37,211,102,.16) 1px, transparent 1.5px), radial-gradient(rgba(37,211,102,.10) 1px, transparent 1.5px);
-          background-size: 26px 26px, 26px 26px; background-position: 0 0, 13px 13px;
-        }
-        .wlg-bubble { margin-left: auto; max-width: 88%; background: #C8F5D6; border-radius: 12px 12px 2px 12px; padding: 10px 12px; font-size: 13.5px; color: #0c1f17; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
-        .wlg-phone-foot { padding: 10px 14px; border-top: 1px solid #eef2f0; display:flex; align-items:center; }
-        .wlg-phone-foot-pill { flex:1; height: 34px; border-radius: 999px; background: #f1f5f3; }
-      `}</style>
-
-      <div className="wlg-card">
-        <div className="wlg-field">
-          <label className="wlg-label">Your WhatsApp number</label>
-          <div className="wlg-row">
-            <select className="wlg-select" value={countryCode} onChange={(e) => setCountryCode(e.target.value)}>
-              {COUNTRIES.map((c) => (
-                <option key={c.code} value={c.code}>{c.label}</option>
-              ))}
-            </select>
-            <input
-              className="wlg-input"
-              inputMode="tel"
-              placeholder="87078 79485"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+    <div id="generator" className="tl-toolwrap">
+      <div className="tl-tool">
+      <div className="tl-toolcard">
+        <div className="tl-tstep">
+          <span className="tl-tnum" aria-hidden="true">1</span>
+          <div className="tl-tbody">
+            <label className="tl-label" htmlFor="wlg-phone">Your WhatsApp number</label>
+            <div className="tl-row">
+              <select
+                className="tl-select tl-select--cc" value={countryCode} aria-label="Country code"
+                onChange={(e) => setCountryCode(e.target.value)}
+              >
+                {COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>{c.label}</option>
+                ))}
+              </select>
+              <input
+                id="wlg-phone" className="tl-input" inputMode="tel" autoComplete="tel-national" placeholder="98765 43210"
+                value={phone} onChange={(e) => setPhone(e.target.value)}
+                aria-invalid={phoneProblem ? true : undefined} aria-describedby="wlg-phone-help"
+              />
+            </div>
+            {phoneProblem ? (
+              <p id="wlg-phone-help" className="tl-error" role="alert">{phoneProblem}</p>
+            ) : (
+              <p id="wlg-phone-help" className="tl-hint">
+                Pick the country, then type the number. Spaces, dashes and a leading 0 are fine.
+              </p>
+            )}
           </div>
-          <p className="wlg-hint">Double-check the country code — this is what your customers will message.</p>
         </div>
 
-        <div className="wlg-field">
-          <label className="wlg-label">Pre-filled message (optional)</label>
-          <textarea
-            className="wlg-textarea"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder='e.g. "Hi! I want to know more about your services"'
-          />
+        <div className="tl-tstep">
+          <span className="tl-tnum" aria-hidden="true">2</span>
+          <div className="tl-tbody">
+            <label className="tl-label" htmlFor="wlg-message">
+              First message <span className="tl-opt">(optional)</span>
+            </label>
+            <div className="tl-chips" role="group" aria-label="Quick messages">
+              {QUICK_MESSAGES.map((q) => (
+                <button key={q.label} type="button" className="tl-qchip" onClick={() => setMessage(q.text)}>
+                  {q.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              id="wlg-message" ref={messageBox} className="tl-textarea" value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder='e.g. "Hi! I want to know more about your services"'
+            />
+            <p className="tl-hint">It waits in the chat box. Your customer taps send.</p>
+          </div>
         </div>
 
-        <button className="wlg-btn" disabled={!isValidPhone} onClick={handleGenerate}>
-          Generate my WhatsApp link
-        </button>
-
-        {link && (
-          <div className="wlg-result">
-            <label className="wlg-label">Your link</label>
-            <div className="wlg-linkrow">
-              <div className="wlg-linkbox">{link}</div>
-              <button className="wlg-copybtn" onClick={handleCopy}>{copied ? 'Copied ✓' : 'Copy'}</button>
+        <div className={`tl-tstep${link ? '' : ' tl-tstep--off'}`}>
+          <span className="tl-tnum" aria-hidden="true">3</span>
+          <div className="tl-tbody">
+            <span className="tl-label" id="wlg-link-label">Your link</span>
+            <div className="tl-linkrow">
+              <div
+                ref={linkBox} aria-labelledby="wlg-link-label" aria-live="polite"
+                className={`tl-linkbox${link ? '' : ' tl-linkbox--empty'}`}
+              >
+                {link || 'Enter your number and your link appears here'}
+              </div>
             </div>
 
-            {qrDataUrl && !qrError && (
-              <div className="wlg-qr">
-                {/* data: URL, not a remote image — eslint's img warning doesn't apply here */}
+            <div className="tl-actions">
+              <button type="button" className="tl-btn tl-btn--primary tl-btn--sm" disabled={!link} onClick={copy}>
+                <Icon name={copied ? 'check' : 'copy'} size={17} strokeWidth={copied ? 2.4 : 1.8} />
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+              <a
+                className="tl-btn tl-btn--ghost tl-btn--sm" href={link || undefined} target="_blank" rel="noopener noreferrer"
+                aria-disabled={!link} onClick={(e) => { if (!link) e.preventDefault() }}
+              >
+                <Icon name="external" size={16} />
+                Test in WhatsApp
+              </a>
+              {qrDataUrl && (
+                <a className="tl-btn tl-btn--ghost tl-btn--sm" href={qrDataUrl} download="whatsapp-link-qr.png">
+                  <Icon name="download" size={16} />
+                  Download QR
+                </a>
+              )}
+              {canShare && link && (
+                <button type="button" className="tl-btn tl-btn--ghost tl-btn--sm" onClick={share}>
+                  <Icon name="share" size={16} />
+                  Share
+                </button>
+              )}
+            </div>
+
+            {qrDataUrl && (
+              <div className="tl-qr">
+                {/* data: URL generated in the browser, so next/image has nothing to optimise */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={qrDataUrl} alt="QR code for your WhatsApp link" width={110} height={110} />
+                <img src={qrDataUrl} alt="QR code for your WhatsApp link" width={124} height={124} />
                 <div>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#0c1f17' }}>Scan to chat</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#8a978f', maxWidth: 200 }}>
-                    Put this on a poster, business card, or storefront — no typing required.
-                  </p>
+                  <b>Scan to chat</b>
+                  <p>Print it on a poster, packaging or a business card. Phones open the chat straight from the camera.</p>
                 </div>
               </div>
             )}
           </div>
-        )}
+        </div>
 
-        <p style={{ marginTop: 18, fontSize: 11.5, color: '#a7b3ac' }}>
-          Nothing you type here is saved or sent anywhere — the link is built entirely in your browser.
+        <p className="tl-toolfoot">
+          Nothing you type here is saved or sent anywhere. The link is built entirely in your browser.
         </p>
       </div>
 
-      <div className="wlg-phone">
-        <div className="wlg-phone-head">
-          <div className="wlg-phone-avatar" />
-          <div>
-            <div style={{ fontSize: 13.5, fontWeight: 700 }}>
-              {phone ? `+${countryCode} ${phone}` : `+${countryCode} …`}
+      <aside className="tl-prevcol" aria-label="Preview">
+        <p className="tl-prevcap">What your customer sees when they tap</p>
+        <div className="tl-phone">
+          <div className="tl-phone__head">
+            <span className="tl-phone__avatar"><Icon name="store" size={17} /></span>
+            <div style={{ minWidth: 0 }}>
+              <div className="tl-phone__name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {shownNumber}
+              </div>
+              <div className="tl-phone__status">WhatsApp chat</div>
             </div>
-            <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.65)' }}>This is how your customer sees it</div>
+          </div>
+          <div className="tl-phone__body">
+            <span className="tl-day">Today</span>
+          </div>
+          <div className="tl-phone__foot tl-phone__foot--tall">
+            <span className={`tl-phone__input${message.trim() ? ' tl-phone__input--filled' : ''}`}>
+              {message.trim() || 'Message'}
+            </span>
+            <span className="tl-phone__send"><Icon name="send" size={16} /></span>
           </div>
         </div>
-        <div className="wlg-phone-body">
-          {message.trim() && <div className="wlg-bubble">{message}</div>}
-        </div>
-        <div className="wlg-phone-foot"><div className="wlg-phone-foot-pill" /></div>
+      </aside>
       </div>
 
-      <p style={{ gridColumn: '1 / -1', marginTop: 4, fontSize: 13, color: '#6b7c73' }}>
-        Want to send this to thousands of contacts instead of one at a time —
-        with delivery tracking and auto-replies?{' '}
-        <Link href="/signup" style={{ color: '#0f6e37', fontWeight: 700 }}>Try AiSend free →</Link>
+      <p className="tl-upsell">
+        Want to message thousands of contacts instead of one at a time, with delivery tracking and auto-replies?{' '}
+        <Link href="/signup">Try AiSend free</Link>
       </p>
     </div>
   )

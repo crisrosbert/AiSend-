@@ -7,7 +7,7 @@
 // common shape of a YouTube or Vimeo link, plus a direct file URL, and
 // returns one of three things:
 //
-//   iframe — a YouTube / Vimeo embed URL, to put in an <iframe>
+//   iframe — a YouTube / Vimeo / Instagram embed URL, to put in an <iframe>
 //   file   — a direct video file, to put in a <video> element
 //   none   — empty or unusable, so the caller shows a placeholder
 //
@@ -16,7 +16,7 @@
 // would be blocked as mixed content on an https page anyway.
 
 export type VideoSource =
-  | { kind: 'iframe'; provider: 'youtube' | 'vimeo'; src: string }
+  | { kind: 'iframe'; provider: 'youtube' | 'vimeo' | 'instagram'; src: string }
   | { kind: 'file'; src: string }
   | { kind: 'none' }
 
@@ -72,6 +72,21 @@ function vimeoId(url: URL): string | null {
   return null
 }
 
+/**
+ * A single Instagram Reel or post: /reel/ID, /reels/ID, /p/ID, /tv/ID, each
+ * optionally behind a username (/creator/reel/ID) and with a trailing /embed.
+ * Profile pages, /explore and the bare /reels feed carry no id and are refused.
+ */
+const INSTAGRAM_PATH = /^(?:\/[A-Za-z0-9._]+)?\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{5,40})(?:\/embed)?\/?$/
+
+function instagramEmbed(url: URL): string | null {
+  if (url.hostname.replace(/^www\./, '') !== 'instagram.com') return null
+  const match = url.pathname.match(INSTAGRAM_PATH)
+  if (!match) return null
+  const kind = match[1] === 'reel' || match[1] === 'reels' ? 'reel' : 'p'
+  return `https://www.instagram.com/${kind}/${match[2]}/embed`
+}
+
 export function parseVideoUrl(raw: string | undefined | null): VideoSource {
   if (!raw || !raw.trim()) return { kind: 'none' }
 
@@ -97,6 +112,9 @@ export function parseVideoUrl(raw: string | undefined | null): VideoSource {
       src: `https://player.vimeo.com/video/${vm}?dnt=1`,
     }
   }
+
+  const ig = instagramEmbed(url)
+  if (ig) return { kind: 'iframe', provider: 'instagram', src: ig }
 
   // Anything else must look like a real video file. A random web page
   // pasted by mistake would otherwise render as a blank player.

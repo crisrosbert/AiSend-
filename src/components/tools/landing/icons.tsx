@@ -8,6 +8,8 @@ export type IconName =
   | 'bolt' | 'users' | 'shield' | 'check' | 'plus' | 'minus' | 'arrowRight'
   | 'arrowLeft' | 'play' | 'star' | 'copy' | 'external' | 'download' | 'share'
   | 'bot' | 'inbox' | 'pin' | 'profile' | 'send' | 'ticks'
+  | 'code' | 'calc' | 'palette' | 'file' | 'warning' | 'image' | 'sliders'
+  | 'trend' | 'clock' | 'scan'
 
 const PATHS: Record<IconName, ReactNode> = {
   link: <><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" /><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" /></>,
@@ -38,6 +40,16 @@ const PATHS: Record<IconName, ReactNode> = {
   profile: <><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><circle cx="9" cy="11" r="2" /><path d="M6.5 16c.6-1.6 1.6-2.3 2.5-2.3s1.9.7 2.5 2.3M14 10h4M14 13h3" /></>,
   send: <path d="M4 12 20 4l-4.5 16-3.5-6.5L4 12Zm8 1.5L20 4" />,
   ticks: <path d="m2.5 12.5 4 4L14 8M10 15.5l1 1L18.5 8" />,
+  code: <path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13.5 5.5l-3 13" />,
+  calc: <><rect x="5" y="3" width="14" height="18" rx="2.5" /><path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01" /></>,
+  palette: <><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.3 0 2-.9 2-1.9 0-1.4-1.2-1.6-1.2-2.7 0-.9.8-1.6 1.8-1.6H17a3.5 3.5 0 0 0 3.5-3.5C20.5 6.7 16.7 3.5 12 3.5Z" /><path d="M7.5 11.5h.01M10 7.8h.01M14.2 7.8h.01" /></>,
+  file: <><path d="M7 3.5h6.5l5 5V19a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5Z" /><path d="M13.5 3.5v5h5M8.5 13h7M8.5 16.5h5" /></>,
+  warning: <><path d="M12 4 3 19.5h18L12 4Z" /><path d="M12 10v4.2M12 17h.01" /></>,
+  image: <><rect x="3.5" y="5" width="17" height="14" rx="2.5" /><circle cx="9" cy="10.2" r="1.6" /><path d="m4 17 5-4.5 3.5 3 3-2.5 4.5 4" /></>,
+  sliders: <><path d="M4 8h3M11 8h9M4 16h9M17 16h3" /><circle cx="9" cy="8" r="2.2" /><circle cx="15" cy="16" r="2.2" /></>,
+  trend: <path d="M4 17.5 9.5 12l3.5 3.5L20 8.5M15 8.5h5v5" />,
+  clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>,
+  scan: <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M4 12h16" />,
 }
 
 const FILLED = new Set<IconName>(['play', 'star'])

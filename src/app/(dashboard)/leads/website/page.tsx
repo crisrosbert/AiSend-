@@ -2,25 +2,54 @@
 
 // src/app/(dashboard)/leads/website/page.tsx
 //
-// Website Leads — read-only view of conversations captured by the AI
-// agent through the website widget (channel='website').
+// ────────────────────────────────────────────────────────────────────────────
+// Website Leads — Design System v2 (rebuilt 2026-10-11)
+// ────────────────────────────────────────────────────────────────────────────
+// Read-only view of conversations captured by the AI agent through the
+// website widget (channel='website').
 //
-// This is NOT an inbox. The AI handles the entire conversation. The
-// business reviews what the AI captured: the visitor's questions, the
-// AI's answers, any name/phone collected, and booking status.
+// This is NOT an inbox. The AI handles the entire conversation; the business
+// reviews what the AI captured: the visitor's questions, the AI's answers,
+// any name/phone collected, and booking status.
 //
-// Serious leads continue on WhatsApp (handled by the widget button) —
-// so there is no human-reply box here by design.
+// Serious leads continue on WhatsApp (handled by the widget button) — so
+// there is no human-reply box here by design.
+//
+// LAYOUT CONTRACT (matches the Design System v2 preview artifact)
+// ---------------------------------------------------------------
+//   [PageHead]  title + sub
+//   [LeadsTabs] sub-nav
+//   [StatCard row — 3 up] Total · Need attention · Named leads
+//   [Panel]     search + filter chips
+//   [Panel]     list of conversations (click → drawer)
+//   [Drawer]    captured lead details + appointment + read-only transcript
+// ────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback } from "react";
 import { LeadsTabs } from "@/components/leads/leads-tabs";
 import { createClient } from "@/lib/supabase/client";
-import {
-  Globe, User, Phone, Loader2, Search, AlertCircle, ChevronRight, X,
-  Bot, CalendarCheck, Sparkles,
-} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useBusiness } from "@/hooks/use-business";
+
+// ── Shared design-system components ──
+import { PageHead } from "@/components/ui/page-head";
+import { Panel, PanelHead } from "@/components/ui/panel";
+import { Pill } from "@/components/ui/pill";
+import { StatCard } from "@/components/ui/stat";
+
+import {
+  Globe,
+  User,
+  Phone,
+  Loader2,
+  Search,
+  AlertCircle,
+  ChevronRight,
+  X,
+  Bot,
+  CalendarCheck,
+  Sparkles,
+} from "lucide-react";
 
 interface LeadConversation {
   id: string;
@@ -66,9 +95,17 @@ export default function LeadsPage() {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLeads([]); setLoading(false); return; }
+      if (!user) {
+        setLeads([]);
+        setLoading(false);
+        return;
+      }
       if (businessLoading) return;
-      if (!businessId) { setLeads([]); setLoading(false); return; }
+      if (!businessId) {
+        setLeads([]);
+        setLoading(false);
+        return;
+      }
 
       const { data, error } = await supabase
         .from("conversations")
@@ -92,7 +129,9 @@ export default function LeadsPage() {
     }
   }, [supabase, businessId, businessLoading]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function openLead(lead: LeadConversation) {
     setActiveLead(lead);
@@ -139,243 +178,466 @@ export default function LeadsPage() {
     (l) => l.contact?.name && !l.contact.name.startsWith("Website Visitor"),
   ).length;
 
+  // ────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
-      <LeadsTabs active="website" />
-      {/* Header + stats — one banner, matching the pattern used on
-          Dashboard/Contacts, instead of a separate header card stacked
-          on top of a 3-box grid. */}
-      <div className="overflow-hidden rounded-2xl border border-[#d1fae5] bg-gradient-to-br from-white to-emerald-50 p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white shadow-md" style={{ background: "linear-gradient(135deg,#10b981,#059669)" }}>
-              <Globe className="size-5" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-[#0c1f17]" style={{ fontFamily: "var(--font-display)" }}>
-                Website Chats
-              </h1>
-              <p className="mt-1 max-w-xl text-xs text-slate-500">
-                Conversations your AI agent handled on your website. The AI answers questions and
-                captures leads automatically — review them here. Serious leads continue on WhatsApp.
-              </p>
-            </div>
+    <div className="w-full px-5 pb-20 pt-5 sm:px-7 lg:px-10 lg:pb-10">
+      <PageHead
+        title="Website chats"
+        subtitle="Conversations your AI agent handled on your website. The AI answers questions and captures leads automatically — review them here. Serious leads continue on WhatsApp."
+      />
+
+      <div className="mb-6">
+        <LeadsTabs active="website" />
+      </div>
+
+      {/* KPI row — 3 up (named leads is the "quality" indicator) */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Total conversations"
+          value={leads.length.toLocaleString("en-IN")}
+          icon={<Globe size={12} aria-hidden />}
+        />
+        <StatCard
+          label="Need attention"
+          value={attentionCount.toLocaleString("en-IN")}
+          icon={<AlertCircle size={12} aria-hidden />}
+          delta={
+            attentionCount > 0
+              ? { label: "unread", tone: "down" }
+              : undefined
+          }
+        />
+        <StatCard
+          label="Named leads"
+          value={namedCount.toLocaleString("en-IN")}
+          icon={<Sparkles size={12} aria-hidden />}
+        />
+      </div>
+
+      {/* Search + filter chips */}
+      <Panel className="mb-6">
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
+          <div className="relative min-w-[200px] flex-1">
+            <Search
+              className="absolute left-3 top-1/2 size-4 -translate-y-1/2"
+              style={{ color: "var(--ink-3)" }}
+              aria-hidden
+            />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search leads…"
+              className="w-full rounded-[9px] border py-2 pl-10 pr-3 text-[13px] outline-none transition-colors"
+              style={{
+                borderColor: "var(--line)",
+                background: "var(--surface)",
+                color: "var(--ink)",
+              }}
+            />
+          </div>
+          <div className="flex gap-1.5">
+            {([["all", "All"], ["attention", "Need attention"]] as const).map(([val, label]) => (
+              <FilterChip
+                key={val}
+                label={label}
+                active={filter === val}
+                onClick={() => setFilter(val)}
+              />
+            ))}
           </div>
         </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-6 border-t border-[#d1fae5] pt-4">
-          <StatChip icon={Globe} label="Total conversations" value={leads.length} />
-          <div className="hidden h-9 w-px bg-[#d1fae5] sm:block" />
-          <StatChip icon={AlertCircle} label="Need attention" value={attentionCount} warn={attentionCount > 0} />
-          <div className="hidden h-9 w-px bg-[#d1fae5] sm:block" />
-          <StatChip icon={Sparkles} label="Named leads" value={namedCount} />
-        </div>
-      </div>
-
-      {/* Search + filter */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search leads..."
-            className="w-full rounded-lg border border-[#e7ece9] bg-white py-2 pl-10 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-          />
-        </div>
-        <div className="flex gap-1.5">
-          {([["all", "All"], ["attention", "Need attention"]] as const).map(([val, label]) => (
-            <button
-              key={val}
-              onClick={() => setFilter(val)}
-              className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
-                filter === val
-                  ? "border-transparent bg-emerald-500 text-white"
-                  : "border-[#e7ece9] bg-white text-slate-500 hover:border-emerald-300"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      </Panel>
 
       {/* Leads list */}
-      <div className="overflow-hidden rounded-2xl border border-[#e7ece9] bg-white shadow-sm">
+      <Panel>
+        <PanelHead
+          title={`${filtered.length} conversation${filtered.length === 1 ? "" : "s"}`}
+          subtitle={
+            filter === "attention"
+              ? "Filtered to conversations that need your attention"
+              : undefined
+          }
+        />
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="size-6 animate-spin text-emerald-500" />
+          <div className="flex justify-center py-16">
+            <Loader2
+              className="size-6 animate-spin"
+              style={{ color: "var(--brand)" }}
+              aria-hidden
+            />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-            <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-500">
-              <Globe className="size-6" />
-            </div>
-            <p className="text-sm font-semibold text-slate-700">No website leads yet</p>
-            <p className="mt-1 max-w-sm text-xs text-slate-400">
-              When a visitor chats with your AI agent on your website, the conversation appears here.
-            </p>
-          </div>
+          <EmptyState hasAnyRows={leads.length > 0} />
         ) : (
-          <div className="divide-y divide-[#e7ece9]">
-            {filtered.map((lead) => {
-              const isNamed = lead.contact?.name && !lead.contact.name.startsWith("Website Visitor");
-              const initial = isNamed ? lead.contact!.name!.charAt(0).toUpperCase() : "?";
-              return (
-                <button
-                  key={lead.id}
-                  onClick={() => openLead(lead)}
-                  className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-[#f8faf9]"
-                >
-                  <div
-                    className={`flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                      isNamed ? "text-white" : "bg-slate-100 text-slate-400"
-                    }`}
-                    style={isNamed ? { background: "linear-gradient(135deg,#10b981,#059669)" } : undefined}
-                  >
-                    {isNamed ? initial : <User className="size-4" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-[#0c1f17]">
-                        {isNamed ? lead.contact!.name : "Anonymous visitor"}
-                      </span>
-                      {lead.needs_attention && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
-                          <AlertCircle className="size-2.5" /> Attention
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 truncate text-xs text-slate-400">
-                      {lead.last_message_text || "No messages"}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-[10px] text-slate-400">
-                      {lead.last_message_at
-                        ? formatDistanceToNow(new Date(lead.last_message_at), { addSuffix: true })
-                        : ""}
-                    </div>
-                    <ChevronRight className="ml-auto mt-1 size-4 text-slate-300" />
-                  </div>
-                </button>
-              );
-            })}
+          <div
+            className="divide-y"
+            style={{ borderColor: "var(--line)" }}
+          >
+            {filtered.map((lead) => (
+              <LeadRow
+                key={lead.id}
+                lead={lead}
+                onOpen={() => openLead(lead)}
+              />
+            ))}
           </div>
         )}
-      </div>
+      </Panel>
 
       {/* Conversation drawer */}
       {activeLead && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setActiveLead(null)}>
-          <div
-            className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Drawer header */}
-            <div className="flex items-center justify-between border-b border-[#e7ece9] p-4">
-              <div className="flex items-center gap-2">
-                <Globe className="size-4 text-emerald-600" />
-                <span className="text-sm font-bold text-[#0c1f17]">Website conversation</span>
-              </div>
-              <button onClick={() => setActiveLead(null)} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
-                <X className="size-4" />
-              </button>
-            </div>
-
-            {/* Captured lead details */}
-            <div className="space-y-2 border-b border-[#e7ece9] bg-[#f8faf9] p-4">
-              {appointment ? (
-                <>
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
-                    <CalendarCheck className="size-4" /> Booking captured
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-slate-600">
-                    <span className="flex items-center gap-1"><User className="size-3" /> {appointment.customer_name}</span>
-                    <a href={`tel:${appointment.customer_phone}`} className="flex items-center gap-1 hover:text-emerald-600">
-                      <Phone className="size-3" /> {appointment.customer_phone}
-                    </a>
-                  </div>
-                  <div className="text-[11px] text-slate-400">Service: {appointment.service} · Status: {appointment.status}</div>
-                </>
-              ) : (
-                <div className="text-xs text-slate-500">
-                  {activeLead.contact?.name && !activeLead.contact.name.startsWith("Website Visitor")
-                    ? <span className="flex items-center gap-2"><User className="size-3" /> {activeLead.contact.name}</span>
-                    : "No name captured yet — AI conversation only"}
-                </div>
-              )}
-              {activeLead.needs_attention && activeLead.handoff_reason && (
-                <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">
-                  <AlertCircle className="size-3" /> {activeLead.handoff_reason}
-                </div>
-              )}
-            </div>
-
-            {/* Conversation thread (read-only) */}
-            <div className="flex-1 space-y-3 overflow-y-auto bg-[#fafcfb] p-4">
-              {drawerLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="size-5 animate-spin text-emerald-500" />
-                </div>
-              ) : messages.length === 0 ? (
-                <p className="py-8 text-center text-xs text-slate-400">No messages</p>
-              ) : (
-                messages.map((m) => {
-                  const isVisitor = m.sender_type === "customer";
-                  return (
-                    <div key={m.id} className={`flex ${isVisitor ? "justify-end" : "justify-start"}`}>
-                      <div
-                        className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs ${
-                          isVisitor
-                            ? "rounded-br-sm bg-[var(--brand-100,#C8F5D6)] text-[#0c1f17]"
-                            : "rounded-bl-sm border border-[#e7ece9] bg-white text-slate-700"
-                        }`}
-                      >
-                        {!isVisitor && (
-                          <div className="mb-0.5 flex items-center gap-1 text-[9px] text-slate-400">
-                            <Bot className="size-2.5" /> AI
-                          </div>
-                        )}
-                        {m.content_text}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Footer note — no reply box by design */}
-            <div className="border-t border-[#e7ece9] bg-white p-3">
-              <p className="text-center text-[11px] text-slate-400">
-                Read-only. The AI handles website chats. Serious leads continue on WhatsApp.
-              </p>
-            </div>
-          </div>
-        </div>
+        <ConversationDrawer
+          lead={activeLead}
+          messages={messages}
+          appointment={appointment}
+          loading={drawerLoading}
+          onClose={() => setActiveLead(null)}
+        />
       )}
     </div>
   );
 }
 
-function StatChip({
-  icon: Icon, label, value, warn,
+// ────────────────────────────────────────────────────────────────────────────
+// LOCAL COMPONENTS
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Dark-pill-when-active filter chip — matches other leads sub-pages. */
+function FilterChip({
+  label,
+  active,
+  onClick,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
   label: string;
-  value: number;
-  warn?: boolean;
+  active: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${warn ? "bg-amber-100 text-amber-600" : "bg-white text-emerald-600"}`}>
-        <Icon className="size-4" />
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full px-3 py-1.5 text-[11.5px] font-semibold transition-colors"
+      style={{
+        background: active ? "var(--ink)" : "var(--surface)",
+        color: active ? "#fff" : "var(--ink-2)",
+        border: `1px solid ${active ? "var(--ink)" : "var(--line)"}`,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Single lead row — click opens the drawer. */
+function LeadRow({
+  lead,
+  onOpen,
+}: {
+  lead: LeadConversation;
+  onOpen: () => void;
+}) {
+  const isNamed =
+    !!lead.contact?.name && !lead.contact.name.startsWith("Website Visitor");
+  const initial = isNamed ? lead.contact!.name!.charAt(0).toUpperCase() : "?";
+
+  return (
+    <button
+      onClick={onOpen}
+      className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[color:var(--surface-2)]"
+    >
+      <div
+        className="flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold"
+        style={
+          isNamed
+            ? {
+                background:
+                  "linear-gradient(135deg,var(--brand),var(--brand-deep))",
+                color: "#fff",
+              }
+            : {
+                background: "var(--canvas)",
+                color: "var(--ink-3)",
+              }
+        }
+      >
+        {isNamed ? initial : <User className="size-4" aria-hidden />}
       </div>
-      <div>
-        <div className="text-lg font-extrabold leading-none text-[#0c1f17]" style={{ fontFamily: "var(--font-display)" }}>
-          {value.toLocaleString()}
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span
+            className="truncate text-[13.5px] font-semibold"
+            style={{ color: "var(--ink)" }}
+          >
+            {isNamed ? lead.contact!.name : "Anonymous visitor"}
+          </span>
+          {lead.needs_attention && (
+            <Pill tone="sched">
+              <AlertCircle className="size-2.5" aria-hidden /> Attention
+            </Pill>
+          )}
         </div>
-        <div className="mt-0.5 text-[11px] font-semibold text-slate-500">{label}</div>
+        <p
+          className="mt-0.5 truncate text-[11.5px]"
+          style={{ color: "var(--ink-3)" }}
+        >
+          {lead.last_message_text || "No messages"}
+        </p>
+      </div>
+
+      <div className="shrink-0 text-right">
+        <div
+          className="text-[10.5px] tabular-nums"
+          style={{ color: "var(--ink-3)" }}
+        >
+          {lead.last_message_at
+            ? formatDistanceToNow(new Date(lead.last_message_at), { addSuffix: true })
+            : ""}
+        </div>
+        <ChevronRight
+          className="ml-auto mt-1 size-4"
+          style={{ color: "var(--ink-4)" }}
+          aria-hidden
+        />
+      </div>
+    </button>
+  );
+}
+
+/** Empty state for both "no rows" and "filter mismatch". */
+function EmptyState({ hasAnyRows }: { hasAnyRows: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+      <div
+        className="mb-1 flex size-14 items-center justify-center rounded-2xl"
+        style={{
+          background: "var(--brand-50)",
+          color: "var(--brand-deep)",
+        }}
+      >
+        <Globe className="size-6" strokeWidth={1.6} aria-hidden />
+      </div>
+      <p
+        className="text-[15px] font-semibold"
+        style={{
+          fontFamily: "var(--font-display)",
+          color: "var(--ink)",
+        }}
+      >
+        {hasAnyRows ? "No conversations match this filter" : "No website leads yet"}
+      </p>
+      {!hasAnyRows && (
+        <p
+          className="max-w-[380px] text-[13px] leading-relaxed"
+          style={{ color: "var(--ink-2)" }}
+        >
+          When a visitor chats with your AI agent on your website, the conversation appears here.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Slide-in drawer with the full conversation. Read-only by design: the AI
+ * handles website chats, so there's no human-reply input here.
+ */
+function ConversationDrawer({
+  lead,
+  messages,
+  appointment,
+  loading,
+  onClose,
+}: {
+  lead: LeadConversation;
+  messages: Message[];
+  appointment: Appointment | null;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  const isNamed =
+    !!lead.contact?.name && !lead.contact.name.startsWith("Website Visitor");
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex justify-end"
+      style={{ background: "rgba(14,31,24,.4)" }}
+      onClick={onClose}
+    >
+      <div
+        className="flex h-full w-full max-w-md flex-col shadow-2xl"
+        style={{ background: "var(--surface)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Drawer header */}
+        <div
+          className="flex items-center justify-between border-b p-4"
+          style={{ borderColor: "var(--line)" }}
+        >
+          <div className="flex items-center gap-2">
+            <Globe
+              className="size-4"
+              style={{ color: "var(--brand-deep)" }}
+              aria-hidden
+            />
+            <span
+              className="text-[13.5px] font-bold"
+              style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
+            >
+              Website conversation
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 transition-colors"
+            style={{ color: "var(--ink-3)" }}
+            aria-label="Close drawer"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        {/* Captured lead details */}
+        <div
+          className="space-y-2 border-b p-4"
+          style={{
+            borderColor: "var(--line)",
+            background: "var(--surface-2)",
+          }}
+        >
+          {appointment ? (
+            <>
+              <div
+                className="flex items-center gap-2 text-[12px] font-bold"
+                style={{ color: "var(--brand-deep)" }}
+              >
+                <CalendarCheck className="size-4" aria-hidden /> Booking captured
+              </div>
+              <div
+                className="flex flex-wrap items-center gap-4 text-[12px]"
+                style={{ color: "var(--ink-2)" }}
+              >
+                <span className="flex items-center gap-1">
+                  <User className="size-3" aria-hidden />
+                  {appointment.customer_name}
+                </span>
+                <a
+                  href={`tel:${appointment.customer_phone}`}
+                  className="flex items-center gap-1 transition-colors"
+                  style={{ color: "var(--ink-2)" }}
+                >
+                  <Phone className="size-3" aria-hidden />
+                  <span style={{ fontFamily: "var(--font-mono)" }}>
+                    {appointment.customer_phone}
+                  </span>
+                </a>
+              </div>
+              <div className="text-[11px]" style={{ color: "var(--ink-3)" }}>
+                Service: {appointment.service} · Status: {appointment.status}
+              </div>
+            </>
+          ) : (
+            <div className="text-[12px]" style={{ color: "var(--ink-2)" }}>
+              {isNamed ? (
+                <span className="flex items-center gap-2">
+                  <User className="size-3" aria-hidden /> {lead.contact?.name}
+                </span>
+              ) : (
+                "No name captured yet — AI conversation only"
+              )}
+            </div>
+          )}
+          {lead.needs_attention && lead.handoff_reason && (
+            <div
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px]"
+              style={{
+                background: "var(--amber-50)",
+                color: "var(--amber)",
+              }}
+            >
+              <AlertCircle className="size-3" aria-hidden /> {lead.handoff_reason}
+            </div>
+          )}
+        </div>
+
+        {/* Conversation thread (read-only) */}
+        <div
+          className="flex-1 space-y-3 overflow-y-auto p-4"
+          style={{ background: "var(--canvas)" }}
+        >
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader2
+                className="size-5 animate-spin"
+                style={{ color: "var(--brand)" }}
+                aria-hidden
+              />
+            </div>
+          ) : messages.length === 0 ? (
+            <p
+              className="py-8 text-center text-[12px]"
+              style={{ color: "var(--ink-3)" }}
+            >
+              No messages
+            </p>
+          ) : (
+            messages.map((m) => {
+              const isVisitor = m.sender_type === "customer";
+              return (
+                <div
+                  key={m.id}
+                  className={`flex ${isVisitor ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-[12px] leading-relaxed ${
+                      isVisitor ? "rounded-br-sm" : "rounded-bl-sm"
+                    }`}
+                    style={
+                      isVisitor
+                        ? {
+                            background: "var(--brand-100)",
+                            color: "var(--ink)",
+                          }
+                        : {
+                            background: "var(--surface)",
+                            color: "var(--ink-2)",
+                            border: "1px solid var(--line)",
+                          }
+                    }
+                  >
+                    {!isVisitor && (
+                      <div
+                        className="mb-0.5 flex items-center gap-1 text-[9px]"
+                        style={{ color: "var(--ink-3)" }}
+                      >
+                        <Bot className="size-2.5" aria-hidden /> AI
+                      </div>
+                    )}
+                    {m.content_text}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer note — no reply box by design */}
+        <div
+          className="border-t p-3"
+          style={{
+            borderColor: "var(--line)",
+            background: "var(--surface)",
+          }}
+        >
+          <p
+            className="text-center text-[11px]"
+            style={{ color: "var(--ink-3)" }}
+          >
+            Read-only. The AI handles website chats. Serious leads continue on WhatsApp.
+          </p>
+        </div>
       </div>
     </div>
   );

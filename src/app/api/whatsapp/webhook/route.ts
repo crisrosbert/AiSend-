@@ -4,6 +4,7 @@ import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
 import { getMediaUrl } from '@/lib/whatsapp/meta-api'
 import { normalizePhone, phonesMatch } from '@/lib/whatsapp/phone-utils'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
+import { platformTokenMatches, findTenantByVerifyToken } from '@/lib/whatsapp/verify-token'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { runJourneysForInbound } from '@/lib/journeys/runner'
 import { handleAdLead, type MetaReferral } from '@/lib/ads-agent/handler'
@@ -95,7 +96,15 @@ export async function GET(request: Request) {
         { status: 400 }
       )
     }
-    // Fetch all whatsapp configs to check verify tokens
+    // The platform token (what the SaaS owner enters in the Meta app
+    // dashboard) must verify even when no client has connected yet.
+    if (platformTokenMatches(verifyToken, process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN)) {
+      return new Response(challenge, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    }
+    // Otherwise check the verify tokens of clients who connected manually
     const { data: configs, error: configError } = await supabaseAdmin()
       .from('whatsapp_config')
       .select('id, verify_token')
@@ -106,19 +115,11 @@ export async function GET(request: Request) {
         { status: 403 }
       )
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let matchedConfig: any = null
-    for (const config of configs) {
-      if (!config.verify_token) continue
-      try {
-        if (decrypt(config.verify_token) === verifyToken) {
-          matchedConfig = config
-          break
-        }
-      } catch {
-        // Malformed / wrong-key token row — skip it and keep checking.
-      }
-    }
+    const matchedConfig = findTenantByVerifyToken<{ id: string; verify_token: string | null }>(
+      verifyToken,
+      configs,
+      decrypt,
+    )
     if (matchedConfig) {
       if (isLegacyFormat(matchedConfig.verify_token)) {
         void supabaseAdmin()

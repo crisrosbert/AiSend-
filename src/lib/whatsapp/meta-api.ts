@@ -9,8 +9,9 @@
  * instead of a runtime rejection from Meta.
  */
 
-const META_API_VERSION = 'v21.0'
-const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
+import { GRAPH_BASE_URL } from '@/lib/meta/graph-version'
+
+const META_API_BASE = GRAPH_BASE_URL
 
 export interface MetaSendResult {
   messageId: string

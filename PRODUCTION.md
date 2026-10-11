@@ -67,6 +67,7 @@ Optional:
 | Variable | Purpose |
 |---|---|
 | `AUTOMATION_CRON_SECRET` | Protects `GET /api/automations/cron`; required if automations use Wait steps |
+| `NEXT_PUBLIC_TOOLS_LEAD_KEY` | Public lead-source key (`pk_…`, from Leads → Lead sources) for the "Request a call back" form on the free-tool pages (`/tools/*`). With it, leads are saved into the CRM; without it the form hands each lead to the team on WhatsApp instead, so nothing is lost. If the lead source restricts allowed domains, include the site's own domain |
 
 **Do not rotate `ENCRYPTION_KEY` casually** — every stored WhatsApp
 token becomes unreadable and users must reconnect their numbers.

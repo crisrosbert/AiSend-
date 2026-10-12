@@ -15,6 +15,13 @@ export const metadata: Metadata = {
 
 const TOOLS = [
   {
+    href: '/tools/ai-chatbot-widget',
+    motif: 'chat' as Motif,
+    name: 'Free AI Chatbot Widget',
+    desc: 'Paste your website address and get an AI chatbot trained on your pages. Test it live, then add it for free.',
+    tag: 'AI · Lead capture',
+  },
+  {
     href: '/tools/whatsapp-link-generator',
     motif: 'link' as Motif,
     name: 'WhatsApp Link Generator',

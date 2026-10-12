@@ -57,6 +57,7 @@ describe('parsePost', () => {
       category: 'Guides',
       tags: ['whatsapp', 'api'],
       draft: false,
+      hideDate: false,
       readingMinutes: 1,
     })
     expect(p.toc.map((t) => t.text)).toEqual(['Intro', 'Steps'])
@@ -71,6 +72,7 @@ describe('parsePost', () => {
     ['a cover without alt text', () => parsePost('a.md', withFields('cover: https://x.com/a.png')), /coverAlt/],
     ['an http cover', () => parsePost('a.md', withFields('cover: http://x.com/a.png\ncoverAlt: a')), /https/],
     ['a bad draft flag', () => parsePost('a.md', withFields('draft: maybe')), /true or false/],
+    ['a bad hideDate flag', () => parsePost('a.md', withFields('hideDate: maybe')), /true or false/],
     ['tags that are not a list', () => parsePost('a.md', GOOD.replace('[whatsapp, api]', 'whatsapp')), /list/],
     ['an empty body', () => parsePost('a.md', GOOD.split('---\n\n')[0] + '---\n\n'), /no content/],
     ['a bad video', () => parsePost('a.md', GOOD + '\n@[video](https://example.com/page)\n'), /video/],

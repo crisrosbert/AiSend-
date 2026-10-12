@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
+import { CoverArt } from '@/components/art/cover-art'
 import { PostBody } from '@/components/blog/post-body'
 import { PostCard } from '@/components/blog/post-card'
 import { formatPostDate, loadPosts, relatedPosts } from '@/lib/blog/posts'
@@ -80,8 +81,8 @@ export default async function BlogPostPage({ params }: Props) {
               <p className="post-head__desc">{post.description}</p>
               <div className="post-meta">
                 <span>{post.author}</span>
-                <span>{formatPostDate(post.date)}</span>
-                {post.updated && post.updated !== post.date ? (
+                {post.hideDate ? null : <span>{formatPostDate(post.date)}</span>}
+                {!post.hideDate && post.updated && post.updated !== post.date ? (
                   <span>Updated {formatPostDate(post.updated)}</span>
                 ) : null}
                 <span>{post.readingMinutes} min read</span>
@@ -94,7 +95,11 @@ export default async function BlogPostPage({ params }: Props) {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={post.cover} alt={post.coverAlt ?? ''} />
             </div>
-          ) : null}
+          ) : (
+            <div className="post-cover post-cover--art">
+              <CoverArt seed={post.slug} hint={post.tags.join(' ')} />
+            </div>
+          )}
 
           <div className={`post-layout${showToc ? ' post-layout--toc' : ''}`}>
             {showToc ? (

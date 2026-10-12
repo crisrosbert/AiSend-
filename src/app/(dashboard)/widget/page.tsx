@@ -16,6 +16,7 @@ import {
   Bot, Power, Code2, ExternalLink, Sparkles, Send, UserRound,
 } from "lucide-react";
 import { useScopedBusinessId } from "@/hooks/use-business";
+import { ChatbotDraftBanner } from "@/components/widget/chatbot-draft-banner";
 
 interface WidgetConfig {
   bot_name: string;
@@ -157,6 +158,7 @@ export default function WidgetSettingsPage() {
 
   return (
     <div className="space-y-5">
+      <ChatbotDraftBanner onApply={(look) => setConfig((c) => ({ ...c, ...look }))} />
       {/* ── Header ── */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">

@@ -3,6 +3,7 @@
 // supplies its own words.
 
 import Link from 'next/link'
+import { CoverArt } from '@/components/art/cover-art'
 import { VideoSlot } from '@/app/(marketing)/video-slot'
 import { formatPostDate, type PostMeta } from '@/lib/blog/posts'
 import { teamWhatsAppLink } from '@/lib/tools/landing-config'
@@ -341,11 +342,19 @@ export function RelatedPosts({ heading, intro, posts }: { heading: string; intro
         <div className="tl-posts">
           {posts.map((p) => (
             <Link key={p.slug} href={`/blog/${p.slug}`} className="tl-post">
-              <div className="tl-post__band"><span className="tl-post__cat">{p.category}</span></div>
+              <div className="tl-post__band">
+                {p.cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.cover} alt={p.coverAlt ?? ''} loading="lazy" decoding="async" />
+                ) : (
+                  <CoverArt seed={p.slug} hint={p.tags.join(' ')} />
+                )}
+                <span className="tl-post__cat">{p.category}</span>
+              </div>
               <div className="tl-post__body">
                 <h3>{p.title}</h3>
                 <p>{p.description}</p>
-                <span className="tl-post__meta">{formatPostDate(p.date)}, {p.readingMinutes} min read</span>
+                <span className="tl-post__meta">{p.hideDate ? '' : `${formatPostDate(p.date)}, `}{p.readingMinutes} min read</span>
                 <span className="tl-post__more">Read article <Icon name="arrowRight" size={16} /></span>
               </div>
             </Link>

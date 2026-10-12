@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
+import { CoverArt, type Motif } from '@/components/art/cover-art'
 import '../(marketing)/landing.css'
 
 export const metadata: Metadata = {
@@ -15,48 +16,56 @@ export const metadata: Metadata = {
 const TOOLS = [
   {
     href: '/tools/whatsapp-link-generator',
+    motif: 'link' as Motif,
     name: 'WhatsApp Link Generator',
     desc: 'Create a free click-to-chat wa.me link with a QR code, in your browser.',
     tag: 'Click-to-chat',
   },
   {
     href: '/tools/whatsapp-bulk-sender',
+    motif: 'bulk' as Motif,
     name: 'WhatsApp Bulk Sender',
     desc: 'Send templated WhatsApp messages to thousands of contacts, officially.',
     tag: 'Official API',
   },
   {
     href: '/tools/whatsapp-qr-code',
+    motif: 'qr' as Motif,
     name: 'WhatsApp QR Code Generator',
     desc: 'Make a scannable QR code in your colours, with a logo, and download it as PNG or SVG.',
     tag: 'Print-ready',
   },
   {
     href: '/tools/whatsapp-template-generator',
+    motif: 'template' as Motif,
     name: 'WhatsApp Template Generator',
     desc: 'Write a message template, preview it as a chat bubble and check it against the common reasons for rejection.',
     tag: 'Approval checker',
   },
   {
     href: '/tools/whatsapp-chat-widget',
+    motif: 'widget' as Motif,
     name: 'WhatsApp Chat Button for Websites',
     desc: 'Design a floating chat button with a welcome popup, preview it live and copy one block of code.',
     tag: 'Website widget',
   },
   {
     href: '/tools/whatsapp-roi-calculator',
+    motif: 'chart' as Motif,
     name: 'WhatsApp vs SMS vs Email ROI Calculator',
     desc: 'Compare profit, return and break-even for the same campaign on three channels, using your own numbers.',
     tag: 'Calculator',
   },
   {
     href: '/tools/whatsapp-text-formatter',
+    motif: 'text' as Motif,
     name: 'WhatsApp Text Formatter',
     desc: 'Bold, italic, strikethrough, and bullets — with a live chat preview.',
     tag: 'Editor',
   },
   {
     href: '/tools/whatsapp-catalog-builder',
+    motif: 'catalog' as Motif,
     name: 'WhatsApp Catalogue Builder',
     desc: 'Paste your store URL and get a ready-to-send WhatsApp product list.',
     tag: 'Auto-discovery',
@@ -91,8 +100,10 @@ export default function ToolsIndexPage() {
               <Link
                 key={t.name}
                 href={t.href}
-                className="block bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all duration-200 p-7"
+                className="block bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all duration-200 overflow-hidden"
               >
+                <CoverArt seed={t.href} motif={t.motif} className="block w-full aspect-[16/7]" />
+                <div className="p-7">
                 <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-[#14523A] mb-4">
                   {t.tag}
                 </span>
@@ -101,6 +112,7 @@ export default function ToolsIndexPage() {
                 <span className="mt-5 inline-flex items-center text-sm font-bold text-[#1B6B4A]">
                   Try it free <span className="ml-1.5">→</span>
                 </span>
+                </div>
               </Link>
             ))}
           </div>

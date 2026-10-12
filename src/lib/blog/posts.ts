@@ -42,6 +42,8 @@ export interface PostMeta {
   cover?: string
   coverAlt?: string
   draft: boolean
+  /** true = no dates are shown on the page (evergreen posts). */
+  hideDate: boolean
   readingMinutes: number
 }
 
@@ -65,6 +67,7 @@ const ALLOWED_KEYS = new Set([
   'cover',
   'coverAlt',
   'draft',
+  'hideDate',
 ])
 
 export class PostError extends Error {
@@ -152,6 +155,7 @@ export function parsePost(file: string, source: string): Post {
   const cover = str(file, data, 'cover', false)
   const coverAlt = str(file, data, 'coverAlt', false)
   const draftRaw = str(file, data, 'draft', false)
+  const hideDateRaw = str(file, data, 'hideDate', false)
 
   if (!isRealDate(date)) throw new PostError(file, `"date" must be a real date like 2026-10-05, got "${date}"`)
   if (updated !== undefined) {
@@ -160,6 +164,9 @@ export function parsePost(file: string, source: string): Post {
   }
   if (draftRaw !== undefined && draftRaw !== 'true' && draftRaw !== 'false') {
     throw new PostError(file, `"draft" must be true or false, got "${draftRaw}"`)
+  }
+  if (hideDateRaw !== undefined && hideDateRaw !== 'true' && hideDateRaw !== 'false') {
+    throw new PostError(file, `"hideDate" must be true or false, got "${hideDateRaw}"`)
   }
   if (cover !== undefined) {
     if (!/^https:\/\/\S+$/.test(cover)) throw new PostError(file, `"cover" must be an https:// link, got "${cover}"`)
@@ -198,6 +205,7 @@ export function parsePost(file: string, source: string): Post {
     tags: rawTags ?? [],
     ...(cover ? { cover, coverAlt } : {}),
     draft: draftRaw === 'true',
+    hideDate: hideDateRaw === 'true',
     readingMinutes: readingMinutes(blocks),
     blocks,
     toc,

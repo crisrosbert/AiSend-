@@ -6,10 +6,10 @@ author: Team AiSend
 category: Guides
 tags: [chat-widget, click-to-chat, whatsapp-link]
 
-cover: https://app.performancemktg.net/covers/whatsappdesktop.webp
+cover: https://app.performancemktg.net/covers/blog-add-whatsapp-chat-button-to-websitedesktop.webp
 coverAlt: WhatsApp Business API pricing in India, rate card illustration
 
-coverMobile: https://app.performancemktg.net/covers/whatsappmobile.webp
+coverMobile: https://app.performancemktg.net/covers/blog-add-whatsapp-chat-button-to-websitemobile.webp
 ---
 
 # What you are adding

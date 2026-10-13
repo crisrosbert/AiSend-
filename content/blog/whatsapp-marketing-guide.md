@@ -7,9 +7,12 @@ category: Marketing
 tags: [whatsapp-marketing, campaigns, business-api, best-practices]
 accordion: true
 tools: [whatsapp-roi-calculator, whatsapp-bulk-sender, whatsapp-template-generator]
-cover: https://app.performancemktg.net/covers/blog-whatsapp-marketing-guide.webp
-coverMobile: https://app.performancemktg.net/covers/blog-whatsapp-marketing-guide-mobile.webp
-coverAlt: WhatsApp Marketing: Take Your Marketing Up a Notch, banner
+
+cover: https://app.performancemktg.net/covers/blog-whatsapp-vs-sms-vs-email-marketing-desktop.webp
+
+coverAlt:  WhatsApp vs SMS vs Email: How to Choose
+
+coverMobile: https://app.performancemktg.net/covers/blog-whatsapp-vs-sms-vs-email-marketingmobile.webp
 ---
 
 Transform regular WhatsApp chats into sales opportunities.

@@ -50,7 +50,7 @@ export default function AiChatbotWidgetPage() {
       <SiteHeader />
       <main>
         <section className="gradient-hero-bg" style={{ padding: '56px 16px 40px' }}>
-          <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ maxWidth: 1280, margin: '0 auto' }}>
             <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: '#6b7280', marginBottom: 14 }}>
               <Link href="/">Home</Link> / <Link href="/tools">Free tools</Link> / AI chatbot widget
             </nav>
@@ -64,7 +64,7 @@ export default function AiChatbotWidgetPage() {
           </div>
         </section>
 
-        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '56px 16px' }}>
+        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '56px 16px' }}>
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-center">How the AI chatbot widget works</h2>
           <div className="grid gap-5 mt-8 sm:grid-cols-2 lg:grid-cols-4">
             {HOW.map(([t, d]) => (
@@ -76,7 +76,7 @@ export default function AiChatbotWidgetPage() {
           </div>
         </section>
 
-        <article style={{ maxWidth: 820, margin: '0 auto', padding: '0 16px 56px' }}>
+        <article style={{ maxWidth: 920, margin: '0 auto', padding: '0 16px 56px' }}>
           <nav aria-label="On this page" className="bg-white rounded-2xl border border-gray-100 p-5 mb-10">
             <p className="font-bold mb-2">On this page</p>
             <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-[15px]">
@@ -122,7 +122,7 @@ export default function AiChatbotWidgetPage() {
           ))}
         </article>
 
-        <section style={{ maxWidth: 820, margin: '0 auto', padding: '0 16px 64px' }}>
+        <section style={{ maxWidth: 920, margin: '0 auto', padding: '0 16px 64px' }}>
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-center">Frequently asked questions</h2>
           <div className="mt-8 space-y-3">
             {ALL_FAQ.map((f) => (

@@ -41,6 +41,8 @@ export interface PostMeta {
   /** Cover picture (https URL). */
   cover?: string
   coverAlt?: string
+  /** Optional phone-sized banner (https URL). Shown on small screens and in cards. */
+  coverMobile?: string
   draft: boolean
   /** true = no dates are shown on the page (evergreen posts). */
   hideDate: boolean
@@ -66,6 +68,7 @@ const ALLOWED_KEYS = new Set([
   'tags',
   'cover',
   'coverAlt',
+  'coverMobile',
   'draft',
   'hideDate',
 ])
@@ -154,6 +157,7 @@ export function parsePost(file: string, source: string): Post {
   const updated = str(file, data, 'updated', false)
   const cover = str(file, data, 'cover', false)
   const coverAlt = str(file, data, 'coverAlt', false)
+  const coverMobile = str(file, data, 'coverMobile', false)
   const draftRaw = str(file, data, 'draft', false)
   const hideDateRaw = str(file, data, 'hideDate', false)
 
@@ -171,6 +175,10 @@ export function parsePost(file: string, source: string): Post {
   if (cover !== undefined) {
     if (!/^https:\/\/\S+$/.test(cover)) throw new PostError(file, `"cover" must be an https:// link, got "${cover}"`)
     if (!coverAlt) throw new PostError(file, '"coverAlt" is required when there is a cover (describe the picture)')
+  }
+  if (coverMobile !== undefined) {
+    if (!/^https:\/\/\S+$/.test(coverMobile)) throw new PostError(file, `"coverMobile" must be an https:// link, got "${coverMobile}"`)
+    if (!cover) throw new PostError(file, '"coverMobile" needs a "cover" (the desktop banner) as well')
   }
 
   const rawTags = data.tags
@@ -204,6 +212,7 @@ export function parsePost(file: string, source: string): Post {
     category,
     tags: rawTags ?? [],
     ...(cover ? { cover, coverAlt } : {}),
+    ...(cover && coverMobile ? { coverMobile } : {}),
     draft: draftRaw === 'true',
     hideDate: hideDateRaw === 'true',
     readingMinutes: readingMinutes(blocks),

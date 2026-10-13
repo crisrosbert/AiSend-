@@ -21,6 +21,7 @@ import path from 'node:path'
 import { parseVideoUrl } from '@/lib/video-embed'
 import { FrontmatterError, parseFrontmatter } from './frontmatter'
 import { parseMarkdown, plainText, type Block } from './markdown'
+import { TOOL_SLUGS } from './tool-catalog'
 
 export interface TocItem {
   id: string
@@ -43,6 +44,10 @@ export interface PostMeta {
   coverAlt?: string
   /** Optional phone-sized banner (https URL). Shown on small screens and in cards. */
   coverMobile?: string
+  /** Show the post as collapsible sections (one per top-level heading). */
+  accordion: boolean
+  /** Slugs of free tools to suggest under the post (see post-extras.ts). */
+  tools: string[]
   draft: boolean
   /** true = no dates are shown on the page (evergreen posts). */
   hideDate: boolean
@@ -69,6 +74,8 @@ const ALLOWED_KEYS = new Set([
   'cover',
   'coverAlt',
   'coverMobile',
+  'accordion',
+  'tools',
   'draft',
   'hideDate',
 ])
@@ -160,6 +167,7 @@ export function parsePost(file: string, source: string): Post {
   const coverMobile = str(file, data, 'coverMobile', false)
   const draftRaw = str(file, data, 'draft', false)
   const hideDateRaw = str(file, data, 'hideDate', false)
+  const accordionRaw = str(file, data, 'accordion', false)
 
   if (!isRealDate(date)) throw new PostError(file, `"date" must be a real date like 2026-10-05, got "${date}"`)
   if (updated !== undefined) {
@@ -168,6 +176,9 @@ export function parsePost(file: string, source: string): Post {
   }
   if (draftRaw !== undefined && draftRaw !== 'true' && draftRaw !== 'false') {
     throw new PostError(file, `"draft" must be true or false, got "${draftRaw}"`)
+  }
+  if (accordionRaw !== undefined && accordionRaw !== 'true' && accordionRaw !== 'false') {
+    throw new PostError(file, `"accordion" must be true or false, got "${accordionRaw}"`)
   }
   if (hideDateRaw !== undefined && hideDateRaw !== 'true' && hideDateRaw !== 'false') {
     throw new PostError(file, `"hideDate" must be true or false, got "${hideDateRaw}"`)
@@ -184,6 +195,14 @@ export function parsePost(file: string, source: string): Post {
   const rawTags = data.tags
   if (rawTags !== undefined && !Array.isArray(rawTags)) {
     throw new PostError(file, '"tags" must be a list like [whatsapp, api]')
+  }
+
+  const rawTools = data.tools
+  if (rawTools !== undefined && !Array.isArray(rawTools)) {
+    throw new PostError(file, '"tools" must be a list like [whatsapp-link-generator, whatsapp-bulk-sender]')
+  }
+  for (const t of rawTools ?? []) {
+    if (!TOOL_SLUGS.includes(t)) throw new PostError(file, `"tools" has an unknown tool "${t}". Known: ${TOOL_SLUGS.join(', ')}`)
   }
 
   const blocks = parseMarkdown(body)
@@ -215,6 +234,8 @@ export function parsePost(file: string, source: string): Post {
     ...(cover && coverMobile ? { coverMobile } : {}),
     draft: draftRaw === 'true',
     hideDate: hideDateRaw === 'true',
+    accordion: accordionRaw === 'true',
+    tools: rawTools ?? [],
     readingMinutes: readingMinutes(blocks),
     blocks,
     toc,

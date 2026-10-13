@@ -92,8 +92,11 @@ export default async function BlogPostPage({ params }: Props) {
 
           {post.cover ? (
             <div className="post-cover">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={post.cover} alt={post.coverAlt ?? ''} />
+              <picture>
+                {post.coverMobile ? <source media="(max-width: 720px)" srcSet={post.coverMobile} /> : null}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={post.cover} alt={post.coverAlt ?? ''} />
+              </picture>
             </div>
           ) : (
             <div className="post-cover post-cover--art">

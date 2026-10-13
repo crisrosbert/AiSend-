@@ -5,8 +5,12 @@ import { SiteFooter } from '@/components/layout/site-footer'
 import { CoverArt } from '@/components/art/cover-art'
 import { PostBody } from '@/components/blog/post-body'
 import { PostCard } from '@/components/blog/post-card'
+import { PostAccordion } from '@/components/blog/post-accordion'
+import { BlogLeadForm } from '@/components/blog/blog-lead-form'
+import { PostCtaBanner, RelatedTools } from '@/components/blog/post-extras'
+import { extractFaq } from '@/lib/blog/post-extras'
 import { formatPostDate, loadPosts, relatedPosts } from '@/lib/blog/posts'
-import { articleJsonLd, breadcrumbJsonLd, serializeJsonLd } from '@/lib/seo/json-ld'
+import { articleJsonLd, breadcrumbJsonLd, faqJsonLd, serializeJsonLd } from '@/lib/seo/json-ld'
 import { buildMetadata } from '@/lib/seo/metadata'
 import '../blog.css'
 
@@ -49,6 +53,7 @@ export default async function BlogPostPage({ params }: Props) {
   const path = `/blog/${post.slug}`
   const related = relatedPosts(post, all)
   const showToc = post.toc.length >= 3
+  const faq = extractFaq(post.blocks)
 
   const structuredData = [
     articleJsonLd({
@@ -65,6 +70,7 @@ export default async function BlogPostPage({ params }: Props) {
       { name: 'Blog', path: '/blog' },
       { name: post.title, path },
     ]),
+    ...(faq.length ? [faqJsonLd(faq)] : []),
   ]
 
   return (
@@ -109,7 +115,7 @@ export default async function BlogPostPage({ params }: Props) {
               <aside className="post-toc" aria-label="Table of contents">
                 <p className="post-toc__title">On this page</p>
                 <ul>
-                  {post.toc.map((t) => (
+                  {post.toc.filter((t) => !post.accordion || t.level === 2).map((t) => (
                     <li key={t.id} className={t.level > 2 ? 'is-sub' : undefined}>
                       <a href={`#${t.id}`}>{t.text}</a>
                     </li>
@@ -119,7 +125,22 @@ export default async function BlogPostPage({ params }: Props) {
             ) : null}
 
             <article className="post-article">
-              <PostBody blocks={post.blocks} />
+              {post.accordion ? (
+                <PostAccordion
+                  blocks={post.blocks}
+                  inserts={{
+                    3: (
+                      <PostCtaBanner
+                        title="Automate your WhatsApp in minutes"
+                        text="Greetings, follow-ups, chatbots and a shared inbox in one dashboard."
+                        button="Start free"
+                      />
+                    ),
+                  }}
+                />
+              ) : (
+                <PostBody blocks={post.blocks} />
+              )}
               {post.tags.length ? (
                 <div className="post-tags">
                   {post.tags.map((t) => (
@@ -127,12 +148,30 @@ export default async function BlogPostPage({ params }: Props) {
                   ))}
                 </div>
               ) : null}
-              <div className="post-cta">
-                <p>Run WhatsApp marketing, chatbots and a shared inbox from one dashboard.</p>
-                <a href="/signup">Start free</a>
-              </div>
+              {post.accordion ? (
+                <>
+                  <PostCtaBanner
+                    variant="light"
+                    title="Ready to automate your WhatsApp?"
+                    text="Create your account free and send your first automated reply today."
+                    button="Create free account"
+                  />
+                  <BlogLeadForm
+                    slug={post.slug}
+                    title="Want help setting up WhatsApp automation?"
+                    text="Leave your WhatsApp number and our team will message you with the next steps."
+                  />
+                </>
+              ) : (
+                <div className="post-cta">
+                  <p>Run WhatsApp marketing, chatbots and a shared inbox from one dashboard.</p>
+                  <a href="/signup">Start free</a>
+                </div>
+              )}
             </article>
           </div>
+
+          <RelatedTools slugs={post.tools} />
 
           {related.length ? (
             <section className="post-related">

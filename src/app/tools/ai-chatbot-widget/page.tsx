@@ -1,81 +1,141 @@
-/* Blog pages. Scoped under .blog so nothing leaks into the app. */
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { SiteHeader } from '@/components/layout/site-header'
+import { SiteFooter } from '@/components/layout/site-footer'
+import { breadcrumbJsonLd, faqJsonLd, serializeJsonLd } from '@/lib/seo/json-ld'
+import { SITE_URL } from '@/lib/seo/site'
+import '../../(marketing)/landing.css'
+import { ChatbotTool } from './chatbot-tool'
+import { EXTRA_FAQ, SECTIONS } from './content'
 
-.blog { color: #1f2937; background: #fff; }
-.blog a { color: #1B6B4A; }
+const PATH = '/tools/ai-chatbot-widget'
+const TITLE = 'Free AI Chatbot Widget for Your Website'
+const DESC =
+  'Paste your website address and get an AI chatbot trained on your own pages in under a minute. Test it live, then add it to your site for free and capture leads.'
 
-.blog__wrap { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
-@media (max-width: 640px) { .blog__wrap { padding: 0 20px; } }
+export const metadata: Metadata = {
+  title: TITLE,
+  description: DESC,
+  alternates: { canonical: `${SITE_URL}${PATH}` },
+  openGraph: { title: TITLE, description: DESC, url: `${SITE_URL}${PATH}`, type: 'website' },
+  robots: { index: true, follow: true },
+}
 
-/* ── index ─────────────────────────────────────────────── */
-.blog-hero { background: #f2f8f5; padding: 64px 0 48px; border-bottom: 1px solid #e3efe9; }
-.blog-hero__eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #1B6B4A; margin: 0 0 12px; }
-.blog-hero h1 { font-size: clamp(32px, 5vw, 48px); line-height: 1.1; margin: 0 0 14px; }
-.blog-hero p { font-size: 18px; color: #4b5563; max-width: 640px; margin: 0; }
+const FAQ = [
+  { q: 'Is the AI chatbot widget really free?', a: 'Yes. You can build and test the chatbot without signing up. Creating a free account lets you embed it on your website and see the conversations and leads it collects.' },
+  { q: 'How does the chatbot learn about my business?', a: 'It reads the public pages of the website you enter, such as your home, services, pricing and contact pages, and answers visitor questions from that content. It does not invent details that are not on your site.' },
+  { q: 'Can I change the chatbot name, tone and greeting?', a: 'Yes. After the scan you can edit the name, role, tone of voice, greeting, suggested questions and colour, and the preview updates straight away.' },
+  { q: 'What happens when the chatbot does not know the answer?', a: 'It says it is not sure and points the visitor to your contact details, so customers are never given a made-up price or policy.' },
+  { q: 'Does it work with WhatsApp?', a: 'Yes. AiSend connects the same chatbot to your WhatsApp Business number, so one assistant can answer visitors on your website and customers on WhatsApp.' },
+  { q: 'Will it work on any website?', a: 'It works on most public websites. Sites that block bots, or that load all their text with JavaScript, may not be readable. In that case our team can set the chatbot up with you manually.' },
+]
 
-.blog-grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); padding: 48px 0 72px; }
-.blog-card { display: flex; flex-direction: column; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden; background: #fff; text-decoration: none; transition: box-shadow .2s, transform .2s; }
-.blog-card:hover { box-shadow: 0 10px 30px rgba(27, 107, 74, .12); transform: translateY(-2px); }
-.blog-card__cover { aspect-ratio: 16 / 9; background: linear-gradient(135deg, #e3efe9, #f2f8f5); }
-.blog-card__cover svg, .blog-card__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.blog-card__body { padding: 20px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
-.blog-card__cat { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #1B6B4A; }
-.blog-card__title { font-size: 20px; line-height: 1.3; margin: 0; color: #111827; }
-.blog-card__desc { font-size: 15px; line-height: 1.55; color: #4b5563; margin: 0; flex: 1; }
-.blog-card__meta { font-size: 13px; color: #6b7280; }
-.blog-empty { padding: 72px 0; text-align: center; color: #6b7280; }
+const ALL_FAQ = [...FAQ, ...EXTRA_FAQ]
 
-/* ── post ──────────────────────────────────────────────── */
-.post-head { background: #f2f8f5; padding: 48px 0 40px; border-bottom: 1px solid #e3efe9; }
-.post-head__inner { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
-.post-crumbs { font-size: 14px; color: #6b7280; margin-bottom: 18px; }
-.post-crumbs a { text-decoration: none; }
-.post-head h1 { font-size: clamp(30px, 4.5vw, 44px); line-height: 1.15; margin: 0 0 16px; }
-.post-head__desc { font-size: 19px; line-height: 1.55; color: #4b5563; margin: 0 0 18px; }
-.post-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: #6b7280; }
-.post-cover { max-width: 1120px; margin: 32px auto 0; padding: 0 20px; }
-.post-cover img { width: 100%; border-radius: 16px; display: block; }
-.post-cover--art svg { width: 100%; aspect-ratio: 16 / 7; border-radius: 16px; display: block; }
+const HOW = [
+  ['1. Enter your website', 'Type your address. No signup, no card.'],
+  ['2. We read your pages', 'Your services, products, prices and contact details become the chatbot\'s knowledge.'],
+  ['3. Test and tweak', 'Chat with it, rename it, set the tone and pick your colour.'],
+  ['4. Add it for free', 'Create a free account to embed it and capture every lead.'],
+]
 
-.post-layout { max-width: 1120px; margin: 0 auto; padding: 40px 20px 72px; display: grid; gap: 48px; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 960px) { .post-layout--toc { grid-template-columns: 240px minmax(0, 1fr); } }
-.post-toc { font-size: 14px; }
-.post-toc__title { font-weight: 600; margin: 0 0 10px; color: #111827; }
-.post-toc ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.post-toc li.is-sub { padding-left: 14px; }
-.post-toc a { color: #4b5563; text-decoration: none; }
-.post-toc a:hover { color: #1B6B4A; }
-@media (min-width: 960px) { .post-toc { position: sticky; top: 96px; align-self: start; } }
-.post-article { max-width: 820px; }
+export default function AiChatbotWidgetPage() {
+  const ld = [
+    breadcrumbJsonLd([{ name: 'Home', path: '/' }, { name: 'Free tools', path: '/tools' }, { name: 'AI chatbot widget', path: PATH }]),
+    faqJsonLd(ALL_FAQ),
+    { '@context': 'https://schema.org', '@type': 'WebApplication', name: TITLE, url: `${SITE_URL}${PATH}`, applicationCategory: 'BusinessApplication', operatingSystem: 'Any', offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' } },
+  ]
+  return (
+    <div className="lp" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <SiteHeader />
+      <main>
+        <section className="gradient-hero-bg" style={{ padding: '56px 16px 40px' }}>
+          <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+            <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: '#6b7280', marginBottom: 14 }}>
+              <Link href="/">Home</Link> / <Link href="/tools">Free tools</Link> / AI chatbot widget
+            </nav>
+            <div style={{ textAlign: 'center', maxWidth: 760, margin: '0 auto 32px' }}>
+              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">Free AI chatbot widget for your website</h1>
+              <p className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed">
+                Paste your website address. In under a minute you get a chatbot that answers visitor questions from your own pages, 24 hours a day. Test it here, then add it to your site for free.
+              </p>
+            </div>
+            <ChatbotTool />
+          </div>
+        </section>
 
-/* ── body typography ───────────────────────────────────── */
-.blog-body { font-size: 18px; line-height: 1.75; color: #1f2937; }
-.blog-body > * + * { margin-top: 1.25em; }
-.blog-body h2 { font-size: 28px; line-height: 1.25; margin-top: 2em; scroll-margin-top: 96px; }
-.blog-body h3 { font-size: 22px; line-height: 1.3; margin-top: 1.7em; scroll-margin-top: 96px; }
-.blog-body h4 { font-size: 18px; margin-top: 1.5em; scroll-margin-top: 96px; }
-.blog-body ul, .blog-body ol { padding-left: 1.4em; }
-.blog-body ul { list-style: disc; }
-.blog-body ol { list-style: decimal; }
-.blog-body li + li { margin-top: .45em; }
-.blog-body blockquote { border-left: 4px solid #1B6B4A; background: #f2f8f5; padding: 14px 18px; border-radius: 0 10px 10px 0; color: #374151; }
-.blog-body code { background: #f3f4f6; padding: 2px 6px; border-radius: 6px; font-size: .9em; }
-.blog-body pre { background: #0f172a; color: #e2e8f0; padding: 16px 18px; border-radius: 12px; overflow-x: auto; font-size: 14px; line-height: 1.6; }
-.blog-body pre code { background: none; padding: 0; color: inherit; }
-.blog-body figure { margin-left: 0; margin-right: 0; }
-.blog-body figure img { width: 100%; border-radius: 12px; display: block; }
-.blog-body figcaption { font-size: 14px; color: #6b7280; margin-top: 8px; text-align: center; }
-.blog-body hr { border: 0; border-top: 1px solid #e5e7eb; margin: 2.2em 0; }
-.blog-table { overflow-x: auto; }
-.blog-table table { width: 100%; border-collapse: collapse; font-size: 16px; }
-.blog-table th, .blog-table td { border: 1px solid #e5e7eb; padding: 10px 12px; text-align: left; vertical-align: top; }
-.blog-table th { background: #f2f8f5; }
+        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '56px 16px' }}>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-center">How the AI chatbot widget works</h2>
+          <div className="grid gap-5 mt-8 sm:grid-cols-2 lg:grid-cols-4">
+            {HOW.map(([t, d]) => (
+              <div key={t} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h3 className="font-bold text-lg">{t}</h3>
+                <p className="mt-2 text-gray-600 text-[15px] leading-relaxed">{d}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-/* ── closing ───────────────────────────────────────────── */
-.post-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 40px; }
-.post-tags span { font-size: 13px; background: #f2f8f5; color: #1B6B4A; padding: 4px 12px; border-radius: 999px; }
-.post-cta { margin-top: 48px; padding: 32px; border-radius: 16px; background: #1B6B4A; }
-.post-cta p { color: #e6f4ee; margin: 0 0 18px; font-size: 17px; }
-.post-cta a { display: inline-block; background: #fff; color: #1B6B4A; font-weight: 600; padding: 12px 22px; border-radius: 10px; text-decoration: none; }
-.post-related { background: #f9fafb; padding: 56px 0 72px; border-top: 1px solid #e5e7eb; }
-.post-related h2 { font-size: 26px; margin: 0 0 24px; }
-.post-related .blog-grid { padding: 0; }
+        <article style={{ maxWidth: 920, margin: '0 auto', padding: '0 16px 56px' }}>
+          <nav aria-label="On this page" className="bg-white rounded-2xl border border-gray-100 p-5 mb-10">
+            <p className="font-bold mb-2">On this page</p>
+            <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-[15px]">
+              {SECTIONS.map((sec) => (
+                <li key={sec.id}><a href={`#${sec.id}`} className="text-emerald-800 hover:underline">{sec.h2}</a></li>
+              ))}
+            </ul>
+          </nav>
+          {SECTIONS.map((sec) => (
+            <section key={sec.id} id={sec.id} className="mb-10 scroll-mt-24">
+              <h2 className="text-2xl font-extrabold tracking-tight mb-4">{sec.h2}</h2>
+              {sec.paras.map((t, i) => (
+                <p key={i} className="text-gray-700 leading-relaxed mb-4">{t}</p>
+              ))}
+              {sec.list ? (
+                <ul className="list-disc pl-6 space-y-2 text-gray-700 leading-relaxed mb-4">
+                  {sec.list.map((li) => <li key={li}>{li}</li>)}
+                </ul>
+              ) : null}
+              {sec.table ? (
+                <div className="overflow-x-auto mb-4">
+                  <table className="w-full text-left text-[15px] border border-gray-200 rounded-xl overflow-hidden">
+                    <thead className="bg-emerald-50">
+                      <tr>{sec.table.head.map((h, i) => <th key={i} className="p-3 font-bold">{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {sec.table.rows.map((r) => (
+                        <tr key={r[0]} className="border-t border-gray-100">
+                          {r.map((c, i) => <td key={i} className={`p-3 ${i === 0 ? 'font-semibold' : 'text-gray-700'}`}>{c}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+              {sec.after?.map((t, i) => <p key={i} className="text-gray-700 leading-relaxed mb-4">{t}</p>)}
+              {sec.id === 'lead-capture' ? (
+                <p className="mb-4">
+                  <Link href="/blog/where-to-see-website-chatbot-leads" className="font-semibold text-emerald-800 underline">Read the guide: where your chatbot leads appear</Link>
+                </p>
+              ) : null}
+            </section>
+          ))}
+        </article>
+
+        <section style={{ maxWidth: 920, margin: '0 auto', padding: '0 16px 64px' }}>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-center">Frequently asked questions</h2>
+          <div className="mt-8 space-y-3">
+            {ALL_FAQ.map((f) => (
+              <details key={f.q} className="bg-white rounded-xl border border-gray-100 p-5">
+                <summary className="font-semibold cursor-pointer">{f.q}</summary>
+                <p className="mt-3 text-gray-600 leading-relaxed">{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      </main>
+      <SiteFooter />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(ld) }} />
+    </div>
+  )
+}

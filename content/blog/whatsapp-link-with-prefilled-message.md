@@ -5,6 +5,11 @@ date: 2026-10-11
 author: Team AiSend
 category: Guides
 tags: [whatsapp-link, click-to-chat, wa-me]
+cover: https://app.performancemktg.net/covers/blog-whatsapp-link-with-prefilled-message-desktop.webp
+coverAlt: WhatsApp Business API pricing in India, rate card illustration
+
+coverMobile: https://app.performancemktg.net/covers/blog-whatsapp-link-with-prefilled-message-mobile.webp
+
 ---
 
 # What a WhatsApp link does

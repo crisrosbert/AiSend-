@@ -8,6 +8,8 @@ category: Pricing
 tags: [whatsapp-api-pricing, business-api, pricing, india]
 cover: https://app.performancemktg.net/covers/whatsapp.jpg
 coverAlt: WhatsApp Business API pricing in India, rate card illustration
+
+coverMobile: https://app.performancemktg.net/covers/whatsappmobile.jpg
 ---
 
 # Quick answer: what does the WhatsApp Business API cost in India?

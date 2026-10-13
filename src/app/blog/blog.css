@@ -15,7 +15,7 @@
 .blog-grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); padding: 48px 0 72px; }
 .blog-card { display: flex; flex-direction: column; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden; background: #fff; text-decoration: none; transition: box-shadow .2s, transform .2s; }
 .blog-card:hover { box-shadow: 0 10px 30px rgba(27, 107, 74, .12); transform: translateY(-2px); }
-.blog-card__cover { aspect-ratio: 16 / 9; background: linear-gradient(135deg, #e3efe9, #f2f8f5); }
+.blog-card__cover { aspect-ratio: 1983 / 793; background: linear-gradient(135deg, #e3efe9, #f2f8f5); }
 .blog-card__cover svg, .blog-card__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .blog-card__body { padding: 20px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
 .blog-card__cat { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #1B6B4A; }

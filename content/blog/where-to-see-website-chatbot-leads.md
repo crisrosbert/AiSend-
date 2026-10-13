@@ -5,6 +5,10 @@ date: 2026-10-12
 author: Team AiSend
 category: Guides
 tags: [chatbot, leads, website-widget]
+cover: https://app.performancemktg.net/covers/blog-where-to-see-website-chatbot-leadsdesktop.webp
+coverAlt: Where to See Leads from Your Website Chatbot
+
+coverMobile: https://app.performancemktg.net/covers/blog-where-to-see-website-chatbot-leadsmobile.webp
 ---
 
 # The short answer

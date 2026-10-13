@@ -6,8 +6,8 @@ import { Inlines, PostBody } from './post-body'
 
 /**
  * A post as collapsible sections, one per top-level heading. All the text is
- * in the page either way, so search engines read it all; only the first
- * section starts open. `inserts` puts a block (a banner, say) after the
+ * in the page either way, so search engines read it all; every
+ * section starts open (readers can collapse them). `inserts` puts a block (a banner, say) after the
  * section with that number.
  */
 export function PostAccordion({
@@ -24,7 +24,7 @@ export function PostAccordion({
       {sections.length > 2 ? <AccordionControls targetId="post-sections" /> : null}
       {sections.map((s, i) => (
         <div key={s.heading.id}>
-          <details className="acc" open={i === 0}>
+          <details className="acc" open>
             <summary className="acc__summary">
               <h2 id={s.heading.id}>
                 <Inlines nodes={s.heading.children} />

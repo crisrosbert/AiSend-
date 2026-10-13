@@ -7,9 +7,10 @@ category: Marketing
 tags: [bulk-whatsapp, broadcast, business-api, campaigns]
 accordion: true
 tools: [whatsapp-bulk-sender, whatsapp-template-generator, whatsapp-roi-calculator]
-cover: https://app.performancemktg.net/covers/blog-bulk-whatsapp-messaging-guide.webp
-coverMobile: https://app.performancemktg.net/covers/blog-bulk-whatsapp-messaging-guide-mobile.webp
-coverAlt: Bulk WhatsApp Messaging Made Easy with the Business API, banner
+cover: https://app.performancemktg.net/covers/whatsappdesktop.webp
+coverAlt: WhatsApp Business API pricing in India, rate card illustration
+
+coverMobile: https://app.performancemktg.net/covers/whatsappmobile.webp
 ---
 
 Got a long customer list? No need to message everyone one by one. With PerformanceMktg, send WhatsApp campaigns through the official [WhatsApp Business API](/blog/official-whatsapp-business-api). Spread your offers, launch information, newsletters, alerts, and other messages to the right customers.

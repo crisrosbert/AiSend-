@@ -5,6 +5,14 @@ date: 2026-10-11
 author: Team AiSend
 category: Guides
 tags: [whatsapp-templates, business-api, pricing]
+
+
+cover: https://app.performancemktg.net/covers/blog-marketing-or-utility-whatsapp-template-desktop.webp
+coverAlt: WhatsApp Business API pricing in India, rate card illustration
+
+coverMobile: https://app.performancemktg.net/covers/blog-marketing-or-utility-whatsapp-template-mobile.webp
+
+
 ---
 
 # Why the category matters

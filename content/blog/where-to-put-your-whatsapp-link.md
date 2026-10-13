@@ -5,6 +5,12 @@ date: 2026-10-11
 author: Team AiSend
 category: Guides
 tags: [whatsapp-link, marketing, click-to-chat]
+
+cover: https://app.performancemktg.net/covers/blog-where-to-put-your-whatsapp-link-desktop.webp
+
+coverAlt: WhatsApp Business API pricing in India, rate card illustration
+
+coverMobile: https://app.performancemktg.net/covers/blog-where-to-put-your-whatsapp-link-mobile.webp
 ---
 
 # A link only helps if people see it

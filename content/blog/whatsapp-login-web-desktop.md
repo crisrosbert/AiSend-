@@ -7,9 +7,11 @@ category: Guides
 tags: [whatsapp-login, whatsapp-web, desktop, qr-code]
 accordion: true
 tools: [whatsapp-link-generator, whatsapp-qr-code, whatsapp-chat-widget]
-cover: https://app.performancemktg.net/covers/blog-whatsapp-login-web-desktop.webp
-coverMobile: https://app.performancemktg.net/covers/blog-whatsapp-login-web-desktop-mobile.webp
-coverAlt: WhatsApp Login: How to Log In to WhatsApp Web and Desktop, banner
+cover: https://app.performancemktg.net/covers/blog-whatsapp-vs-sms-vs-email-marketing-desktop.webp
+
+coverAlt:  WhatsApp vs SMS vs Email: How to Choose
+
+coverMobile: https://app.performancemktg.net/covers/blog-whatsapp-vs-sms-vs-email-marketingmobile.webp
 ---
 
 ### Quick Overview

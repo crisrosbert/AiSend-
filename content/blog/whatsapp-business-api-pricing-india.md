@@ -6,10 +6,10 @@ hideDate: true
 author: Team AiSend
 category: Pricing
 tags: [whatsapp-api-pricing, business-api, pricing, india]
-cover: https://app.performancemktg.net/covers/whatsapp.jpg
+cover: https://app.performancemktg.net/covers/whatsappdesktop.webp
 coverAlt: WhatsApp Business API pricing in India, rate card illustration
 
-coverMobile: https://app.performancemktg.net/covers/whatsappmobile.jpg
+coverMobile: https://app.performancemktg.net/covers/whatsappmobile.webp
 ---
 
 # Quick answer: what does the WhatsApp Business API cost in India?

@@ -6,7 +6,7 @@ hideDate: true
 author: Team AiSend
 category: Pricing
 tags: [whatsapp-api-pricing, business-api, pricing, india]
-cover: https://app.performancemktg.net/covers/WhatsApp Business Pricing in India.png
+cover: https://app.performancemktg.net/covers/whatsapp-business-api-pricing-india.webp
 coverAlt: WhatsApp Business API pricing in India, rate card illustration
 ---
 

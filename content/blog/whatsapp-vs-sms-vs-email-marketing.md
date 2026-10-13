@@ -6,6 +6,7 @@ author: Team AiSend
 category: Guides
 tags: [roi-calculator, marketing, whatsapp]
 cover: https://app.performancemktg.net/covers/blog-whatsapp-vs-sms-vs-email-marketing-desktop.webp
+
 coverAlt:  WhatsApp vs SMS vs Email: How to Choose
 
 coverMobile: https://app.performancemktg.net/covers/blog-whatsapp-vs-sms-vs-email-marketingmobile.webp

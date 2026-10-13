@@ -5,6 +5,13 @@ date: 2026-10-11
 author: Team AiSend
 category: Guides
 tags: [roi-calculator, marketing, whatsapp]
+
+cover: https://app.performancemktg.net/covers/blog-how-to-calculate-whatsapp-campaign-roidesktop.webp
+coverAlt: WhatsApp Business API pricing in India, rate card illustration
+
+coverMobile: https://app.performancemktg.net/covers/blog-how-to-calculate-whatsapp-campaign-roi-mobile.webp
+
+
 ---
 
 # Start with what you kept, not what you sold

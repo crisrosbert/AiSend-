@@ -5,6 +5,11 @@ date: 2026-10-11
 author: Team AiSend
 category: Guides
 tags: [chat-widget, click-to-chat, whatsapp-link]
+
+cover: https://app.performancemktg.net/covers/blog-add-whatsapp-chat-button-to-websitedesktop.webp
+coverAlt: How to Add a WhatsApp Chat Button to Your Website
+
+coverMobile: https://app.performancemktg.net/covers/blog-add-whatsapp-chat-button-to-websitemobile.webp
 ---
 
 # What you are adding

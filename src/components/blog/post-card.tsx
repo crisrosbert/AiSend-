@@ -8,7 +8,7 @@ export function PostCard({ post }: { post: PostMeta }) {
       <div className="blog-card__cover">
         {post.cover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={post.cover} alt={post.coverAlt ?? ''} loading="lazy" decoding="async" />
+          <img src={post.coverMobile ?? post.cover} alt={post.coverAlt ?? ''} loading="lazy" decoding="async" />
         ) : (
           <CoverArt seed={post.slug} hint={post.tags.join(' ')} />
         )}

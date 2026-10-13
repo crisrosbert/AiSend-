@@ -5,10 +5,10 @@ date: 2026-10-11
 author: Team AiSend
 category: Guides
 tags: [whatsapp-templates, business-api]
-cover: https://app.performancemktg.net/covers/whatsappdesktop.webp
+cover: https://app.performancemktg.net/covers/blog-why-whatsapp-templates-get-rejecteddesktop.webp
 coverAlt: WhatsApp Business API pricing in India, rate card illustration
 
-coverMobile: https://app.performancemktg.net/covers/whatsappmobile.webp
+coverMobile: https://app.performancemktg.net/covers/blog-why-whatsapp-templates-get-rejectedmobile.webp
 ---
 
 # A rejection is usually a small mistake

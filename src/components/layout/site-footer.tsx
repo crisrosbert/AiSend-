@@ -36,6 +36,7 @@ export function SiteFooter() {
       <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12">
         <FooterPromoBanner
           href="/signup"
+          src="/home/footer-banner.webp"
           alt="Your customers are already on WhatsApp. Is your business reaching them there? Start Your Free WhatsApp Campaign."
         />
 

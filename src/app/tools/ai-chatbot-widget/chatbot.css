@@ -106,3 +106,5 @@
 .cb-check{display:flex;gap:8px;font-size:13px;color:#4b5563;margin-bottom:10px;font-weight:400}
 .sb-link{position:absolute;inset:0;border-radius:50%;z-index:2}
 .sb-bubble:has(.sb-link):hover .sb-disc{transform:scale(1.18);opacity:1}
+.cb-check{align-items:flex-start;line-height:1.4}
+.cb-check input[type=checkbox]{width:18px;height:18px;min-width:18px;margin:2px 0 0;padding:0;flex:none;accent-color:#1b6b4a}

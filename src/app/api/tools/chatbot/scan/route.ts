@@ -9,6 +9,7 @@ import { crawlSite, normaliseUrl, validatePublicUrl } from '@/lib/agent/rag/site
 import { toChunks } from '@/lib/tools/chatbot/knowledge'
 import { buildProfile } from '@/lib/tools/chatbot/profile'
 import { signSession } from '@/lib/tools/chatbot/session'
+import { factsToText } from '@/lib/agent/rag/site-facts'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 45
@@ -31,7 +32,14 @@ export async function POST(req: Request) {
   const check = validatePublicUrl(url)
   if (!check.ok) return NextResponse.json({ error: 'Enter a public website address.' }, { status: 400 })
 
-  const crawl = await crawlSite(url, { maxPages: 8, maxDepth: 1, totalBudgetMs: 28_000 })
+  const crawl = await crawlSite(url, {
+    maxPages: 16,
+    maxDepth: 1,
+    totalBudgetMs: 30_000,
+    perRequestMs: 7_000,
+    concurrency: 5,
+    preferKeyPages: true,
+  })
   const chunks = toChunks(crawl.pages)
   if (chunks.length === 0) {
     return NextResponse.json(
@@ -46,6 +54,7 @@ export async function POST(req: Request) {
     site: host,
     profile,
     pages: crawl.pages.length,
-    session: signSession({ site: host, chunks }),
+    facts: crawl.facts ? factsToText(crawl.facts) : '',
+    session: signSession({ site: host, chunks, facts: crawl.facts ? factsToText(crawl.facts) : '' }),
   })
 }

@@ -9,6 +9,8 @@ import { crawlSite, normaliseUrl, validatePublicUrl } from '@/lib/agent/rag/site
 import { toChunks } from '@/lib/tools/chatbot/knowledge'
 import { buildProfile } from '@/lib/tools/chatbot/profile'
 import { signSession } from '@/lib/tools/chatbot/session'
+import { recordScan } from '@/lib/tools/chatbot/scanned-sites'
+import { likelyQuestions } from '@/lib/tools/chatbot/questions'
 import { factsToText } from '@/lib/agent/rag/site-facts'
 
 export const dynamic = 'force-dynamic'
@@ -50,10 +52,12 @@ export async function POST(req: Request) {
 
   const host = new URL(url).hostname.replace(/^www\./, '')
   const profile = buildProfile(crawl.brand, crawl.pages, url)
+  await recordScan(host, profile.name || null, profile.logoUrl)
   return NextResponse.json({
     site: host,
     profile,
     pages: crawl.pages.length,
+    questions: likelyQuestions(crawl.pages, crawl.facts, profile.name.replace(/ AI Assistant$/, '')),
     facts: crawl.facts ? factsToText(crawl.facts) : '',
     session: signSession({ site: host, chunks, facts: crawl.facts ? factsToText(crawl.facts) : '' }),
   })

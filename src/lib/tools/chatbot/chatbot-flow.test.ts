@@ -1,0 +1,75 @@
+// End to end through both routes with the network stubbed: scan a site whose
+// phone number lives only in the footer, then ask how to contact them, and
+// check that the model was actually given that number.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { POST as scan } from './scan/route'
+import { POST as chat } from './chat/route'
+
+const filler = 'We offer teeth whitening, dental implants and root canal treatment at fair prices in Pune. '.repeat(3)
+const html = (body: string) => `<html><head><title>Smile Clinic</title></head><body>${body}</body></html>`
+
+function reply(body: string, url: string, type = 'text/html') {
+  const res = new Response(body, { status: 200, headers: { 'content-type': type } })
+  Object.defineProperty(res, 'url', { value: url })
+  return res
+}
+
+describe('free chatbot, end to end', () => {
+  let prompts: string[] = []
+  beforeEach(() => {
+    prompts = []
+    vi.stubEnv('TOOLS_SESSION_SECRET', 'test-secret')
+    vi.stubEnv('LLM_PROVIDER', 'openai')
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test')
+    vi.stubEnv('TOOLS_CHATBOT_MODEL', 'gpt-test-model')
+    vi.stubGlobal('fetch', async (u: string, init?: RequestInit) => {
+      const url = String(u)
+      if (url.startsWith('https://api.openai.com')) {
+        const body = JSON.parse(String(init?.body))
+        prompts.push(`${body.model}\n${body.messages[0].content}`)
+        return new Response(JSON.stringify({ choices: [{ message: { content: 'Call us on +91 98765 43210.' } }], usage: { total_tokens: 5 } }), { status: 200 })
+      }
+      if (url === 'https://smile.example.com/') {
+        return reply(html(`<header><nav><a href="/services">Teeth Whitening</a></nav></header><main><p>${filler}</p></main><footer>Call <a href="tel:+919876543210">+91 98765 43210</a></footer>`), url)
+      }
+      return reply('missing', url)
+    })
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  it('gives the model the footer phone number and uses the tool model', async () => {
+    const s = await scan(new Request('http://x/api/tools/chatbot/scan', { method: 'POST', body: JSON.stringify({ url: 'smile.example.com' }) }))
+    const scanned = await s.json()
+    expect(s.status).toBe(200)
+    expect(scanned.facts).toMatch(/Phone: \+919876543210/)
+    expect(scanned.facts).toMatch(/Website menu: Teeth Whitening/)
+
+    const c = await chat(
+      new Request('http://x/api/tools/chatbot/chat', {
+        method: 'POST',
+        body: JSON.stringify({ session: scanned.session, profile: scanned.profile, messages: [{ role: 'user', text: 'How can I contact you?' }] }),
+      }),
+    )
+    const out = await c.json()
+    expect(out.reply).toMatch(/98765/)
+    expect(prompts[0]).toMatch(/^gpt-test-model/)
+    expect(prompts[0]).toMatch(/BUSINESS FACTS:\nPhone: \+919876543210/)
+    expect(prompts[0]).toMatch(/teeth whitening/i)
+  })
+
+  it('without an AI key it still answers a contact question with the real details', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '')
+    const s = await scan(new Request('http://x/api/tools/chatbot/scan', { method: 'POST', body: JSON.stringify({ url: 'smile.example.com' }) }))
+    const scanned = await s.json()
+    const c = await chat(
+      new Request('http://x/api/tools/chatbot/chat', {
+        method: 'POST',
+        body: JSON.stringify({ session: scanned.session, profile: scanned.profile, messages: [{ role: 'user', text: 'what is your phone number' }] }),
+      }),
+    )
+    expect((await c.json()).reply).toMatch(/\+919876543210/)
+  })
+})

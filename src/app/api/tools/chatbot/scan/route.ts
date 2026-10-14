@@ -4,6 +4,7 @@
 // refuses private addresses.
 
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
 import { crawlSite, normaliseUrl, validatePublicUrl } from '@/lib/agent/rag/site-crawler'
 import { toChunks } from '@/lib/tools/chatbot/knowledge'
@@ -53,6 +54,8 @@ export async function POST(req: Request) {
   const host = new URL(url).hostname.replace(/^www\./, '')
   const profile = buildProfile(crawl.brand, crawl.pages, url)
   await recordScan(host, profile.name || null, profile.logoUrl)
+  // Refresh the cached brand wall now, not after the 10 min cache window.
+  try { if (profile.logoUrl) revalidatePath('/tools/ai-chatbot-widget') } catch { /* optional */ }
   return NextResponse.json({
     site: host,
     profile,

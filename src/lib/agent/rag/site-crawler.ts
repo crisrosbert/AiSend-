@@ -35,6 +35,8 @@
    Types
    ───────────────────────────────────────────────────────────────────── */
 
+import { EMPTY_FACTS, extractFacts, mergeFacts, type SiteFacts } from './site-facts'
+
 export interface CrawledPage {
   url: string
   title: string
@@ -59,6 +61,8 @@ export interface CrawlResult {
   skipped: Array<{ url: string; reason: string }>
   /** True when a cap or the time budget stopped us early. */
   truncated: boolean
+  /** Phone, email, address, hours, menu... read from the raw html of every page. */
+  facts?: SiteFacts
 }
 
 export interface CrawlOptions {
@@ -69,6 +73,10 @@ export interface CrawlOptions {
   totalBudgetMs?: number
   perRequestMs?: number
   maxBytesPerPage?: number
+  /** Fetch this many pages at once. 1 = one at a time. */
+  concurrency?: number
+  /** Visit contact / about / pricing / services style pages before others. */
+  preferKeyPages?: boolean
 }
 
 const DEFAULTS: Required<CrawlOptions> = {
@@ -79,6 +87,8 @@ const DEFAULTS: Required<CrawlOptions> = {
   totalBudgetMs: 40_000,
   perRequestMs: 8_000,
   maxBytesPerPage: 1_500_000,
+  concurrency: 1,
+  preferKeyPages: false,
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -505,6 +515,27 @@ export function withSourceHeader(chunk: string, title: string, url: string): str
   return `<source title="${title.replace(/"/g, "'")}" url="${url}">\n${chunk}`
 }
 
+/** Pages a visitor is most likely to ask about, tried even if no link leads to them. */
+const GUESS_PATHS = ['/contact', '/contact-us', '/about', '/about-us', '/pricing', '/faq']
+
+const KEY_PAGE: Array<[RegExp, number]> = [
+  [/contact|reach-us|get-in-touch/i, 6],
+  [/pricing|plans?|price|fees|cost/i, 5],
+  [/about|who-we-are|our-story/i, 4],
+  [/services?|products?|treatments?|solutions?|menu|shop|courses?|programs?/i, 4],
+  [/faq|help|support|how-it-works/i, 3],
+  [/locations?|visit|book|appointment|clinic|store|team|doctor/i, 3],
+  [/blog|news|press|tag|category|author|privacy|terms|policy|login|signin|cart|checkout|careers?/i, -4],
+]
+
+export function keyPageScore(url: string): number {
+  let path = url
+  try { path = new URL(url).pathname } catch { /* keep as is */ }
+  let score = 0
+  for (const [re, w] of KEY_PAGE) if (re.test(path)) score += w
+  return score - Math.min(path.split('/').filter(Boolean).length, 4) * 0.3
+}
+
 /* ─────────────────────────────────────────────────────────────────────
    The crawl
    ───────────────────────────────────────────────────────────────────── */
@@ -586,58 +617,87 @@ export async function crawlSite(
   const pages: CrawledPage[] = []
   const skipped: Array<{ url: string; reason: string }> = []
   let brand: SiteBrand = { name: null, logoUrl: null, description: null, themeColor: null }
+  let facts: SiteFacts = { ...EMPTY_FACTS }
   let truncated = false
+  let seedDone = false
+
+  const origin = new URL(start).origin
 
   while (frontier.length > 0) {
     const next: Array<{ url: string; depth: number }> = []
 
-    for (const { url, depth } of frontier) {
+    for (let i = 0; i < frontier.length; i += opts.concurrency) {
       if (pages.length >= opts.maxPages) { truncated = true; break }
       if (Date.now() - startedAt > opts.totalBudgetMs) { truncated = true; break }
 
-      // Re-checked here even though it passed on discovery: cheap, and
-      // the one place a mistake would be exploitable.
-      const checked = validatePublicUrl(url)
-      if (!checked.ok) { skipped.push({ url, reason: checked.reason }); continue }
+      // Only fetch as many as there is room for.
+      const room = Math.max(1, Math.min(opts.concurrency, opts.maxPages - pages.length))
+      const batch = frontier.slice(i, i + room)
+      i += room - opts.concurrency // keeps the stride equal to what was taken
 
-      const result = await fetchPage(url, opts.perRequestMs, opts.maxBytesPerPage)
-      if ('error' in result) { skipped.push({ url, reason: result.error }); continue }
+      const fetched = await Promise.all(
+        batch.map(async ({ url, depth }) => {
+          // Re-checked here even though it passed on discovery: cheap, and
+          // the one place a mistake would be exploitable.
+          const checked = validatePublicUrl(url)
+          if (!checked.ok) return { url, depth, error: checked.reason ?? 'invalid url' } as const
+          const result = await fetchPage(url, opts.perRequestMs, opts.maxBytesPerPage)
+          return { url, depth, ...result } as const
+        }),
+      )
 
-      const html = result.html
+      for (const r of fetched) {
+        const { url, depth } = r
+        if (pages.length >= opts.maxPages) { truncated = true; break }
+        if ('error' in r) { skipped.push({ url, reason: String((r as { error?: string }).error ?? 'failed') }); continue }
 
-      // The seed page speaks for the site's identity.
-      if (pages.length === 0 && skipped.length === 0) brand = extractBrand(html, url)
+        const html = (r as { html: string }).html
 
-      const text = htmlToText(html)
+        // The seed page speaks for the site's identity.
+        if (!seedDone) {
+          seedDone = true
+          brand = extractBrand(html, url)
+        }
 
-      if (looksJsRendered(text, html)) {
-        skipped.push({ url, reason: 'js_rendered_shell' })
-      } else if (text.length < 120) {
-        skipped.push({ url, reason: 'too little text' })
-      } else {
-        const rawTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
-        pages.push({
-          url,
-          title: rawTitle ? decodeEntities(rawTitle).trim().slice(0, 120) : url,
-          chunkSource: `link://${url}`,
-          text,
-          wordCount: text.split(/\s+/).length,
-        })
-      }
+        facts = mergeFacts(facts, extractFacts(html))
 
-      // Links come from the same response — never a second fetch.
-      if (depth < opts.maxDepth) {
-        for (const link of extractLinks(html, url, rootUrl)) {
-          if (queued.has(link)) continue
-          if (queued.size >= opts.maxPages * 3) break // discovery cap
-          queued.add(link)
-          next.push({ url: link, depth: depth + 1 })
+        const text = htmlToText(html)
+
+        if (looksJsRendered(text, html)) {
+          skipped.push({ url, reason: 'js_rendered_shell' })
+        } else if (text.length < 120) {
+          skipped.push({ url, reason: 'too little text' })
+        } else {
+          const rawTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+          pages.push({
+            url,
+            title: rawTitle ? decodeEntities(rawTitle).trim().slice(0, 120) : url,
+            chunkSource: `link://${url}`,
+            text,
+            wordCount: text.split(/\s+/).length,
+          })
+        }
+
+        // Links come from the same response — never a second fetch.
+        if (depth < opts.maxDepth) {
+          const links = extractLinks(html, url, rootUrl)
+          // The pages every business has, even when the menu hides them.
+          if (depth === 0 && opts.preferKeyPages) {
+            for (const guess of GUESS_PATHS) links.push(normaliseUrl(new URL(guess, origin)))
+          }
+          for (const link of links) {
+            if (queued.has(link)) continue
+            if (queued.size >= opts.maxPages * 4) break // discovery cap
+            queued.add(link)
+            next.push({ url: link, depth: depth + 1 })
+          }
         }
       }
     }
 
     if (pages.length >= opts.maxPages) { truncated = true; break }
     if (Date.now() - startedAt > opts.totalBudgetMs) { truncated = true; break }
+    if (opts.preferKeyPages) next.sort((x, y) => keyPageScore(y.url) - keyPageScore(x.url))
     frontier = next
   }
 
@@ -650,5 +710,5 @@ export async function crawlSite(
     })
   }
 
-  return { pages, brand, skipped, truncated }
+  return { pages, brand, skipped, truncated, facts }
 }

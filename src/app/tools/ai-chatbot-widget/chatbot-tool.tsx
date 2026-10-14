@@ -81,7 +81,7 @@ export function ChatbotTool() {
       const res = await fetch('/api/tools/chatbot/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session: scan.session, profile, messages: next.slice(-6) }),
+        body: JSON.stringify({ session: scan.session, profile, messages: next.slice(-10) }),
       })
       const data = await res.json().catch(() => ({}))
       const reply = res.ok && data.reply ? data.reply : data?.error || 'Sorry, I could not answer that. Please try again.'

@@ -26,7 +26,10 @@ export function newShareId(): string {
 }
 
 export async function createShare(input: Omit<Share, 'id'>): Promise<string | null> {
-  if (!enabled()) return null
+  if (!enabled()) {
+    console.error('[chatbot-share] Supabase env vars missing')
+    return null
+  }
   const id = newShareId()
   try {
     const db = supabaseAdmin()
@@ -38,12 +41,16 @@ export async function createShare(input: Omit<Share, 'id'>): Promise<string | nu
       facts: input.facts,
       listed: input.listed,
     })
-    if (error) return null
+    if (error) {
+      console.error('[chatbot-share] insert failed (did you run migration 011?):', error.message)
+      return null
+    }
     if (input.listed) {
       await db.from('tool_scanned_sites').update({ demo_id: id }).eq('host', input.host)
     }
     return id
-  } catch {
+  } catch (e) {
+    console.error('[chatbot-share] unexpected', e)
     return null
   }
 }

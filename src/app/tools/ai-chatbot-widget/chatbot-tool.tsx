@@ -6,10 +6,11 @@ import { TOOL_LEAD } from '@/lib/tools/landing-config'
 import { buildWhatsAppLeadLink, submitLead, validateLeadForm } from '@/lib/tools/lead-form'
 import type { BotProfile, Tone } from '@/lib/tools/chatbot/profile'
 import { saveDraft } from '@/lib/tools/chatbot/draft'
+import type { LeadCard } from '@/lib/tools/chatbot/booking'
 import './chatbot.css'
 
-type Msg = { role: 'user' | 'model'; text: string }
-type Scan = { site: string; profile: BotProfile; pages: number; session: string }
+type Msg = { role: 'user' | 'model'; text: string; card?: LeadCard }
+type Scan = { site: string; profile: BotProfile; pages: number; session: string; questions?: Array<{ q: string; tag: string }> }
 
 const STEPS = [
   { t: 'Scans your website', d: 'Learns your business, products and services' },
@@ -30,6 +31,10 @@ export function ChatbotTool() {
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [gate, setGate] = useState(false)
+  const [shareUrl, setShareUrl] = useState('')
+  const [listed, setListed] = useState(false)
+  const [shareBusy, setShareBusy] = useState(false)
+  const [shareErr, setShareErr] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -81,15 +86,42 @@ export function ChatbotTool() {
       const res = await fetch('/api/tools/chatbot/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session: scan.session, profile, messages: next.slice(-10) }),
+        body: JSON.stringify({
+          session: scan.session,
+          profile,
+          // Not the typed Msg: the server only needs role and text.
+          messages: next.slice(-10).map(({ role, text }) => ({ role, text })),
+          tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       const reply = res.ok && data.reply ? data.reply : data?.error || 'Sorry, I could not answer that. Please try again.'
-      setMsgs((m) => [...m, { role: 'model', text: reply }])
+      setMsgs((m) => [...m, { role: 'model', text: reply, card: res.ok ? data.card : undefined }])
     } catch {
       setMsgs((m) => [...m, { role: 'model', text: 'Connection problem. Please try again.' }])
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function share() {
+    if (!scan || !profile || shareBusy) return
+    setShareBusy(true)
+    setShareErr('')
+    try {
+      const res = await fetch('/api/tools/chatbot/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session: scan.session, profile, listed }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) throw new Error(data?.error || 'Could not create the link.')
+      setShareUrl(data.url)
+      try { await navigator.clipboard.writeText(data.url) } catch { /* the link is shown below anyway */ }
+    } catch (e) {
+      setShareErr(e instanceof Error ? e.message : 'Could not create the link.')
+    } finally {
+      setShareBusy(false)
     }
   }
 
@@ -164,6 +196,33 @@ export function ChatbotTool() {
               {COLORS.map((c) => <button key={c} type="button" aria-label={`Colour ${c}`} className={`cb-swatch${profile.color === c ? ' is-on' : ''}`} style={{ background: c }} onClick={() => patch({ color: c })} />)}
             </div>
           </div>
+          {scan.questions && scan.questions.length ? (
+            <div className="cb-field cb-qs">
+              <label>Questions your visitors will likely ask</label>
+              <p className="cb-hint" style={{ margin: '0 0 8px' }}>Worked out from what {scan.site} actually has. Click one to try it.</p>
+              <div className="cb-qs__list">
+                {scan.questions.map((x) => (
+                  <button key={x.q} type="button" onClick={() => send(x.q)} disabled={busy}><i>{x.tag}</i>{x.q}</button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div className="cb-field cb-share">
+            <label>Try it as a customer</label>
+            {shareUrl ? (
+              <>
+                <input readOnly value={shareUrl} onFocus={(e) => e.currentTarget.select()} aria-label="Demo link" />
+                <p className="cb-hint" style={{ margin: '6px 0 0' }}>Link copied. Send it to your team: it opens this chatbot full screen for 30 days.</p>
+                <a className="cb-btn cb-btn--ghost" href={shareUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 8, textDecoration: 'none' }}>Open demo</a>
+              </>
+            ) : (
+              <>
+                <label className="cb-check"><input type="checkbox" checked={listed} onChange={(e) => setListed(e.target.checked)} /> Also show {scan.site} on the public brand wall with a live demo. I confirm I am allowed to.</label>
+                <button className="cb-btn cb-btn--ghost" type="button" onClick={share} disabled={shareBusy}>{shareBusy ? 'Creating link…' : 'Create demo link'}</button>
+                {shareErr ? <p className="cb-err" role="alert">{shareErr}</p> : null}
+              </>
+            )}
+          </div>
           <div className="cb-cta">
             <button className="cb-btn" onClick={() => { saveDraft({ site: scan.site, name: profile.name, greeting: profile.greeting, color: profile.color }); setGate(true) }}>Add to website for free →</button>
             <button className="cb-btn cb-btn--ghost" onClick={() => { setPhase('start'); setScan(null) }}>Try another website</button>
@@ -180,7 +239,10 @@ export function ChatbotTool() {
             </div>
             <div className="cb-msgs" aria-live="polite">
               {msgs.map((m, i) => (
-                <div key={i} className={`cb-m ${m.role === 'user' ? 'cb-m--me' : 'cb-m--bot'}`} style={m.role === 'user' ? { background: profile.color } : undefined}>{m.text}</div>
+                <div key={i} className="cb-mrow">
+                  <div className={`cb-m ${m.role === 'user' ? 'cb-m--me' : 'cb-m--bot'}`} style={m.role === 'user' ? { background: profile.color } : undefined}>{m.text}</div>
+                  {m.card ? <LeadCardView card={m.card} site={scan.site} color={profile.color} /> : null}
+                </div>
               ))}
               {busy ? <div className="cb-m cb-m--bot"><span className="cb-typing"><i /><i /><i /></span></div> : null}
               <div ref={endRef} />
@@ -198,6 +260,28 @@ export function ChatbotTool() {
         </div>
       </div>
       {gate ? <Gate site={scan.site} onClose={() => setGate(false)} /> : null}
+    </div>
+  )
+}
+
+export function LeadCardView({ card, site, color }: { card: LeadCard; site: string; color: string }) {
+  const rows: Array<[string, string | undefined]> = [
+    ['Name', card.name],
+    ['Phone', card.phone],
+    [card.kind === 'appointment' ? 'Service' : 'Interested in', card.service],
+    [card.kind === 'appointment' ? 'Time' : '', card.when],
+  ]
+  return (
+    <div className="cb-lead" role="note" style={{ borderColor: color }}>
+      <div className="cb-lead__k" style={{ color }}>{card.kind === 'appointment' ? 'New appointment request' : 'New lead captured'}<span>demo</span></div>
+      <dl>
+        {rows.filter(([k, v]) => k && v).map(([k, v]) => (
+          <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+        ))}
+      </dl>
+      {card.adjusted ? <p className="cb-lead__n">Time moved to the next open slot, as the business hours on the website require.</p> : null}
+      <p className="cb-lead__n">This is what your team would receive. Demo only: nothing was saved.</p>
+      <a className="cb-lead__cta" href={`/signup?from=ai-chatbot-lead&site=${encodeURIComponent(site)}`} style={{ background: color }}>Create a free account to get real leads →</a>
     </div>
   )
 }

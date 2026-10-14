@@ -6,7 +6,11 @@ import { breadcrumbJsonLd, faqJsonLd, serializeJsonLd } from '@/lib/seo/json-ld'
 import { SITE_URL } from '@/lib/seo/site'
 import '../../(marketing)/landing.css'
 import { ChatbotTool } from './chatbot-tool'
+import { ScannedBrands } from './scanned-brands'
+import { getTopScanned } from '@/lib/tools/chatbot/scanned-sites'
 import { EXTRA_FAQ, SECTIONS } from './content'
+
+export const revalidate = 600
 
 const PATH = '/tools/ai-chatbot-widget'
 const TITLE = 'Free AI Chatbot Widget for Your Website'
@@ -39,7 +43,8 @@ const HOW = [
   ['4. Add it for free', 'Create a free account to embed it and capture every lead.'],
 ]
 
-export default function AiChatbotWidgetPage() {
+export default async function AiChatbotWidgetPage() {
+  const brands = await getTopScanned(10)
   const ld = [
     breadcrumbJsonLd([{ name: 'Home', path: '/' }, { name: 'Free tools', path: '/tools' }, { name: 'AI chatbot widget', path: PATH }]),
     faqJsonLd(ALL_FAQ),
@@ -72,6 +77,26 @@ export default function AiChatbotWidgetPage() {
                 <h3 className="font-bold text-lg">{t}</h3>
                 <p className="mt-2 text-gray-600 text-[15px] leading-relaxed">{d}</p>
               </div>
+            ))}
+          </div>
+        </section>
+
+        {brands.length >= 3 ? <ScannedBrands brands={brands} /> : null}
+
+        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '8px 16px 48px' }}>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-center">Get more customers chatting</h2>
+          <p className="mt-2 text-center text-gray-600">Free tools that send visitors into a WhatsApp conversation.</p>
+          <div className="grid gap-5 mt-8 sm:grid-cols-3">
+            {[
+              ['/tools/whatsapp-qr-code', 'WhatsApp QR code generator', 'Print a QR code for packaging, shop counters or flyers. Customers scan and start a chat.'],
+              ['/tools/whatsapp-link-generator', 'Click-to-chat link generator', 'Create a wa.me link with a ready message for bios, ads, emails and buttons.'],
+              ['/tools/whatsapp-chat-widget', 'Floating WhatsApp button', 'Add a chat button to your website so visitors opt in to talk with you.'],
+            ].map(([href, t, d]) => (
+              <Link key={href} href={href} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 hover:border-emerald-300 transition">
+                <h3 className="font-bold text-lg">{t}</h3>
+                <p className="mt-2 text-gray-600 text-[15px] leading-relaxed">{d}</p>
+                <span className="mt-3 inline-block text-emerald-800 font-semibold">Open tool →</span>
+              </Link>
             ))}
           </div>
         </section>

@@ -791,3 +791,48 @@ describe('falling back to a logo on the page', () => {
     expect(extractBrand('<p>hello</p>', page).logoUrl).toBe('https://hudle.in/favicon.ico')
   })
 })
+
+describe('crawlSite: key pages, facts, concurrency', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  const respond = (body: string, status = 200, url = 'https://x.example.com/') => {
+    const res = new Response(body, { status, headers: { 'content-type': 'text/html' } })
+    Object.defineProperty(res, 'url', { value: url })
+    return res
+  }
+  const page = (body: string) => respond(`<html><head><title>T</title></head><body>${body}</body></html>`)
+  const filler = 'We help local customers with friendly, reliable service every single day of the week. '.repeat(3)
+
+  it('reaches /contact even when no link leads there, and keeps footer facts', async () => {
+    const seen: string[] = []
+    vi.stubGlobal('fetch', async (u: string) => {
+      const url = String(u)
+      seen.push(url)
+      if (url === 'https://shop.example.com/') {
+        return page(`<main><p>${filler}</p><a href="/blog/a">Blog</a><a href="/services">Services</a></main><footer>x</footer>`)
+      }
+      if (url.endsWith('/contact')) {
+        return page(`<main><p>${filler}</p></main><footer><a href="tel:+911234567890">call</a></footer>`)
+      }
+      if (url.endsWith('/services')) return page(`<main><p>${filler}</p></main>`)
+      if (url.includes('/blog/')) return page(`<main><p>${filler}</p></main>`)
+      return respond('nope', 404)
+    })
+    const r = await crawlSite('https://shop.example.com/', { maxPages: 3, preferKeyPages: true, concurrency: 3 })
+    const urls = r.pages.map((p) => p.url)
+    expect(urls).toContain('https://shop.example.com/contact')
+    expect(urls).toContain('https://shop.example.com/services')
+    expect(urls).not.toContain('https://shop.example.com/blog/a') // low priority, cap reached first
+    expect(r.facts?.phones).toContain('+911234567890')
+  })
+
+  it('stays sequential and ignores key-page guessing by default', async () => {
+    const seen: string[] = []
+    vi.stubGlobal('fetch', async (u: string) => {
+      seen.push(String(u))
+      return page(`<main><p>${filler}</p></main>`)
+    })
+    await crawlSite('https://plain.example.com/', { maxPages: 5 })
+    expect(seen).toEqual(['https://plain.example.com/'])
+  })
+})

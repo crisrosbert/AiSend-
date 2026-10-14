@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server'
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
 import { callLLM, hasProviderKey, type LLMTurn } from '@/lib/agent/llm-provider'
-import { extractiveAnswer, topChunks } from '@/lib/tools/chatbot/knowledge'
+import { extractiveAnswer, orderChunks, topChunks, withinBudget } from '@/lib/tools/chatbot/knowledge'
 import { buildSystemPrompt } from '@/lib/tools/chatbot/prompt'
 import { buildProfile, cleanText, sanitizeProfile } from '@/lib/tools/chatbot/profile'
 import { verifySession } from '@/lib/tools/chatbot/session'
@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const MAX_QUESTION = 400
-const MAX_HISTORY = 6
+const MAX_HISTORY = 10
 
 export async function POST(req: Request) {
   const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown'
@@ -38,19 +38,26 @@ export async function POST(req: Request) {
   if (!question) return NextResponse.json({ error: 'Type a question first.' }, { status: 400 })
 
   const profile = sanitizeProfile(body?.profile, buildProfile({ name: session.site, logoUrl: null, description: null, themeColor: null }, [], `https://${session.site}`))
-  const context = topChunks(session.chunks, `${history.slice(-3).map((m) => m.text).join(' ')}`, 4)
+  const query = history.slice(-3).map((m) => m.text).join(' ')
+  // The whole site goes in, best passages first, so nothing a keyword match
+  // would miss is left out. Only a very large site loses its least relevant text.
+  const context = withinBudget(orderChunks(session.chunks, query))
+  const quoteFrom = topChunks(session.chunks, query, 3)
 
   let reply = ''
   if (hasProviderKey()) {
     try {
       const turns: LLMTurn[] = history.map((m) => ({ role: m.role, text: m.text }))
-      const res = await callLLM(buildSystemPrompt(profile, session.site, context), turns, [])
-      reply = res.text.trim().slice(0, 900)
+      const res = await callLLM(buildSystemPrompt(profile, session.site, context, session.facts ?? ''), turns, [], {
+        // Free-tool model: set TOOLS_CHATBOT_MODEL to give the demo a stronger model than the default.
+        model: process.env.TOOLS_CHATBOT_MODEL || undefined,
+      })
+      reply = res.text.trim().slice(0, 1200)
     } catch {
       reply = ''
     }
   }
-  if (!reply) reply = extractiveAnswer(context, question)
+  if (!reply) reply = session.facts && /contact|phone|call|email|address|reach|whatsapp|timing|hours/i.test(question) ? session.facts.split('\n').filter((l) => /^(Phone|WhatsApp|Email|Address|Opening hours):/.test(l)).join('\n') || extractiveAnswer(quoteFrom, question) : extractiveAnswer(quoteFrom, question)
 
   return NextResponse.json({ reply })
 }

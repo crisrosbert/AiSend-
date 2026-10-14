@@ -78,15 +78,21 @@ export function hasProviderKey(): boolean {
     : !!process.env.OPENAI_API_KEY
 }
 
+export interface CallOptions {
+  /** Use this model instead of the deployment default (same provider). */
+  model?: string
+}
+
 export async function callLLM(
   systemPrompt: string,
   turns: LLMTurn[],
   tools: LLMTool[],
+  options: CallOptions = {},
 ): Promise<LLMResponse> {
   if (activeProvider() === 'gemini') {
-    return callGemini(systemPrompt, turns, tools)
+    return callGemini(systemPrompt, turns, tools, options.model)
   }
-  return callOpenAI(systemPrompt, turns, tools)
+  return callOpenAI(systemPrompt, turns, tools, options.model)
 }
 
 // ════════════════════════════════════════════════════════════
@@ -97,11 +103,12 @@ async function callGemini(
   systemPrompt: string,
   turns: LLMTurn[],
   tools: LLMTool[],
+  modelOverride?: string,
 ): Promise<LLMResponse> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
+  const model = modelOverride || process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
 
   // Convert common turns → Gemini "contents" format
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -173,11 +180,12 @@ async function callOpenAI(
   systemPrompt: string,
   turns: LLMTurn[],
   tools: LLMTool[],
+  modelOverride?: string,
 ): Promise<LLMResponse> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY not set')
 
-  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+  const model = modelOverride || process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
   // Convert common turns → OpenAI messages format
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

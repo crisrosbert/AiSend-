@@ -107,11 +107,20 @@ function formatAddress(a: unknown): string | null {
   return parts.length ? parts.join(', ') : null
 }
 
+const DAY_CODES: Record<string, string> = {
+  Mo: 'Monday', Tu: 'Tuesday', We: 'Wednesday', Th: 'Thursday', Fr: 'Friday', Sa: 'Saturday', Su: 'Sunday',
+}
+
+/** schema.org writes "Mo-Sa 10:00-19:00". Spell the days out so they read (and parse) as words. */
+function expandDayCodes(s: string): string {
+  return s.replace(/\b(Mo|Tu|We|Th|Fr|Sa|Su)\b/g, (c) => DAY_CODES[c])
+}
+
 function formatHours(o: Record<string, unknown>): string | null {
   const plain = o.openingHours
-  if (typeof plain === 'string') return plain
+  if (typeof plain === 'string') return expandDayCodes(plain)
   if (Array.isArray(plain) && plain.every((p) => typeof p === 'string') && plain.length) {
-    return (plain as string[]).join('; ')
+    return expandDayCodes((plain as string[]).join('; '))
   }
   const spec = o.openingHoursSpecification
   const list = Array.isArray(spec) ? spec : spec ? [spec] : []

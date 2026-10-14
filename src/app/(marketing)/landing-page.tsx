@@ -3,6 +3,7 @@ import './landing.css'
 import { ImageSlot } from './image-slot'
 import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
+import { WhatsAppVsEmail } from '@/components/marketing/whatsapp-vs-email'
 
 /**
  * AiSend — public marketing home page.
@@ -635,6 +636,8 @@ export default function LandingPage() {
           </section>
 
           {/* SEO growth banner */}
+          <WhatsAppVsEmail />
+
           <section className="py-16 bg-gray-50/60 border-t border-gray-100">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="bg-[#e8f4fc] rounded-3xl border border-blue-100 p-8 sm:p-12 lg:p-14 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-10 items-center overflow-hidden">

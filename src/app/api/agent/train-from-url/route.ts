@@ -43,6 +43,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ingestSource } from '@/lib/agent/rag/ingest'
 import { callLLM } from '@/lib/agent/llm-provider'
 import { crawlSite, withSourceHeader, type CrawlResult } from '@/lib/agent/rag/site-crawler'
+import { factsToText as siteFactsToText } from '@/lib/agent/rag/site-facts'
 
 // Mutating action — never cache it.
 export const dynamic = 'force-dynamic'
@@ -131,7 +132,10 @@ export async function POST(req: Request) {
     // URL validation lives inside crawlSite and is applied to every link
     // it follows, not just this one. A crawler that checks only its seed
     // will happily fetch an internal address on our behalf.
-    const crawl = await crawlSite(rawUrl, { maxPages, maxDepth: 1 })
+    // preferKeyPages / concurrency: contact, about, pricing and services are
+    // read first (and /contact is tried even when no link leads to it), and
+    // pages are fetched four at a time so the extra reach fits the time budget.
+    const crawl = await crawlSite(rawUrl, { maxPages, maxDepth: 1, preferKeyPages: true, concurrency: 4 })
 
     if (crawl.pages.length === 0) {
       return NextResponse.json({ error: explainEmptyCrawl(crawl) }, { status: 422 })
@@ -203,9 +207,17 @@ export async function POST(req: Request) {
     // that lands in a prompt carries its own citation and the model can
     // say "on your pricing page it says…" rather than stating a number
     // from nowhere.
-    const combined = crawl.pages
-      .map((page) => withSourceHeader(page.text, page.title, page.url))
-      .join('\n\n')
+    //
+    // The first section is the contact block. The page text above has its
+    // <nav>, <header> and <footer> removed (they repeat on every page), and
+    // that is where most sites keep their phone, email, address, hours and
+    // service list. Without this block the agent could not answer "how do I
+    // reach you?" from a site that plainly says so.
+    const contactBlock = crawl.facts ? siteFactsToText(crawl.facts) : ''
+    const combined = [
+      ...(contactBlock ? [withSourceHeader(contactBlock, 'Contact details and site menu', rawUrl)] : []),
+      ...crawl.pages.map((page) => withSourceHeader(page.text, page.title, page.url)),
+    ].join('\n\n')
 
     const ingested = await ingestSource({
       tenantId: user.id,
@@ -310,6 +322,7 @@ function explainEmptyCrawl(crawl: CrawlResult): string {
  * even on a site with a long homepage.
  */
 function buildLlmText(crawl: CrawlResult): string {
+  const contact = crawl.facts ? siteFactsToText(crawl.facts) : ''
   const priority = /\/(about|about-us|contact|services|pricing|plans|team|company|faq)/i
 
   const ordered = [...crawl.pages].sort((a, b) => {
@@ -323,7 +336,9 @@ function buildLlmText(crawl: CrawlResult): string {
   const seed = crawl.pages[0]
   const rest = ordered.filter((page) => page.url !== seed.url)
 
-  let out = ''
+  // The contact block leads, so the fact extractor sees the phone and hours
+  // that only the footer carries.
+  let out = contact ? `--- Contact details and site menu ---\n${contact}` : ''
   for (const page of [seed, ...rest]) {
     const block = `\n\n--- ${page.title} (${page.url}) ---\n${page.text}`
     if (out.length + block.length > MAX_TEXT_FOR_LLM) break

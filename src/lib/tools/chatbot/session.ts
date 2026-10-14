@@ -4,11 +4,14 @@
 // a free general-purpose chatbot.
 
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { deflateSync, inflateSync } from 'node:zlib'
 import type { KnowledgeChunk } from './knowledge'
 
 export interface ChatSession {
   site: string
   chunks: KnowledgeChunk[]
+  /** Phone, email, address, hours, menu: read from the raw html, always shown to the model. */
+  facts?: string
   exp: number
 }
 
@@ -24,19 +27,21 @@ function secret(): string {
 const mac = (body: string) => createHmac('sha256', secret()).update(body).digest('base64url')
 
 export function signSession(s: Omit<ChatSession, 'exp'>, now = Date.now()): string {
-  const body = Buffer.from(JSON.stringify({ ...s, exp: now + SESSION_TTL_MS })).toString('base64url')
+  // Deflated: the whole site's text travels in this token, and plain JSON
+  // of 40k characters would not fit under the length cap.
+  const body = deflateSync(Buffer.from(JSON.stringify({ ...s, exp: now + SESSION_TTL_MS }))).toString('base64url')
   return `${body}.${mac(body)}`
 }
 
 export function verifySession(token: unknown, now = Date.now()): ChatSession | null {
-  if (typeof token !== 'string' || token.length > 60_000) return null
+  if (typeof token !== 'string' || token.length > 150_000) return null
   const [body, sig] = token.split('.')
   if (!body || !sig) return null
   const want = Buffer.from(mac(body))
   const got = Buffer.from(sig)
   if (want.length !== got.length || !timingSafeEqual(want, got)) return null
   try {
-    const s = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as ChatSession
+    const s = JSON.parse(inflateSync(Buffer.from(body, 'base64url'), { maxOutputLength: 400_000 }).toString('utf8')) as ChatSession
     return s.exp > now && Array.isArray(s.chunks) ? s : null
   } catch {
     return null

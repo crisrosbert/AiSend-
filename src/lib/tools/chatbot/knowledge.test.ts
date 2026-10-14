@@ -66,3 +66,39 @@ describe('draft', () => {
     expect(parseDraft(JSON.stringify({ site: 'a.com', color: 'red', savedAt: 5 }), 6)?.color).toBe('#1B6B4A')
   })
 })
+
+import { orderChunks, withinBudget } from './knowledge'
+import { buildSystemPrompt } from './prompt'
+import { buildProfile as bp } from './profile'
+
+describe('full-context knowledge', () => {
+  const chunks = toChunks(pages)
+  it('does not cut a long paragraph off', () => {
+    const long = Array.from({ length: 60 }, (_, i) => `Sentence number ${i} about our service.`).join(' ')
+    const c = toChunks([{ url: 'https://a.com/x', title: 'X', text: long }])
+    expect(c.map((x) => x.text).join(' ')).toContain('Sentence number 59')
+  })
+  it('puts the best chunk first but keeps all of them', () => {
+    const o = orderChunks(chunks, 'what is your email')
+    expect(o[0].url).toBe('https://a.com/contact')
+    expect(o).toHaveLength(chunks.length)
+  })
+  it('respects the budget by dropping what does not fit', () => {
+    const o = withinBudget(chunks, 120)
+    expect(o.reduce((n, x) => n + x.text.length, 0)).toBeLessThanOrEqual(120)
+  })
+  it('puts the facts in the prompt', () => {
+    const profile = bp({ name: 'A', logoUrl: null, description: null, themeColor: null }, [], 'https://a.com')
+    const p = buildSystemPrompt(profile, 'a.com', chunks, 'Phone: 98765 43210')
+    expect(p).toMatch(/BUSINESS FACTS:\nPhone: 98765 43210/)
+    expect(p).toMatch(/WEBSITE CONTENT/)
+  })
+  it('a big signed session round-trips', () => {
+    const big = Array.from({ length: 40 }, (_, i) => ({ url: `https://a.com/${i}`, title: `P${i}`, text: `Paragraph ${i} `.repeat(90) }))
+    const token = signSession({ site: 'a.com', chunks: big, facts: 'Phone: 1' })
+    expect(token.length).toBeLessThan(150_000)
+    expect(verifySession(token)?.chunks).toHaveLength(40)
+    expect(verifySession(token)?.facts).toBe('Phone: 1')
+    expect(verifySession(token.slice(0, -2) + 'xx')).toBeNull()
+  })
+})

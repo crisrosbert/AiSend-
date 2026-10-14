@@ -53,10 +53,10 @@ const METRICS = [
 ]
 
 const ADVANCED_CARDS = [
-  { title: 'Multiple Human Live Chat', body: ['Have multiple team members to drive Live Chat Support on the Same WhatsApp Business Number.', 'Filter Chats according to tags, campaigns and attributes for Smart Agent Chat Routing.'], alt: 'Live Chat UI Interface' },
-  { title: 'Real-Time Analytics', body: ['Track your campaign results in real-time.', 'Monitor Read, Replied & Clicked rates for each campaign and retarget smartly for higher conversions!'], alt: 'Campaign Analytics UI' },
-  { title: 'Build no-code Chatbot in minutes', body: ['Build your Own Chatbot Flows your Way! Easy-to-use Chatbot & Catalog Flow builder to build your conversational journeys'], alt: 'Drag and drop chatbot flow builder' },
-  { title: 'Import & Broadcast Instantly', body: ['Simply Import all your Contacts and Broadcast approved messages Instantly.', 'See real-time analytics on the AISEND. Platform for delivered, read rates and more'], alt: 'Import contacts and broadcast console' },
+  { title: 'Multiple Human Live Chat', body: ['Have multiple team members to drive Live Chat Support on the Same WhatsApp Business Number.', 'Filter Chats according to tags, campaigns and attributes for Smart Agent Chat Routing.'], alt: 'Live Chat UI Interface', img: 'home-live-chat' },
+  { title: 'Real-Time Analytics', body: ['Track your campaign results in real-time.', 'Monitor Read, Replied & Clicked rates for each campaign and retarget smartly for higher conversions!'], alt: 'Campaign Analytics UI', img: 'home-analytics' },
+  { title: 'Build no-code Chatbot in minutes', body: ['Build your Own Chatbot Flows your Way! Easy-to-use Chatbot & Catalog Flow builder to build your conversational journeys'], alt: 'Drag and drop chatbot flow builder', img: 'home-chatbot-flow' },
+  { title: 'Import & Broadcast Instantly', body: ['Simply Import all your Contacts and Broadcast approved messages Instantly.', 'See real-time analytics on the AISEND. Platform for delivered, read rates and more'], alt: 'Import contacts and broadcast console', img: 'home-import-broadcast' },
 ]
 
 const PERKS = [
@@ -195,7 +195,7 @@ export default function LandingPage() {
                   <div className="absolute -bottom-10 -right-10 w-72 h-72 bg-[#6FD9A0]/25 rounded-full blur-3xl pointer-events-none" />
                   <div className="relative mx-auto max-w-lg lg:max-w-none">
                     <div className="relative rounded-3xl p-2 bg-gradient-to-b from-white/90 to-white/40 backdrop-blur-xl border border-white/60 shadow-2xl">
-                      <ImageSlot alt="WhatsApp AI Marketing & Sales in Action" label="Hero product shot" dimensions="1200 × 900 · PNG, JPG or WebP" variant="flush" />
+                      <ImageSlot src="/home/home-hero.webp" alt="WhatsApp AI Marketing & Sales in Action" label="Hero product shot" dimensions="1200 × 900 · PNG, JPG or WebP" variant="flush" />
                       <div className="absolute -top-4 -left-4 sm:-left-6 bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-gray-100 flex items-center gap-3 animate-pulse">
                         <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-lg border border-amber-200">🔥</div>
                         <div>
@@ -262,7 +262,7 @@ export default function LandingPage() {
                 </div>
                 <div className="flex justify-center">
                   <div className="relative w-full max-w-lg">
-                    <ImageSlot alt="WhatsApp Broadcasting Preview" label="Broadcast preview" dimensions="1000 × 900 · PNG, JPG or WebP" variant="plain" />
+                    <ImageSlot src="/home/home-broadcast.webp" alt="WhatsApp Broadcasting Preview" label="Broadcast preview" dimensions="1000 × 900 · PNG, JPG or WebP" variant="plain" />
                   </div>
                 </div>
               </div>
@@ -287,12 +287,12 @@ export default function LandingPage() {
                     </div>
                   </div>
                   <div className="order-1 lg:order-2 flex justify-center">
-                    <ImageSlot alt="Click to WhatsApp Ads illustration" label="Click-to-WhatsApp ads" dimensions="800 × 700" variant="plain" />
+                    <ImageSlot src="/home/home-click-to-whatsapp-ads.webp" alt="Click to WhatsApp Ads illustration" label="Click-to-WhatsApp ads" dimensions="800 × 700" variant="plain" />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
                   <div className="flex justify-center order-1">
-                    <ImageSlot alt="WhatsApp Native Forms illustration" label="WhatsApp forms" dimensions="800 × 700" variant="plain" />
+                    <ImageSlot src="/home/home-whatsapp-forms.webp" alt="WhatsApp Native Forms illustration" label="WhatsApp forms" dimensions="800 × 700" variant="plain" />
                   </div>
                   <div className="order-2">
                     <h3 className="text-2xl sm:text-3xl font-bold">Build WhatsApp Forms</h3>
@@ -312,7 +312,7 @@ export default function LandingPage() {
                     </div>
                   </div>
                   <div className="order-1 lg:order-2 flex justify-center">
-                    <ImageSlot alt="WhatsApp Payments feature illustration" label="WhatsApp payments" dimensions="800 × 700" variant="plain" />
+                    <ImageSlot src="/home/home-whatsapp-payments.webp" alt="WhatsApp Payments feature illustration" label="WhatsApp payments" dimensions="800 × 700" variant="plain" />
                   </div>
                 </div>
               </div>
@@ -352,7 +352,7 @@ export default function LandingPage() {
                       ))}
                     </div>
                     <div className="px-6 pb-6 pt-2 bg-gradient-to-b from-transparent to-gray-50 flex items-center justify-center">
-                      <ImageSlot alt={c.alt} label={c.alt} dimensions="900 × 600" variant="flush" />
+                      <ImageSlot src={`/home/${c.img}.webp`} alt={c.alt} label={c.alt} dimensions="900 × 600" variant="flush" />
                     </div>
                   </div>
                 ))}
@@ -425,7 +425,7 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div className="lg:col-span-5 flex justify-center">
-                  <ImageSlot alt="AISEND. Onboarding and Features Console" label="Onboarding console" dimensions="900 × 900" variant="plain" />
+                  <ImageSlot src="/home/home-onboarding.webp" alt="AISEND. Onboarding and Features Console" label="Onboarding console" dimensions="900 × 900" variant="plain" />
                 </div>
               </div>
             </div>
@@ -514,7 +514,7 @@ export default function LandingPage() {
                     </div>
                   </div>
                   <div className="w-full lg:w-1/2 flex justify-center">
-                    <ImageSlot alt="Campaign builder interface" label="Campaign builder" dimensions="900 × 700" variant="plain" />
+                    <ImageSlot src="/home/home-campaign-builder.webp" alt="Campaign builder interface" label="Campaign builder" dimensions="900 × 700" variant="plain" />
                   </div>
                 </div>
               </div>

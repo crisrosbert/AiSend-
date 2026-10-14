@@ -1,0 +1,85 @@
+import { describe, expect, it } from 'vitest'
+import { BOOKING_TOOLS, bookingContext, hoursFromText, resolveHours, runTool, safeTimezone } from './booking'
+
+const NOW = new Date('2026-10-14T06:00:00Z') // Wednesday 11:30 in Kolkata
+const open = (d: number, days: ReturnType<typeof hoursFromText>) => days?.[d]
+
+describe('hoursFromText', () => {
+  it('reads a Hinglish range with am/pm', () => {
+    const d = hoursFromText('Clinic ke hours: Monday se Saturday, 10:00 AM se 7:00 PM')
+    expect(open(1, d)).toEqual({ open: '10:00', close: '19:00' })
+    expect(open(6, d)).toEqual({ open: '10:00', close: '19:00' })
+    expect(open(0, d)).toBeNull()
+  })
+  it('reads short day names and an explicit closed day', () => {
+    const d = hoursFromText('Mon-Sat 10:00-19:00; Sunday: Closed')
+    expect(open(3, d)).toEqual({ open: '10:00', close: '19:00' })
+    expect(open(0, d)).toBeNull()
+  })
+  it('reads different hours per day (JSON-LD style)', () => {
+    const d = hoursFromText('Monday, Tuesday 09:00-18:00; Saturday 09:00-13:00')
+    expect(open(2, d)).toEqual({ open: '09:00', close: '18:00' })
+    expect(open(6, d)).toEqual({ open: '09:00', close: '13:00' })
+    expect(open(3, d)).toBeNull()
+  })
+  it('does not invent hours from ordinary text', () => {
+    expect(hoursFromText('We offer teeth whitening and implants. Call 98765 43210.')).toBeNull()
+  })
+})
+
+describe('resolveHours', () => {
+  it('prefers the facts line, then page text, then falls back to the default', () => {
+    const a = resolveHours('Phone: 1\nOpening hours: Monday-Friday 09:00-17:00', [], 'Asia/Kolkata')
+    expect(a.fromSite).toBe(true)
+    expect(a.hours.days[1]).toEqual({ open: '09:00', close: '17:00' })
+    const b = resolveHours('', [{ title: 'Contact', url: 'u', text: 'Open Monday to Saturday 10 AM to 7 PM' }], 'Asia/Kolkata')
+    expect(b.fromSite).toBe(true)
+    const c = resolveHours('', [{ title: 'x', url: 'u', text: 'nothing here' }], 'Asia/Kolkata')
+    expect(c.fromSite).toBe(false)
+  })
+  it('validates timezones', () => {
+    expect(safeTimezone('Asia/Dubai')).toBe('Asia/Dubai')
+    expect(safeTimezone('Not/AZone')).toBe('Asia/Kolkata')
+    expect(safeTimezone(undefined)).toBe('Asia/Kolkata')
+  })
+})
+
+describe('runTool', () => {
+  const ctx = { hours: resolveHours('Opening hours: Monday-Saturday 10:00-19:00', [], 'Asia/Kolkata'), now: NOW }
+  const base = { name: 'Rahul Sharma', phone: '+91 98765 43210' }
+
+  it('books a slot inside opening hours as asked', () => {
+    const o = runTool('book_appointment', { ...base, preferred_date: '2026-10-15', preferred_time: '11:00', service: 'Whitening' }, ctx)
+    expect(o.card).toMatchObject({ kind: 'appointment', adjusted: false, service: 'Whitening' })
+    expect(o.card?.when).toMatch(/Thursday 15\/10 at 11/)
+    expect(o.result).toMatch(/Do not say it is confirmed/)
+  })
+  it('moves a Sunday request and says so', () => {
+    const o = runTool('book_appointment', { ...base, preferred_date: '2026-10-18', preferred_time: '11:00' }, ctx)
+    expect(o.card?.adjusted).toBe(true)
+    expect(o.result).toMatch(/did NOT work/)
+  })
+  it('moves a late-night request for today', () => {
+    const o = runTool('book_appointment', { ...base, preferred_date: '2026-10-14', preferred_time: '23:00' }, ctx)
+    expect(o.card?.adjusted).toBe(true)
+  })
+  it('rejects a bad phone or missing name without making a card', () => {
+    expect(runTool('book_appointment', { ...base, phone: '123', preferred_date: '2026-10-15' }, ctx).card).toBeUndefined()
+    expect(runTool('capture_lead', { name: '', phone: '+91 98765 43210' }, ctx).card).toBeUndefined()
+  })
+  it('does not check a time when the site gave no hours', () => {
+    const none = { hours: resolveHours('', [], 'Asia/Kolkata'), now: NOW }
+    const o = runTool('book_appointment', { ...base, preferred_date: '2026-10-18', preferred_time: '03:00' }, none)
+    expect(o.card?.when).toBe('2026-10-18 at 03:00')
+    expect(o.result).toMatch(/NOT checked/)
+  })
+  it('captures a plain lead', () => {
+    const o = runTool('capture_lead', { ...base, interest: 'Implant price' }, ctx)
+    expect(o.card).toMatchObject({ kind: 'lead', service: 'Implant price' })
+  })
+  it('exposes both tools and a prompt line with today and the hours', () => {
+    expect(BOOKING_TOOLS.map((t) => t.name)).toEqual(['book_appointment', 'capture_lead'])
+    expect(bookingContext(ctx)).toMatch(/14\/10\/2026/)
+    expect(bookingContext({ hours: resolveHours('', [], 'Asia/Kolkata'), now: NOW })).toMatch(/not found on the website/)
+  })
+})

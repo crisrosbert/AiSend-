@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
 import { callLLM, hasProviderKey, type LLMTurn } from '@/lib/agent/llm-provider'
+import { BOOKING_TOOLS, bookingContext, resolveHours, runTool, safeTimezone, type LeadCard } from '@/lib/tools/chatbot/booking'
 import { extractiveAnswer, orderChunks, topChunks, withinBudget } from '@/lib/tools/chatbot/knowledge'
 import { buildSystemPrompt } from '@/lib/tools/chatbot/prompt'
 import { buildProfile, cleanText, sanitizeProfile } from '@/lib/tools/chatbot/profile'
@@ -44,20 +45,41 @@ export async function POST(req: Request) {
   const context = withinBudget(orderChunks(session.chunks, query))
   const quoteFrom = topChunks(session.chunks, query, 3)
 
+  // Booking: same opening-hours logic as the paid agent, nothing stored.
+  const toolCtx = { hours: resolveHours(session.facts ?? '', session.chunks, safeTimezone(body?.tz)), now: new Date() }
+  const system = buildSystemPrompt(profile, session.site, context, session.facts ?? '', bookingContext(toolCtx))
+
   let reply = ''
+  let card: LeadCard | undefined
   if (hasProviderKey()) {
     try {
-      const turns: LLMTurn[] = history.map((m) => ({ role: m.role, text: m.text }))
-      const res = await callLLM(buildSystemPrompt(profile, session.site, context, session.facts ?? ''), turns, [], {
-        // Free-tool model: set TOOLS_CHATBOT_MODEL to give the demo a stronger model than the default.
-        model: process.env.TOOLS_CHATBOT_MODEL || undefined,
-      })
-      reply = res.text.trim().slice(0, 1200)
+      let turns: LLMTurn[] = history.map((m) => ({ role: m.role, text: m.text }))
+      for (let i = 0; i < 3; i++) {
+        const res = await callLLM(system, turns, BOOKING_TOOLS, {
+          // Free-tool model: set TOOLS_CHATBOT_MODEL to give the demo a stronger model than the default.
+          model: process.env.TOOLS_CHATBOT_MODEL || undefined,
+        })
+        if (res.toolCall) {
+          const out = runTool(res.toolCall.name, res.toolCall.args, toolCtx)
+          if (out.card) card = out.card
+          turns = [
+            ...turns,
+            { role: 'model', toolCall: res.toolCall },
+            { role: 'tool', toolResult: { name: res.toolCall.name, result: out.result } },
+          ]
+          continue
+        }
+        reply = res.text.trim().slice(0, 1200)
+        break
+      }
     } catch {
       reply = ''
     }
   }
+  if (!reply && card) {
+    reply = card.kind === 'appointment' ? `Done. Your request for ${card.when ?? 'that time'} has been noted and the team will confirm it.` : 'Done. Your request has been noted and the team will contact you.'
+  }
   if (!reply) reply = session.facts && /contact|phone|call|email|address|reach|whatsapp|timing|hours/i.test(question) ? session.facts.split('\n').filter((l) => /^(Phone|WhatsApp|Email|Address|Opening hours):/.test(l)).join('\n') || extractiveAnswer(quoteFrom, question) : extractiveAnswer(quoteFrom, question)
 
-  return NextResponse.json({ reply })
+  return NextResponse.json({ reply, card })
 }

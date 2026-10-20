@@ -11,8 +11,9 @@ import { PostShare } from '@/components/blog/post-share'
 import { PostAuthor } from '@/components/blog/post-author'
 import { PostSidebar } from '@/components/blog/post-sidebar'
 import { LeadPopup } from '@/components/blog/lead-popup'
+import { PostAds } from '@/components/blog/post-ad'
 import { categoriesWithCounts, categorySlug } from '@/lib/blog/categories'
-import { BLOG_TOOLS } from '@/lib/blog/tool-catalog'
+import { BLOG_TOOLS, toolImage } from '@/lib/blog/tool-catalog'
 import { extractFaq, groupSections } from '@/lib/blog/post-extras'
 import { formatPostDate, loadPosts, relatedPosts } from '@/lib/blog/posts'
 import { articleJsonLd, breadcrumbJsonLd, faqJsonLd, serializeJsonLd } from '@/lib/seo/json-ld'
@@ -117,6 +118,19 @@ export default async function BlogPostPage({ params }: Props) {
                 <Link href="/">Home</Link> <span>&gt;</span> <Link href="/blog">Blog</Link> <span>&gt;</span>{' '}
                 <Link href={catPath}>{post.category}</Link> <span>&gt;</span> <span aria-current="page">{post.title}</span>
               </nav>
+              {post.cover ? (
+                <div className="post-cover">
+                  <picture>
+                    {post.coverMobile ? <source media="(max-width: 720px)" srcSet={post.coverMobile} /> : null}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={post.cover} alt={post.coverAlt ?? ''} />
+                  </picture>
+                </div>
+              ) : (
+                <div className="post-cover post-cover--art">
+                  <CoverArt seed={post.slug} hint={post.tags.join(' ')} />
+                </div>
+              )}
               <h1>{post.title}</h1>
               <div className="post-meta">
                 <Link className="post-head__cat" href={catPath}>{post.category}</Link>
@@ -136,6 +150,7 @@ export default async function BlogPostPage({ params }: Props) {
           </header>
 
           <div className="post-layout post-layout--side">
+            <PostAds slug={post.slug} placement="rail" />
             <article className="post-article">
               {showToc ? (
                 <details className="post-toc" open>
@@ -149,6 +164,7 @@ export default async function BlogPostPage({ params }: Props) {
                   </ol>
                 </details>
               ) : null}
+              <PostAds slug={post.slug} placement="inline" />
               {post.accordion ? (
                 <PostAccordion
                   blocks={post.blocks}
@@ -173,6 +189,7 @@ export default async function BlogPostPage({ params }: Props) {
                         title={bannerTools[c.banner].name}
                         text={bannerTools[c.banner].text}
                         button="Try it free"
+                        image={toolImage(bannerTools[c.banner].slug)}
                         href={`/tools/${bannerTools[c.banner].slug}`}
                       />
                     ) : null}
@@ -203,8 +220,11 @@ export default async function BlogPostPage({ params }: Props) {
                 </>
               ) : (
                 <div className="post-cta">
-                  <p>Run WhatsApp marketing, chatbots and a shared inbox from one dashboard.</p>
-                  <a href="/signup">Start free</a>
+                  <div className="post-cta__copy">
+                    <p className="post-cta__title">Run WhatsApp marketing from one dashboard</p>
+                    <p className="post-cta__text">Campaigns, chatbots and a shared inbox on the official WhatsApp Business API.</p>
+                  </div>
+                  <a className="post-cta__btn" href="/signup">Start free →</a>
                 </div>
               )}
             </article>

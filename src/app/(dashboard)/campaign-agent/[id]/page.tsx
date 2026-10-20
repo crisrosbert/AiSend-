@@ -15,6 +15,15 @@ import { Pill, type PillTone } from "@/components/ui/pill";
 import { StatCard } from "@/components/ui/stat";
 import { Button } from "@/components/ui/button";
 
+interface Live {
+  day: { current: number; total: number };
+  budget: { plannedMax: number; spent: number; remaining: number; balance: number | null };
+  clicks: number | null;
+  attention: Array<{ contactId: string; name: string | null; phone: string; reason: "waiting" | "unreachable"; detail: string }>;
+  counts: { waiting: number; unreachable: number };
+}
+const inr = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 interface Campaign { id: string; name: string; goal: string; status: string; error: string | null; est_contacts: number; est_cost: number }
 interface Step { id: string; grp: number; variant: number; label: string; body: string; status: string; error: string | null; wait_hours: number; rule: string | null; broadcast_id: string | null; run_at: string | null; kind: string; rewrite_count: number; rejection_reason: string | null }
 interface Bc { id: string; total_recipients: number; sent_count: number; delivered_count: number; read_count: number; replied_count: number; failed_count: number }
@@ -43,11 +52,13 @@ export default function CampaignAgentDetailPage() {
   const [bcs, setBcs] = useState<Record<string, Bc>>({});
   const [busy, setBusy] = useState(false);
   const [missing, setMissing] = useState(false);
+  const [live, setLive] = useState<Live | null>(null);
 
   const load = useCallback(async () => {
     const { data: camp } = await supabase.from("campaign_agents").select("id, name, goal, status, error, est_contacts, est_cost").eq("id", id).maybeSingle();
     if (!camp) { setMissing(true); return; }
     setC(camp as Campaign);
+    fetch(`/api/campaign-agent/${id}/live`).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.day) setLive(d as Live); }).catch(() => {});
     const { data: st } = await supabase.from("campaign_steps").select("id, grp, variant, label, body, status, error, wait_hours, rule, broadcast_id, run_at, kind, rewrite_count, rejection_reason").eq("campaign_id", id).order("grp").order("variant");
     const list = (st ?? []) as Step[];
     setSteps(list);
@@ -107,12 +118,41 @@ export default function CampaignAgentDetailPage() {
 
       {c.error && <div className="mb-5 rounded-xl border p-3.5 text-[13px]" style={{ borderColor: "var(--amber-200)", background: "var(--amber-50)", color: "var(--amber)" }}>{c.error}</div>}
 
+      {live && (
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Journey" value={finished ? "Finished" : `Day ${live.day.current} of ${live.day.total}`} />
+          <StatCard label="Spent so far" value={inr(live.budget.spent)} />
+          <StatCard label="Budget left (of max)" value={inr(live.budget.remaining)} />
+          <StatCard label="Link clicks" value={live.clicks === null ? "No link" : live.clicks.toLocaleString("en-IN")} />
+        </div>
+      )}
+      {live && live.budget.balance !== null && (
+        <p className="mb-5 text-[12px] text-[color:var(--ink-3)]">Planned maximum {inr(live.budget.plannedMax)} (if every follow-up reached everyone). Wallet balance {inr(live.budget.balance)}.</p>
+      )}
+
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Sent" value={totals.sent.toLocaleString("en-IN")} />
         <StatCard label="Delivered" value={totals.delivered.toLocaleString("en-IN")} />
         <StatCard label="Read" value={totals.read.toLocaleString("en-IN")} />
         <StatCard label="Replied" value={totals.replied.toLocaleString("en-IN")} />
       </div>
+
+      {live && live.attention.length > 0 && (
+        <Panel className="mb-6">
+          <PanelHead title="Needs your attention" subtitle={`${live.counts.waiting} waiting for a reply · ${live.counts.unreachable} could not be reached`} />
+          <ul className="divide-y" style={{ borderColor: "var(--line)" }}>
+            {live.attention.map((p) => (
+              <li key={p.contactId} className="flex flex-wrap items-center gap-3 px-5 py-3 text-[13px]">
+                <Pill tone={p.reason === "waiting" ? "sched" : "err"}>{p.reason === "waiting" ? "Waiting for you" : "Not reachable"}</Pill>
+                <span className="font-medium">{p.name || "No name"}</span>
+                <span className="text-[color:var(--ink-3)]">{p.phone}</span>
+                <span className="text-[color:var(--ink-3)]">{p.detail}</span>
+                {p.reason === "waiting" && <Link href={`/inbox?q=${encodeURIComponent(p.phone)}`} className="ml-auto text-[12.5px] font-semibold text-[color:var(--brand-deep)] underline">Open chat</Link>}
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
 
       <Panel>
         <PanelHead title="Journey" subtitle={c.goal} />

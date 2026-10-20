@@ -32,37 +32,37 @@ A restricted API account can often still receive messages but is limited in what
 
 WhatsApp does not publish a single checklist that explains every ban, and it can act at its own discretion. What it does publish is its Business Messaging Policy, and the patterns below match what that policy names as problems. They are listed roughly in the order we would check them.
 
-## 1. You messaged people who never opted in
+### 1. You messaged people who never opted in
 
 This is the big one. The policy says businesses may message only people who gave their number and agreed to receive messages from them. A phone number you found, bought or copied from a visiting card is not consent.
 
 The tricky part is that WhatsApp does not need to prove you had no permission. It only needs enough people to tap **Block** or **Report** after your message. Every one of those taps is a signal about you.
 
-## 2. You sent bulk messages from the normal app or a browser extension
+### 2. You sent bulk messages from the normal app or a browser extension
 
 Many cheap "bulk sender" tools work by controlling WhatsApp Web or by scanning a QR code, then sending messages one after another from an ordinary number. To WhatsApp this looks like automation on a consumer account, and the policy lists unauthorized large-scale messaging through a service as grounds for action. It is the main reason these tools come with a ban warning in the fine print.
 
 The risk grows with volume. Ten messages to friends is one thing. Two thousand messages in an afternoon to people who have never heard of you is another.
 
-## 3. Too many people blocked or reported you
+### 3. Too many people blocked or reported you
 
 Quality is a running score. If a meaningful share of the people you message block or report you, WhatsApp may limit what you can send, and repeated problems can end in a ban. Blocks come from messages that feel irrelevant, too frequent, or hard to stop.
 
 This is why a small, interested list often beats a large cold one. Fewer blocks keep your quality healthy, and healthy quality lets you send more later.
 
-## 4. A new number suddenly sent a lot
+### 4. A new number suddenly sent a lot
 
 A brand new number that goes from zero to thousands of messages in one day looks nothing like a normal business. Even on the official API, new accounts start with a daily limit that grows as you send good-quality messages. Meta moved these limits to the whole business portfolio in October 2025, so look at your own limit in WhatsApp Manager instead of trusting a number from a blog, including this one.
 
-## 5. The same message, copied, with links in it
+### 5. The same message, copied, with links in it
 
 Identical text sent to a long list, especially with shortened links or heavy promotion, trips spam filters. Small changes help, such as the customer's first name and a line about what they actually did with you. A message that reads like it was written for one person is also less likely to be reported.
 
-## 6. Prohibited products or misleading claims
+### 6. Prohibited products or misleading claims
 
 The policy bars some categories outright, including things like firearms, tobacco, drugs and real-money gambling, and it restricts others. It also forbids misleading or deceptive messages and pretending to be another business. A message promising a guaranteed result, a fake discount or a fake urgent deadline can get you reported and reviewed.
 
-## 7. A bought or scraped contact list
+### 7. A bought or scraped contact list
 
 Lists sold online are the fastest way to a ban. The numbers are old, the people never agreed to anything, and many are simply wrong. If you want a list, build it, one honest sign-up at a time.
 
@@ -85,7 +85,7 @@ The official route costs more per message and asks you to follow rules. In retur
 
 Stay calm, and do these in order. Rushed mistakes such as creating five new numbers in one evening make things worse.
 
-## If your app number is banned
+### If your app number is banned
 
 1. **Stop sending from that number.** Do not try to work around the block with the same SIM on another phone.
 2. **Read the exact message on screen.** Take a screenshot. It tells you whether the block is temporary or permanent.
@@ -93,7 +93,7 @@ Stay calm, and do these in order. Rushed mistakes such as creating five new numb
 4. **Wait for a reply.** Resending the request again and again does not speed it up.
 5. **Prepare a fallback.** Tell your regular customers on another channel that you may be slow to reply for a few days.
 
-## If your API account is restricted or disabled
+### If your API account is restricted or disabled
 
 1. **Open WhatsApp Manager** in your Meta Business Portfolio and select the account. The policy alert there usually names the reason.
 2. **Pause campaigns.** Do not send promotions until you understand the problem.
@@ -115,19 +115,19 @@ If the first review does not work, you can usually ask again after improving som
 
 Most bans are preventable. The habits below take a few hours to set up and save you from a much longer recovery later.
 
-## Collect opt-in properly
+### Collect opt-in properly
 
 Give people a reason to say yes. Put a checkbox at checkout that says they want order and offer updates on WhatsApp. Add a click-to-WhatsApp button to your website with a [prefilled message](/blog/whatsapp-link-with-prefilled-message). Run a "message us to get the offer" ad. In each case you keep a record of the moment they agreed.
 
-## Make stopping easy
+### Make stopping easy
 
 End promotional messages with a plain line such as "Reply STOP to unsubscribe", and then honour it straight away. People who cannot leave will block you instead, and blocks hurt more than unsubscribes.
 
-## Use approved templates for the first message
+### Use approved templates for the first message
 
 On the official API, a conversation that you start must begin with a template that Meta has approved. Write it clearly, give it the right category, and avoid the common rejection reasons covered in our guide to [why templates get rejected](/blog/why-whatsapp-templates-get-rejected). If you are unsure about the category, read [marketing or utility](/blog/marketing-or-utility-whatsapp-template) first.
 
-## Warm up gradually
+### Warm up gradually
 
 Do not send to your whole list on day one. A simple example plan, to be adjusted to your own limit:
 
@@ -138,7 +138,7 @@ Do not send to your whole list on day one. A simple example plan, to be adjusted
 | 6 to 10 | The rest of your opted-in list in batches | Lets you spot problems early |
 | After that | Raise volume only if blocks stay low | Quality, not speed, raises your limit |
 
-## Write like a person
+### Write like a person
 
 Use the customer's first name, mention what they did, and say why you are writing. Compare these two messages.
 
@@ -148,11 +148,11 @@ Better: "Hi Priya, the kurta set you looked at last week is back in your size. W
 
 The second one is shorter on hype and longer on relevance. It is also the kind of message people reply to instead of reporting.
 
-## Watch your numbers every week
+### Watch your numbers every week
 
 Check blocks, replies and delivery rates after each campaign. If blocks climb, pause, look at the message and look at the list, and change one thing at a time. Treat it like a health check, not an emergency.
 
-## Keep a human way out
+### Keep a human way out
 
 If you use a chatbot, give people a clear route to a real person. WhatsApp's policy expects automated experiences to offer a way to reach a human. A [free AI chatbot](/tools/ai-chatbot-widget) can handle first questions while a team member takes over the rest.
 

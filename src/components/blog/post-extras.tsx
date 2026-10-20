@@ -8,21 +8,25 @@ export function PostCtaBanner({
   button,
   href = '/signup',
   variant = 'dark',
+  tag,
 }: {
   title: string
   text: string
   button: string
   href?: string
-  variant?: 'dark' | 'light'
+  variant?: 'dark' | 'light' | 'blue'
+  /** Small label above the title, e.g. "Free tool". */
+  tag?: string
 }) {
   return (
     <aside className={`cta-banner cta-banner--${variant}`}>
       <div className="cta-banner__copy">
+        {tag ? <span className="cta-banner__tag">{tag}</span> : null}
         <p className="cta-banner__title">{title}</p>
         <p className="cta-banner__text">{text}</p>
       </div>
       <Link className="cta-banner__btn" href={href}>
-        {button}
+        {button}{variant === 'blue' ? ' →' : ''}
       </Link>
     </aside>
   )

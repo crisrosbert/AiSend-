@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { CoverArt } from '@/components/art/cover-art'
-import { BLOG_TOOLS } from '@/lib/blog/tool-catalog'
+import { BLOG_TOOLS, toolImage } from '@/lib/blog/tool-catalog'
 import type { CategoryCount } from '@/lib/blog/categories'
 import { formatPostDate, type PostMeta } from '@/lib/blog/posts'
 import { BlogLeadForm } from '@/components/blog/blog-lead-form'
@@ -68,6 +68,8 @@ export function PostSidebar({
           {BLOG_TOOLS.map((t) => (
             <li key={t.slug}>
               <Link href={`/tools/${t.slug}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="side-tools__img" src={toolImage(t.slug)} alt="" width={40} height={40} loading="lazy" />
                 <span className="side-tools__name">{t.name}</span>
                 <span className={`side-tools__tag${t.ai ? ' is-ai' : ''}`}>{t.ai ? 'AI · Free' : 'Free'}</span>
               </Link>

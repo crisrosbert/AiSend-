@@ -4,7 +4,6 @@ import { SiteHeader } from '@/components/layout/site-header'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { CoverArt } from '@/components/art/cover-art'
 import { PostBody } from '@/components/blog/post-body'
-import { PostCard } from '@/components/blog/post-card'
 import { PostAccordion } from '@/components/blog/post-accordion'
 import { BlogLeadForm } from '@/components/blog/blog-lead-form'
 import { PostCtaBanner, RelatedTools } from '@/components/blog/post-extras'
@@ -19,6 +18,8 @@ import { formatPostDate, loadPosts, relatedPosts } from '@/lib/blog/posts'
 import { articleJsonLd, breadcrumbJsonLd, faqJsonLd, serializeJsonLd } from '@/lib/seo/json-ld'
 import { buildMetadata } from '@/lib/seo/metadata'
 import '../blog.css'
+
+const FONT_HREF = 'https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..800&display=swap'
 
 // Only posts that exist at build time are valid pages; anything else is a 404.
 export const dynamicParams = false
@@ -62,6 +63,11 @@ export default async function BlogPostPage({ params }: Props) {
   const faq = extractFaq(post.blocks)
   const categories = categoriesWithCounts(all)
   const catPath = `/blog/category/${categorySlug(post.category)}`
+  const popular = all
+    .filter((p) => p.slug !== post.slug)
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .slice(0, 3)
+  const more = related.length ? related : popular
 
   // Banners that sit inside a long post, one third and two thirds of the way down.
   const bannerTools = (post.tools.length ? post.tools : ['whatsapp-template-generator', 'ai-chatbot-widget'])
@@ -101,59 +107,48 @@ export default async function BlogPostPage({ params }: Props) {
 
   return (
     <>
-      <div className="lp blog" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <link rel="stylesheet" href={FONT_HREF} precedence="default" />
+      <div className="lp blog blog--post" style={{ fontFamily: "'DM Sans', 'Inter', sans-serif" }}>
         <SiteHeader />
         <main>
           <header className="post-head">
-            <div className="post-head__inner">
+            <div className="post-wrap">
               <nav className="post-crumbs" aria-label="Breadcrumb">
-                <Link href="/">Home</Link> / <Link href="/blog">Blog</Link> /{' '}
-                <Link href={catPath}>{post.category}</Link>
+                <Link href="/">Home</Link> <span>&gt;</span> <Link href="/blog">Blog</Link> <span>&gt;</span>{' '}
+                <Link href={catPath}>{post.category}</Link> <span>&gt;</span> <span aria-current="page">{post.title}</span>
               </nav>
-              <Link className="post-head__cat" href={catPath}>{post.category}</Link>
               <h1>{post.title}</h1>
-              <p className="post-head__desc">{post.description}</p>
               <div className="post-meta">
-                <span>By {post.author}</span>
-                {post.hideDate ? null : <span>Published: {formatPostDate(post.date)}</span>}
+                <Link className="post-head__cat" href={catPath}>{post.category}</Link>
+                {post.hideDate ? null : (
+                  <span className="post-meta__date">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" fill="none" /></svg>
+                    <b>Published:</b> {formatPostDate(post.date)}
+                  </span>
+                )}
                 {!post.hideDate && post.updated && post.updated !== post.date ? (
-                  <span>Updated on: {formatPostDate(post.updated)}</span>
+                  <span><b>Updated on:</b> {formatPostDate(post.updated)}</span>
                 ) : null}
                 <span>{post.readingMinutes} min read</span>
+                <PostShare title={post.title} />
               </div>
-              <PostShare title={post.title} />
             </div>
           </header>
 
-          {post.cover ? (
-            <div className="post-cover">
-              <picture>
-                {post.coverMobile ? <source media="(max-width: 720px)" srcSet={post.coverMobile} /> : null}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={post.cover} alt={post.coverAlt ?? ''} />
-              </picture>
-            </div>
-          ) : (
-            <div className="post-cover post-cover--art">
-              <CoverArt seed={post.slug} hint={post.tags.join(' ')} />
-            </div>
-          )}
-
-          <div className={`post-layout post-layout--side${showToc ? ' post-layout--toc' : ''}`}>
-            {showToc ? (
-              <aside className="post-toc" aria-label="Table of contents">
-                <p className="post-toc__title">On this page</p>
-                <ul>
-                  {post.toc.filter((t) => !post.accordion || t.level === 2).map((t) => (
-                    <li key={t.id} className={t.level > 2 ? 'is-sub' : undefined}>
-                      <a href={`#${t.id}`}>{t.text}</a>
-                    </li>
-                  ))}
-                </ul>
-              </aside>
-            ) : null}
-
+          <div className="post-layout post-layout--side">
             <article className="post-article">
+              {showToc ? (
+                <details className="post-toc" open>
+                  <summary className="post-toc__title">Table of Contents</summary>
+                  <ol>
+                    {post.toc.filter((t) => t.level === 2).map((t) => (
+                      <li key={t.id}>
+                        <a href={`#${t.id}`}>{t.text}</a>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              ) : null}
               {post.accordion ? (
                 <PostAccordion
                   blocks={post.blocks}
@@ -213,23 +208,36 @@ export default async function BlogPostPage({ params }: Props) {
                 </div>
               )}
             </article>
-            <PostSidebar categories={categories} currentCategory={post.category} slug={post.slug} />
+            <PostSidebar categories={categories} currentCategory={post.category} slug={post.slug} popular={popular} />
           </div>
 
           <RelatedTools slugs={post.tools} />
 
-          {related.length ? (
-            <section className="post-related">
-              <div className="blog__wrap">
-                <h2>Keep reading</h2>
-                <div className="blog-grid">
-                  {related.map((p) => (
-                    <PostCard key={p.slug} post={p} />
-                  ))}
-                </div>
+          <section className="post-related">
+            <div className="post-wrap">
+              <h2>Related Blog Posts</h2>
+              <div className="rel-row">
+                {more.map((p) => (
+                  <Link key={p.slug} className="rel-card" href={`/blog/${p.slug}`}>
+                    <div className="rel-card__img">
+                      {p.cover ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.coverMobile ?? p.cover} alt={p.coverAlt ?? ''} loading="lazy" decoding="async" />
+                      ) : (
+                        <CoverArt seed={p.slug} hint={p.tags.join(' ')} />
+                      )}
+                    </div>
+                    <span className="post-head__cat">{p.category}</span>
+                    <h3>{p.title}</h3>
+                    <div className="rel-card__foot">
+                      <span>{p.hideDate ? `${p.readingMinutes} min read` : formatPostDate(p.date)}</span>
+                      <span className="rel-card__go" aria-hidden="true">→</span>
+                    </div>
+                  </Link>
+                ))}
               </div>
-            </section>
-          ) : null}
+            </div>
+          </section>
         </main>
         <LeadPopup slug={post.slug} />
         {structuredData.map((data, i) => (

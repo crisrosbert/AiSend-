@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BLOG_TOOLS } from '@/lib/blog/tool-catalog'
+import { BLOG_TOOLS, toolImage } from '@/lib/blog/tool-catalog'
 
 /** A wide banner that asks for the click. Used inside and at the end of a post. */
 export function PostCtaBanner({
@@ -9,6 +9,7 @@ export function PostCtaBanner({
   href = '/signup',
   variant = 'dark',
   tag,
+  image,
 }: {
   title: string
   text: string
@@ -17,11 +18,18 @@ export function PostCtaBanner({
   variant?: 'dark' | 'light' | 'blue'
   /** Small label above the title, e.g. "Free tool". */
   tag?: string
+  /** Picture shown in the round badge of the blue banner. */
+  image?: string
 }) {
   return (
     <aside className={`cta-banner cta-banner--${variant}`}>
       {variant === 'blue' ? (
-        <span className="cta-banner__orb" aria-hidden="true">{tag && /ai/i.test(tag) ? 'AI' : 'Free'}</span>
+        <span className="cta-banner__orb" aria-hidden="true">
+          {image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={image} alt="" width={78} height={78} />
+          ) : tag && /ai/i.test(tag) ? 'AI' : 'Free'}
+        </span>
       ) : null}
       <div className="cta-banner__copy">
         {tag ? <span className="cta-banner__tag">{tag}</span> : null}
@@ -46,7 +54,9 @@ export function RelatedTools({ slugs }: { slugs: readonly string[] }) {
         <div className="post-tools__grid">
           {tools.map((t) => (
             <Link key={t.slug} className="post-tool" href={`/tools/${t.slug}`}>
-              <span className="post-tool__tag">Free tool</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="post-tool__img" src={toolImage(t.slug)} alt="" width={56} height={56} loading="lazy" />
+              <span className="post-tool__tag">{t.ai ? 'Free AI tool' : 'Free tool'}</span>
               <span className="post-tool__name">{t.name}</span>
               <span className="post-tool__text">{t.text}</span>
               <span className="post-tool__go">Open the tool →</span>

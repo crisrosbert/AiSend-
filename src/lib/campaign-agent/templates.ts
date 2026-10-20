@@ -3,6 +3,7 @@
 // session): load the account's WhatsApp config, submit to Meta, mirror locally.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { randomUUID } from 'node:crypto'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { createTemplate, uploadProfilePhoto } from '@/lib/whatsapp/meta-api'
 import { GRAPH_BASE_URL } from '@/lib/meta/graph-version'
@@ -35,6 +36,14 @@ export interface SubmitArgs {
   /** Public https URL of the header image, if the campaign has one. */
   imageUrl?: string | null
   language?: string
+  /** Optional call-to-action button. Clicks are counted through our own redirect. */
+  link?: { text: string; url: string } | null
+}
+
+function siteUrl(): string {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return 'http://localhost:3000'
 }
 
 /** Submits one Marketing template. Throws with Meta's own message if it is refused. */
@@ -52,6 +61,12 @@ export async function submitTemplate(db: Db, userId: string, a: SubmitArgs): Pro
     headerMediaHandle = await uploadProfilePhoto({ appId, accessToken, fileBytes: await res.arrayBuffer(), mimeType, fileName: 'header.jpg' })
   }
 
+  // Click tracking: Meta approves OUR redirect URL; the real destination stays local.
+  const clickToken = a.link ? randomUUID() : null
+  const metaButtons = a.link && clickToken
+    ? [{ type: 'URL' as const, text: a.link.text, url: `${siteUrl()}/api/t/click/${clickToken}` }]
+    : undefined
+
   const result = await createTemplate({
     wabaId,
     accessToken,
@@ -62,6 +77,7 @@ export async function submitTemplate(db: Db, userId: string, a: SubmitArgs): Pro
     headerMediaFormat: headerMediaHandle ? 'IMAGE' : undefined,
     headerMediaHandle,
     footerText: FOOTER,
+    buttons: metaButtons,
     sampleValues: [a.sampleName],
   })
 
@@ -75,7 +91,10 @@ export async function submitTemplate(db: Db, userId: string, a: SubmitArgs): Pro
     header_content: headerMediaHandle ? a.imageUrl : null,
     body_text: a.body,
     footer_text: FOOTER,
-    buttons: null,
+    buttons: a.link ? [{ type: 'URL', text: a.link.text, url: a.link.url }] : null,
+    click_tracking_enabled: !!clickToken,
+    click_token: clickToken,
+    cta_target_url: a.link?.url ?? null,
     status,
     meta_template_id: result.id,
     updated_at: new Date().toISOString(),

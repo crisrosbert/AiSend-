@@ -8,7 +8,13 @@ import { PostCard } from '@/components/blog/post-card'
 import { PostAccordion } from '@/components/blog/post-accordion'
 import { BlogLeadForm } from '@/components/blog/blog-lead-form'
 import { PostCtaBanner, RelatedTools } from '@/components/blog/post-extras'
-import { extractFaq } from '@/lib/blog/post-extras'
+import { PostShare } from '@/components/blog/post-share'
+import { PostAuthor } from '@/components/blog/post-author'
+import { PostSidebar } from '@/components/blog/post-sidebar'
+import { LeadPopup } from '@/components/blog/lead-popup'
+import { categoriesWithCounts, categorySlug } from '@/lib/blog/categories'
+import { BLOG_TOOLS } from '@/lib/blog/tool-catalog'
+import { extractFaq, groupSections } from '@/lib/blog/post-extras'
 import { formatPostDate, loadPosts, relatedPosts } from '@/lib/blog/posts'
 import { articleJsonLd, breadcrumbJsonLd, faqJsonLd, serializeJsonLd } from '@/lib/seo/json-ld'
 import { buildMetadata } from '@/lib/seo/metadata'
@@ -54,6 +60,25 @@ export default async function BlogPostPage({ params }: Props) {
   const related = relatedPosts(post, all)
   const showToc = post.toc.length >= 3
   const faq = extractFaq(post.blocks)
+  const categories = categoriesWithCounts(all)
+  const catPath = `/blog/category/${categorySlug(post.category)}`
+
+  // Banners that sit inside a long post, one third and two thirds of the way down.
+  const bannerTools = (post.tools.length ? post.tools : ['whatsapp-template-generator', 'ai-chatbot-widget'])
+    .flatMap((s) => BLOG_TOOLS.filter((t) => t.slug === s))
+    .slice(0, 2)
+  const { intro, sections } = groupSections(post.blocks)
+  const cutAt = sections.length >= 4 ? [Math.floor(sections.length / 3), Math.floor((sections.length * 2) / 3)] : []
+  const chunks: Array<{ blocks: typeof post.blocks; banner?: number }> = []
+  if (!post.accordion) {
+    let start = 0
+    chunks.push({ blocks: intro })
+    cutAt.forEach((cut, i) => {
+      chunks.push({ blocks: sections.slice(start, cut).flatMap((sec) => [sec.heading, ...sec.body]), banner: i })
+      start = cut
+    })
+    chunks.push({ blocks: sections.slice(start).flatMap((sec) => [sec.heading, ...sec.body]) })
+  }
 
   const structuredData = [
     articleJsonLd({
@@ -68,6 +93,7 @@ export default async function BlogPostPage({ params }: Props) {
     breadcrumbJsonLd([
       { name: 'Home', path: '/' },
       { name: 'Blog', path: '/blog' },
+      { name: post.category, path: catPath },
       { name: post.title, path },
     ]),
     ...(faq.length ? [faqJsonLd(faq)] : []),
@@ -81,18 +107,21 @@ export default async function BlogPostPage({ params }: Props) {
           <header className="post-head">
             <div className="post-head__inner">
               <nav className="post-crumbs" aria-label="Breadcrumb">
-                <Link href="/">Home</Link> / <Link href="/blog">Blog</Link>
+                <Link href="/">Home</Link> / <Link href="/blog">Blog</Link> /{' '}
+                <Link href={catPath}>{post.category}</Link>
               </nav>
+              <Link className="post-head__cat" href={catPath}>{post.category}</Link>
               <h1>{post.title}</h1>
               <p className="post-head__desc">{post.description}</p>
               <div className="post-meta">
-                <span>{post.author}</span>
-                {post.hideDate ? null : <span>{formatPostDate(post.date)}</span>}
+                <span>By {post.author}</span>
+                {post.hideDate ? null : <span>Published: {formatPostDate(post.date)}</span>}
                 {!post.hideDate && post.updated && post.updated !== post.date ? (
-                  <span>Updated {formatPostDate(post.updated)}</span>
+                  <span>Updated on: {formatPostDate(post.updated)}</span>
                 ) : null}
                 <span>{post.readingMinutes} min read</span>
               </div>
+              <PostShare title={post.title} />
             </div>
           </header>
 
@@ -110,7 +139,7 @@ export default async function BlogPostPage({ params }: Props) {
             </div>
           )}
 
-          <div className={`post-layout${showToc ? ' post-layout--toc' : ''}`}>
+          <div className={`post-layout post-layout--side${showToc ? ' post-layout--toc' : ''}`}>
             {showToc ? (
               <aside className="post-toc" aria-label="Table of contents">
                 <p className="post-toc__title">On this page</p>
@@ -139,7 +168,21 @@ export default async function BlogPostPage({ params }: Props) {
                   }}
                 />
               ) : (
-                <PostBody blocks={post.blocks} />
+                chunks.map((c, i) => (
+                  <div key={i}>
+                    <PostBody blocks={c.blocks} />
+                    {c.banner !== undefined && bannerTools[c.banner] ? (
+                      <PostCtaBanner
+                        variant="blue"
+                        tag={bannerTools[c.banner].ai ? 'Free AI tool' : 'Free tool'}
+                        title={bannerTools[c.banner].name}
+                        text={bannerTools[c.banner].text}
+                        button="Try it free"
+                        href={`/tools/${bannerTools[c.banner].slug}`}
+                      />
+                    ) : null}
+                  </div>
+                ))
               )}
               {post.tags.length ? (
                 <div className="post-tags">
@@ -148,6 +191,7 @@ export default async function BlogPostPage({ params }: Props) {
                   ))}
                 </div>
               ) : null}
+              <PostAuthor name={post.author} checked={post.factCheck} />
               {post.accordion ? (
                 <>
                   <PostCtaBanner
@@ -169,6 +213,7 @@ export default async function BlogPostPage({ params }: Props) {
                 </div>
               )}
             </article>
+            <PostSidebar categories={categories} currentCategory={post.category} slug={post.slug} />
           </div>
 
           <RelatedTools slugs={post.tools} />
@@ -186,6 +231,7 @@ export default async function BlogPostPage({ params }: Props) {
             </section>
           ) : null}
         </main>
+        <LeadPopup slug={post.slug} />
         {structuredData.map((data, i) => (
           <script
             key={i}

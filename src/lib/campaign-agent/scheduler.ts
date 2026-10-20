@@ -53,6 +53,8 @@ export interface Campaign {
   audience: CampaignAudience
   rollover: boolean
   image_url: string | null
+  link_url: string | null
+  link_text: string | null
   plan: { sampleName?: string } | null
 }
 
@@ -105,7 +107,7 @@ export async function tick(db: Db, now = new Date(), budgetMs = 40_000): Promise
   const report: TickReport = { campaigns: 0, started: 0, completed: 0, paused: 0 }
   const { data: campaigns } = await db
     .from('campaign_agents')
-    .select('id, user_id, business_id, name, status, audience, rollover, image_url, plan')
+    .select('id, user_id, business_id, name, status, audience, rollover, image_url, link_url, link_text, plan')
     .eq('status', 'running')
     .order('launched_at', { ascending: true })
     .limit(25)
@@ -322,7 +324,7 @@ async function handleRejected(db: Db, c: Campaign, s: Step, now: Date) {
   }
   const name = `${s.template_name.replace(/_r\d+$/, '')}_r${s.rewrite_count + 1}`
   try {
-    const r = await submitTemplate(db, c.user_id, { name, body: nb, sampleName: c.plan?.sampleName || 'Priya', imageUrl: s.image_url ?? c.image_url })
+    const r = await submitTemplate(db, c.user_id, { name, body: nb, sampleName: c.plan?.sampleName || 'Priya', imageUrl: s.image_url ?? c.image_url, link: c.link_url ? { text: c.link_text || 'Know more', url: c.link_url } : null })
     await patchStep(db, s.id, {
       body: nb,
       template_name: name,

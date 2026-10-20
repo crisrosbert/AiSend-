@@ -1,0 +1,23 @@
+import { describe, expect, it } from 'vitest'
+import { accessFor, limitError } from './access'
+
+describe('campaign access', () => {
+  it('gives premium and agent the full feature', () => {
+    expect(accessFor({ userId: 'u', plan: 'Premium' }).tier).toBe('full')
+    expect(accessFor({ userId: 'u', planId: 'agent' }).images).toBe(true)
+  })
+  it('gives other plans the trial', () => {
+    const a = accessFor({ userId: 'u', plan: 'free' })
+    expect(a.tier).toBe('trial')
+    expect(a.maxContacts).toBe(10)
+    expect(limitError(a, 11, 1, false)).toMatch(/10 contacts/)
+    expect(limitError(a, 5, 3, false)).toMatch(/2 messages/)
+    expect(limitError(a, 5, 2, true)).toMatch(/Premium and Agent/)
+    expect(limitError(a, 10, 2, false)).toBeNull()
+  })
+  it('only the owner may use it', () => {
+    expect(accessFor({ userId: 'u', ownerId: 'someone-else', plan: 'premium' }).allowed).toBe(false)
+    expect(accessFor({ userId: 'u', ownerId: 'u', plan: 'premium' }).allowed).toBe(true)
+    expect(accessFor({ userId: 'u', ownerId: null }).allowed).toBe(true)
+  })
+})

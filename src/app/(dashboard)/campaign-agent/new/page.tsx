@@ -46,20 +46,6 @@ interface PlanResponse {
   balance: number;
 }
 
-/** Reads a JSON reply, or explains what came back instead (e.g. a 404 page when a file was not uploaded). */
-async function readJson(r: Response): Promise<Record<string, unknown>> {
-  const text = await r.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(
-      r.status === 404
-        ? `This feature's server file is missing (${new URL(r.url).pathname} returned 404). Upload it to GitHub and redeploy.`
-        : `The server returned an error page (status ${r.status}) for ${new URL(r.url).pathname}. Check the Vercel logs.`,
-    );
-  }
-}
-
 const inr = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function NewCampaignAgentPage() {
@@ -111,7 +97,7 @@ export default function NewCampaignAgentPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ goal, audience }),
       });
-      const data = (await readJson(r)) as unknown as PlanResponse & { error?: string };
+      const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "Could not write the plan");
       setRes(data);
       setPlan(data.plan);
@@ -146,9 +132,9 @@ export default function NewCampaignAgentPage() {
   async function rewrite(body: string): Promise<string | null> {
     try {
       const r = await fetch("/api/campaign-agent/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) });
-      const d = (await readJson(r)) as { error?: string; body?: string };
+      const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? "Could not rewrite");
-      return d.body ?? null;
+      return d.body as string;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not rewrite");
       return null;
@@ -164,7 +150,7 @@ export default function NewCampaignAgentPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ goal, plan, audience, rollover, imageUrl }),
       });
-      const data = (await readJson(r)) as { error?: string; id?: string };
+      const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "Could not launch");
       toast.success("Campaign created. Messages are with Meta for approval.");
       router.push(`/campaign-agent/${data.id}`);
@@ -486,8 +472,8 @@ function ImagePanel({ access, imageUrl, onChange }: { access: Access | null; ima
     setBusy(true);
     try {
       const r = await fetch("/api/campaign-agent/image", { method: "POST", ...init });
-      const d = (await readJson(r)) as { error?: string; url?: string };
-      if (!r.ok || !d.url) throw new Error(d.error ?? "Could not add the image");
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error ?? "Could not add the image");
       onChange(d.url);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not add the image");

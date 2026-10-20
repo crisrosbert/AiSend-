@@ -16,7 +16,7 @@ import { StatCard } from "@/components/ui/stat";
 import { Button } from "@/components/ui/button";
 
 interface Campaign { id: string; name: string; goal: string; status: string; error: string | null; est_contacts: number; est_cost: number }
-interface Step { id: string; grp: number; variant: number; label: string; body: string; status: string; error: string | null; wait_hours: number; rule: string | null; broadcast_id: string | null; run_at: string | null }
+interface Step { id: string; grp: number; variant: number; label: string; body: string; status: string; error: string | null; wait_hours: number; rule: string | null; broadcast_id: string | null; run_at: string | null; kind: string; rewrite_count: number; rejection_reason: string | null }
 interface Bc { id: string; total_recipients: number; sent_count: number; delivered_count: number; read_count: number; replied_count: number; failed_count: number }
 
 const CAMPAIGN_STATUS: Record<string, { tone: PillTone; label: string }> = {
@@ -48,7 +48,7 @@ export default function CampaignAgentDetailPage() {
     const { data: camp } = await supabase.from("campaign_agents").select("id, name, goal, status, error, est_contacts, est_cost").eq("id", id).maybeSingle();
     if (!camp) { setMissing(true); return; }
     setC(camp as Campaign);
-    const { data: st } = await supabase.from("campaign_steps").select("id, grp, variant, label, body, status, error, wait_hours, rule, broadcast_id, run_at").eq("campaign_id", id).order("grp").order("variant");
+    const { data: st } = await supabase.from("campaign_steps").select("id, grp, variant, label, body, status, error, wait_hours, rule, broadcast_id, run_at, kind, rewrite_count, rejection_reason").eq("campaign_id", id).order("grp").order("variant");
     const list = (st ?? []) as Step[];
     setSteps(list);
     const ids = list.map((s) => s.broadcast_id).filter((x): x is string => !!x);
@@ -124,14 +124,15 @@ export default function CampaignAgentDetailPage() {
               <li key={st.id} className="space-y-2 px-5 py-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="text-[14px] font-semibold">
-                    {st.grp === 0 ? `First message${steps.filter((x) => x.grp === 0).length > 1 ? ` · version ${String.fromCharCode(65 + st.variant)}` : ""}` : `Follow-up ${st.grp}`} · {st.label}
+                    {st.kind === "retry" ? "Retry of failed deliveries" : st.grp === 0 ? `First message${steps.filter((x) => x.grp === 0 && x.kind !== "retry").length > 1 ? ` · version ${String.fromCharCode(65 + st.variant)}` : ""}` : `Follow-up ${st.grp}`} · {st.label}
                   </span>
                   <Pill tone={ss.tone}>{ss.label}</Pill>
-                  {st.grp > 0 && <span className="text-[12px] text-[color:var(--ink-3)]">{st.wait_hours}h after previous · to people who {st.rule === "not_read" ? "did not read it" : "did not reply"}</span>}
+                  {st.grp > 0 && st.kind !== "retry" && <span className="text-[12px] text-[color:var(--ink-3)]">{st.wait_hours}h after previous · to people who {st.rule === "not_read" ? "did not read it" : "did not reply"}</span>}
                   {st.run_at && st.status === "ready" && new Date(st.run_at) > new Date() && <span className="text-[12px] text-[color:var(--ink-3)]">sends {new Date(st.run_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}
                 </div>
                 <p className="whitespace-pre-wrap text-[13px] text-[color:var(--ink-2)]">{st.body.replace(/\{\{\s*1\s*\}\}/g, "[name]")}</p>
                 {b && <p className="text-[12px] tabular-nums text-[color:var(--ink-3)]">{b.total_recipients} queued · {b.sent_count} sent · {b.delivered_count} delivered · {b.read_count} read · {b.replied_count} replied · {b.failed_count} failed</p>}
+                {st.rewrite_count > 0 && <p className="text-[12.5px]" style={{ color: "var(--amber)" }}>Meta rejected the earlier wording{st.rejection_reason ? ` (${st.rejection_reason})` : ""}. The AI rewrote it and submitted it again{st.rewrite_count > 1 ? ` (${st.rewrite_count} times)` : ""}.</p>}
                 {st.error && <p className="text-[12.5px]" style={{ color: "var(--rose)" }}>{st.error}</p>}
               </li>
             );

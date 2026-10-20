@@ -1,7 +1,7 @@
 /* Blog pages. Scoped under .blog so nothing leaks into the app. */
 
 .blog { color: #1f2937; background: #fff; }
-.blog a { color: #1B6B4A; }
+.blog main a { color: #1B6B4A; }
 
 .blog__wrap { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
 @media (max-width: 640px) { .blog__wrap { padding: 0 20px; } }

@@ -52,8 +52,6 @@ export interface PostMeta {
   /** true = no dates are shown on the page (evergreen posts). */
   hideDate: boolean
   readingMinutes: number
-  /** One line saying how the facts were checked (shown in the author box). */
-  factCheck?: string
 }
 
 export interface Post extends PostMeta {
@@ -80,7 +78,6 @@ const ALLOWED_KEYS = new Set([
   'tools',
   'draft',
   'hideDate',
-  'factCheck',
 ])
 
 export class PostError extends Error {
@@ -171,7 +168,6 @@ export function parsePost(file: string, source: string): Post {
   const draftRaw = str(file, data, 'draft', false)
   const hideDateRaw = str(file, data, 'hideDate', false)
   const accordionRaw = str(file, data, 'accordion', false)
-  const factCheck = str(file, data, 'factCheck', false)
 
   if (!isRealDate(date)) throw new PostError(file, `"date" must be a real date like 2026-10-05, got "${date}"`)
   if (updated !== undefined) {
@@ -231,7 +227,6 @@ export function parsePost(file: string, source: string): Post {
     description,
     date,
     ...(updated ? { updated } : {}),
-    ...(factCheck ? { factCheck } : {}),
     author,
     category,
     tags: rawTags ?? [],

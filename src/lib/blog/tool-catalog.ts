@@ -5,10 +5,12 @@ export interface BlogTool {
   slug: string
   name: string
   text: string
+  /** Powered by AI. Shown with an AI label in lists. */
+  ai?: boolean
 }
 
 export const BLOG_TOOLS: readonly BlogTool[] = [
-  { slug: 'ai-chatbot-widget', name: 'Free AI Chatbot Widget', text: 'Paste your website address and get an AI chatbot trained on your pages. Test it live, then add it for free.' },
+  { slug: 'ai-chatbot-widget', ai: true, name: 'Free AI Chatbot Widget', text: 'Paste your website address and get an AI chatbot trained on your pages. Test it live, then add it for free.' },
   { slug: 'whatsapp-link-generator', name: 'WhatsApp Link Generator', text: 'Create a free click-to-chat wa.me link with a QR code, in your browser.' },
   { slug: 'whatsapp-bulk-sender', name: 'WhatsApp Bulk Sender', text: 'Send templated WhatsApp messages to thousands of contacts, officially.' },
   { slug: 'whatsapp-qr-code', name: 'WhatsApp QR Code Generator', text: 'Make a scannable QR code in your colours, with a logo, and download it as PNG or SVG.' },

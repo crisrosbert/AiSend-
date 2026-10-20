@@ -46,6 +46,20 @@ interface PlanResponse {
   balance: number;
 }
 
+/** Reads a JSON reply, or explains what came back instead (e.g. a 404 page when a file was not uploaded). */
+async function readJson(r: Response): Promise<Record<string, unknown>> {
+  const text = await r.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      r.status === 404
+        ? `This feature's server file is missing (${new URL(r.url).pathname} returned 404). Upload it to GitHub and redeploy.`
+        : `The server returned an error page (status ${r.status}) for ${new URL(r.url).pathname}. Check the Vercel logs.`,
+    );
+  }
+}
+
 const inr = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function NewCampaignAgentPage() {
@@ -59,6 +73,8 @@ export default function NewCampaignAgentPage() {
   const [picked, setPicked] = useState<Picked[]>([]);
   const [rollover, setRollover] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkText, setLinkText] = useState("Shop now");
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [excludeTagIds, setExcludeTagIds] = useState<string[]>([]);
   const [lastSeen, setLastSeen] = useState<Recency>("");
@@ -97,7 +113,7 @@ export default function NewCampaignAgentPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ goal, audience }),
       });
-      const data = await r.json();
+      const data = (await readJson(r)) as unknown as PlanResponse & { error?: string };
       if (!r.ok) throw new Error(data.error ?? "Could not write the plan");
       setRes(data);
       setPlan(data.plan);
@@ -132,9 +148,9 @@ export default function NewCampaignAgentPage() {
   async function rewrite(body: string): Promise<string | null> {
     try {
       const r = await fetch("/api/campaign-agent/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) });
-      const d = await r.json();
+      const d = (await readJson(r)) as { error?: string; body?: string };
       if (!r.ok) throw new Error(d.error ?? "Could not rewrite");
-      return d.body as string;
+      return d.body ?? null;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not rewrite");
       return null;
@@ -148,9 +164,9 @@ export default function NewCampaignAgentPage() {
       const r = await fetch("/api/campaign-agent/launch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goal, plan, audience, rollover, imageUrl }),
+        body: JSON.stringify({ goal, plan, audience, rollover, imageUrl, linkUrl: linkUrl.trim() || undefined, linkText }),
       });
-      const data = await r.json();
+      const data = (await readJson(r)) as { error?: string; id?: string };
       if (!r.ok) throw new Error(data.error ?? "Could not launch");
       toast.success("Campaign created. Messages are with Meta for approval.");
       router.push(`/campaign-agent/${data.id}`);
@@ -255,6 +271,14 @@ export default function NewCampaignAgentPage() {
         <div className="space-y-5">
           <ImagePanel access={access} imageUrl={imageUrl} onChange={setImageUrl} />
           <Panel>
+            <PanelHead title="Link button (optional)" subtitle="A button under every message. We count how many people tap it." />
+            <div className="grid gap-3 p-5 sm:grid-cols-[1fr_180px]">
+              <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://yourshop.com/summer" className="h-9 rounded-lg border bg-transparent px-3 text-[13px]" style={{ borderColor: "var(--line)" }} />
+              <input value={linkText} onChange={(e) => setLinkText(e.target.value.slice(0, 25))} placeholder="Button text" className="h-9 rounded-lg border bg-transparent px-3 text-[13px]" style={{ borderColor: "var(--line)" }} />
+              {linkUrl.trim() && !/^https:\/\/[^\s/]+\.[^\s]+$/i.test(linkUrl.trim()) && <p className="text-[12px] sm:col-span-2" style={{ color: "var(--rose)" }}>Use a full link that starts with https://</p>}
+            </div>
+          </Panel>
+          <Panel>
             <PanelHead title="First message" subtitle={plan.variants.length > 1 ? "Each contact gets one version. Compare reads and replies afterwards." : "Edit the text if you like."} actions={plan.variants.length < MAX_VARIANTS && <Button size="sm" variant="outline" onClick={() => setPlan({ ...plan, variants: [...plan.variants, { label: `Version ${plan.variants.length + 1}`, body: plan.variants[0].body }] })}><Plus size={13} /> Add version</Button>} />
             <div className="space-y-4 p-5">
               {plan.variants.map((v, i) => (
@@ -300,7 +324,7 @@ export default function NewCampaignAgentPage() {
           )}
           <div className="flex items-center justify-between">
             <Button variant="outline" onClick={() => setStep(1)}><ArrowLeft size={14} /> Back</Button>
-            <Button disabled={issues.length > 0 || !!limitMsg} onClick={() => setStep(3)}>Review <ArrowRight size={14} /></Button>
+            <Button disabled={issues.length > 0 || !!limitMsg || (!!linkUrl.trim() && !/^https:\/\/[^\s/]+\.[^\s]+$/i.test(linkUrl.trim()))} onClick={() => setStep(3)}>Review <ArrowRight size={14} /></Button>
           </div>
         </div>
       )}
@@ -330,7 +354,7 @@ export default function NewCampaignAgentPage() {
                   <li key={i} className="flex items-center gap-2"><Pill tone="info" dotless>{i + 3}</Pill> {f.waitHours} hours later: follow-up to people who {f.rule === "no_reply" ? "did not reply" : "did not read it"}</li>
                 ))}
               </ol>
-              {(rollover || imageUrl) && <p className="text-[12.5px] text-[color:var(--ink-2)]">{imageUrl ? "Every message carries your image. " : ""}{rollover ? "Failures roll over into the follow-ups. " : ""}If Meta rejects a message, the AI rewrites it and submits it again (up to 2 times). Temporary delivery failures are retried once.</p>}
+              {(rollover || imageUrl || linkUrl.trim()) && <p className="text-[12.5px] text-[color:var(--ink-2)]">{imageUrl ? "Every message carries your image. " : ""}{linkUrl.trim() ? `Every message has a “${linkText || "Know more"}” button. ` : ""}{rollover ? "Failures roll over into the follow-ups. " : ""}If Meta rejects a message, the AI rewrites it and submits it again (up to 2 times). Temporary delivery failures are retried once.</p>}
               <p className="text-[12.5px] text-[color:var(--ink-3)]">Every message ends with “Reply STOP to unsubscribe”. You can pause or stop the campaign anytime from its page.</p>
             </div>
           </Panel>
@@ -472,8 +496,8 @@ function ImagePanel({ access, imageUrl, onChange }: { access: Access | null; ima
     setBusy(true);
     try {
       const r = await fetch("/api/campaign-agent/image", { method: "POST", ...init });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "Could not add the image");
+      const d = (await readJson(r)) as { error?: string; url?: string };
+      if (!r.ok || !d.url) throw new Error(d.error ?? "Could not add the image");
       onChange(d.url);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not add the image");

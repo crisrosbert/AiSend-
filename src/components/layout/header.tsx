@@ -42,6 +42,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/contacts":    "Contacts",
   "/pipelines":   "Pipelines",
   "/broadcasts":  "Campaigns",
+  "/campaign-agent": "AI Campaigns",
   "/leads":       "Leads",
   "/journeys":    "Chat Flows",
   "/flows-lab":   "Flows Lab",

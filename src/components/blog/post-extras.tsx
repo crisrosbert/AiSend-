@@ -20,6 +20,9 @@ export function PostCtaBanner({
 }) {
   return (
     <aside className={`cta-banner cta-banner--${variant}`}>
+      {variant === 'blue' ? (
+        <span className="cta-banner__orb" aria-hidden="true">{tag && /ai/i.test(tag) ? 'AI' : 'Free'}</span>
+      ) : null}
       <div className="cta-banner__copy">
         {tag ? <span className="cta-banner__tag">{tag}</span> : null}
         <p className="cta-banner__title">{title}</p>

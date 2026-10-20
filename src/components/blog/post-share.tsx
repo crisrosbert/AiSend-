@@ -24,20 +24,20 @@ export function PostShare({ title }: { title: string }) {
   return (
     <div className="post-share" role="group" aria-label="Share this article">
       <span className="post-share__label">Share</span>
-      <button type="button" aria-label="Share on WhatsApp" onClick={() => open((u, t) => `https://wa.me/?text=${t}%20${u}`)}>
-        WhatsApp
+      <button type="button" className="sq sq--fb" aria-label="Share on Facebook" onClick={() => open((u) => `https://www.facebook.com/sharer/sharer.php?u=${u}`)}>
+        f
       </button>
-      <button type="button" aria-label="Share on LinkedIn" onClick={() => open((u) => `https://www.linkedin.com/sharing/share-offsite/?url=${u}`)}>
-        LinkedIn
-      </button>
-      <button type="button" aria-label="Share on X" onClick={() => open((u, t) => `https://twitter.com/intent/tweet?url=${u}&text=${t}`)}>
+      <button type="button" className="sq sq--x" aria-label="Share on X" onClick={() => open((u, t) => `https://twitter.com/intent/tweet?url=${u}&text=${t}`)}>
         X
       </button>
-      <button type="button" aria-label="Share on Facebook" onClick={() => open((u) => `https://www.facebook.com/sharer/sharer.php?u=${u}`)}>
-        Facebook
+      <button type="button" className="sq sq--in" aria-label="Share on LinkedIn" onClick={() => open((u) => `https://www.linkedin.com/sharing/share-offsite/?url=${u}`)}>
+        in
       </button>
-      <button type="button" className="post-share__copy" onClick={copy}>
-        {copied ? 'Link copied' : 'Copy link'}
+      <button type="button" className="sq sq--wa" aria-label="Share on WhatsApp" onClick={() => open((u, t) => `https://wa.me/?text=${t}%20${u}`)}>
+        W
+      </button>
+      <button type="button" className="sq sq--copy" aria-label="Copy link" onClick={copy}>
+        {copied ? '✓' : '⧉'}
       </button>
     </div>
   )

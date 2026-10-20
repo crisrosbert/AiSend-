@@ -132,6 +132,8 @@ export interface SendTemplateMessageArgs {
   templateName: string
   language?: string
   params?: string[]
+  /** Image/video for a template whose header is media (the link is supplied per send). */
+  headerMedia?: { type: 'image' | 'video'; url: string }
   /** Meta's message_id of the message being replied to. */
   contextMessageId?: string
 }
@@ -225,6 +227,7 @@ export async function sendTemplateMessage(
     templateName,
     language = 'en_US',
     params,
+    headerMedia,
     contextMessageId,
   } = args
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
@@ -234,14 +237,20 @@ export async function sendTemplateMessage(
     language: { code: language },
   }
 
-  if (params && params.length > 0) {
-    template.components = [
-      {
-        type: 'body',
-        parameters: params.map((p) => ({ type: 'text', text: String(p) })),
-      },
-    ]
+  const components: Record<string, unknown>[] = []
+  if (headerMedia) {
+    components.push({
+      type: 'header',
+      parameters: [{ type: headerMedia.type, [headerMedia.type]: { link: headerMedia.url } }],
+    })
   }
+  if (params && params.length > 0) {
+    components.push({
+      type: 'body',
+      parameters: params.map((p) => ({ type: 'text', text: String(p) })),
+    })
+  }
+  if (components.length > 0) template.components = components
 
   const body: Record<string, unknown> = {
     messaging_product: 'whatsapp',

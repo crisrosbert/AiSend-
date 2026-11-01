@@ -7,7 +7,7 @@
 // punctuation.
 
 import { describe, it, expect } from 'vitest'
-import { buildWhatsAppLink } from './wa-link'
+import { buildWhatsAppLink, isPlausibleNumber } from './wa-link'
 
 function link(countryCode: string, phone: string, message?: string) {
   const r = buildWhatsAppLink({ countryCode, phone, message })
@@ -76,5 +76,14 @@ describe('buildWhatsAppLink — rejecting what cannot work', () => {
 
   it('accepts the longest valid number (15 digits in total)', () => {
     expect(link('91', '+123456789012345')).toBe('https://wa.me/123456789012345')
+  })
+})
+
+describe('isPlausibleNumber', () => {
+  it('accepts real-looking numbers', () => {
+    for (const n of ['919812345670', '971501234567', '14155552671', '447911123456']) expect(isPlausibleNumber(n), n).toBe(true)
+  })
+  it('rejects numbers that cannot be real', () => {
+    for (const n of ['911233455689', '911234567890', '919999999999', '91987654321', '9198765432100', '12345']) expect(isPlausibleNumber(n), n).toBe(false)
   })
 })

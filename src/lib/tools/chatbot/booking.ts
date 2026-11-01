@@ -15,6 +15,7 @@ import {
   type BusinessHours,
   type DayHours,
 } from '@/lib/agent/business-hours'
+import { buildWhatsAppLink, isPlausibleNumber } from '@/lib/tools/wa-link'
 import type { KnowledgeChunk } from './knowledge'
 
 /* ── Reading opening hours out of free text ───────────────────────────── */
@@ -182,15 +183,17 @@ export interface ToolOutcome {
 const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '')
 
 function validPhone(p: string): boolean {
-  const n = p.replace(/\D/g, '').length
-  return n >= 8 && n <= 15 && /^[+\d\s().-]+$/.test(p)
+  if (!/^[+\d\s().-]+$/.test(p)) return false
+  // A bare number is taken as Indian, like the rest of the demo.
+  const link = buildWhatsAppLink({ countryCode: '91', phone: p })
+  return link.ok && isPlausibleNumber(link.number)
 }
 
 export function runTool(name: string, args: Record<string, unknown>, ctx: ToolContext): ToolOutcome {
   const person = clean(args.name, 60)
   const phone = clean(args.phone, 24)
   if (person.length < 2) return { result: 'Not saved: ask the visitor for their name.' }
-  if (!validPhone(phone)) return { result: 'Not saved: that phone number is not valid. Ask the visitor to type it again.' }
+  if (!validPhone(phone)) return { result: 'Not saved: that phone number is not valid (an Indian mobile has 10 digits and starts with 6, 7, 8 or 9). Tell the visitor and ask them to type it again.' }
 
   if (name === 'capture_lead') {
     const interest = clean(args.interest, 100)

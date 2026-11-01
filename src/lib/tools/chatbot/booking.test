@@ -23,7 +23,7 @@ describe('hoursFromText', () => {
     expect(open(3, d)).toBeNull()
   })
   it('does not invent hours from ordinary text', () => {
-    expect(hoursFromText('We offer teeth whitening and implants. Call 98765 43210.')).toBeNull()
+    expect(hoursFromText('We offer teeth whitening and implants. Call 98123 45670.')).toBeNull()
   })
 })
 
@@ -46,7 +46,7 @@ describe('resolveHours', () => {
 
 describe('runTool', () => {
   const ctx = { hours: resolveHours('Opening hours: Monday-Saturday 10:00-19:00', [], 'Asia/Kolkata'), now: NOW }
-  const base = { name: 'Rahul Sharma', phone: '+91 98765 43210' }
+  const base = { name: 'Rahul Sharma', phone: '+91 98123 45670' }
 
   it('books a slot inside opening hours as asked', () => {
     const o = runTool('book_appointment', { ...base, preferred_date: '2026-10-15', preferred_time: '11:00', service: 'Whitening' }, ctx)
@@ -65,7 +65,16 @@ describe('runTool', () => {
   })
   it('rejects a bad phone or missing name without making a card', () => {
     expect(runTool('book_appointment', { ...base, phone: '123', preferred_date: '2026-10-15' }, ctx).card).toBeUndefined()
-    expect(runTool('capture_lead', { name: '', phone: '+91 98765 43210' }, ctx).card).toBeUndefined()
+    expect(runTool('capture_lead', { name: '', phone: '+91 98123 45670' }, ctx).card).toBeUndefined()
+  })
+  it('rejects numbers that cannot be real', () => {
+    const date = { preferred_date: '2026-10-15' }
+    for (const phone of ['+911233455689', '1233455689', '+91 12345 67890', '9999999999', '+91 98765 4321', '+91 98123 456700', 'call me']) {
+      expect(runTool('book_appointment', { ...base, phone, ...date }, ctx).card, phone).toBeUndefined()
+    }
+    for (const phone of ['+91 98123 45670', '9812345670', '098123 45670', '+971 50 123 4567', '+1 415 555 2671']) {
+      expect(runTool('book_appointment', { ...base, phone, ...date }, ctx).card, phone).toBeDefined()
+    }
   })
   it('does not check a time when the site gave no hours', () => {
     const none = { hours: resolveHours('', [], 'Asia/Kolkata'), now: NOW }

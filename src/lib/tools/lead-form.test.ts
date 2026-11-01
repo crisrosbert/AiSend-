@@ -12,7 +12,7 @@ import { validateLeadForm, submitLead, buildWhatsAppLeadLink, type LeadFormInput
 const good: LeadFormInput = {
   name: '  Riya Verma ',
   countryCode: '91',
-  phone: '98765 43210',
+  phone: '98123 45670',
   email: ' riya@shop.example ',
   interest: 'WhatsApp broadcasts',
   message: ' Need to message 2,000 customers ',
@@ -26,7 +26,7 @@ describe('validateLeadForm', () => {
       ok: true,
       value: {
         name: 'Riya Verma',
-        phone: '919876543210',
+        phone: '919812345670',
         email: 'riya@shop.example',
         interest: 'WhatsApp broadcasts',
         message: 'Need to message 2,000 customers',
@@ -59,7 +59,7 @@ describe('validateLeadForm', () => {
 describe('submitLead', () => {
   const lead = {
     name: 'Riya Verma',
-    phone: '919876543210',
+    phone: '919812345670',
     email: 'riya@shop.example',
     interest: 'WhatsApp broadcasts',
     message: 'Need to message 2,000 customers',
@@ -84,7 +84,7 @@ describe('submitLead', () => {
     expect(JSON.parse(init?.body as string)).toMatchObject({
       key: 'pk_test_123',
       name: 'Riya Verma',
-      phone: '+919876543210',
+      phone: '+919812345670',
       email: 'riya@shop.example',
       interest: 'WhatsApp broadcasts',
       message: 'Need to message 2,000 customers',
@@ -133,13 +133,13 @@ describe('buildWhatsAppLeadLink', () => {
   it('opens a chat with the team number, carrying the visitor\'s details and where they came from', () => {
     const link = buildWhatsAppLeadLink({
       to: '918707879485',
-      lead: { name: 'Riya Verma', phone: '919876543210', email: null, interest: 'WhatsApp broadcasts', message: 'Need 2,000 sends' },
+      lead: { name: 'Riya Verma', phone: '919812345670', email: null, interest: 'WhatsApp broadcasts', message: 'Need 2,000 sends' },
       source: 'WhatsApp Link Generator page',
     })
     expect(link.startsWith('https://wa.me/918707879485?text=')).toBe(true)
     const text = decodeURIComponent(link.split('?text=')[1])
     expect(text).toContain('Riya Verma')
-    expect(text).toContain('+919876543210')
+    expect(text).toContain('+919812345670')
     expect(text).toContain('WhatsApp broadcasts')
     expect(text).toContain('Need 2,000 sends')
     expect(text).toContain('WhatsApp Link Generator page')

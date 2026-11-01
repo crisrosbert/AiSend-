@@ -79,3 +79,36 @@ export function buildWhatsAppLink(input: {
   const link = `https://wa.me/${full}${text ? `?text=${encodeURIComponent(text)}` : ''}`
   return { ok: true, link, number: full }
 }
+
+/** True for 1234567890 / 9876543210 style runs, which nobody owns. */
+function isDigitRun(d: string): boolean {
+  if (d.length < 6) return false
+  const step = (d.charCodeAt(1) - d.charCodeAt(0) + 10) % 10
+  if (step !== 1 && step !== 9) return false
+  for (let i = 1; i < d.length; i++) {
+    if ((d.charCodeAt(i) - d.charCodeAt(i - 1) + 10) % 10 !== step) return false
+  }
+  return true
+}
+
+/**
+ * Does a full number (country code + national number, digits only) look like a
+ * real phone number? This is a sanity check for lead forms, not a carrier
+ * lookup: it checks the national length for the countries we list, that an
+ * Indian number starts with 6-9, and rejects repeated or running digits.
+ * A number from a country we do not list only has to be 8-15 digits.
+ */
+export function isPlausibleNumber(full: string): boolean {
+  if (!/^[1-9]\d{7,14}$/.test(full)) return false
+  const country = [...COUNTRIES].sort((a, b) => b.code.length - a.code.length).find((c) => full.startsWith(c.code))
+  let national = full
+  if (country) {
+    national = full.slice(country.code.length)
+    const [min, max] = country.national
+    if (national.length < min || national.length > max) return false
+    if (country.code === '91' && !/^[6-9]/.test(national)) return false
+  }
+  if (/^(\d)\1+$/.test(national)) return false
+  if (isDigitRun(national)) return false
+  return true
+}

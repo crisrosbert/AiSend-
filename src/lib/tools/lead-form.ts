@@ -8,7 +8,7 @@
 // src/app/api/leads/capture/route.ts): one lead per phone number, linked to
 // the CRM, rate-limited, with a hidden honeypot field for bots.
 
-import { buildWhatsAppLink } from './wa-link'
+import { buildWhatsAppLink, isPlausibleNumber } from './wa-link'
 
 export const LEAD_INTERESTS = [
   'WhatsApp broadcasts',
@@ -59,6 +59,10 @@ export function validateLeadForm(input: LeadFormInput): ValidationResult {
         : number.reason === 'too-short'
           ? 'That number looks too short — check the country code and digits'
           : 'That number looks too long — check the country code and digits'
+  }
+
+  if (number.ok && !isPlausibleNumber(number.number)) {
+    errors.phone = 'That number does not look right. Check the country code and digits (an Indian mobile starts with 6, 7, 8 or 9).'
   }
 
   const email = input.email.trim()

@@ -90,7 +90,7 @@ describe('free chatbot: booking', () => {
         calls.push(body)
         const sawTool = body.messages.some((m: { role: string }) => m.role === 'tool')
         if (!sawTool) {
-          const args = { name: 'Rahul Sharma', phone: '+91 98765 43210', service: 'Whitening', preferred_date: '2026-10-18', preferred_time: '11:00' }
+          const args = { name: 'Rahul Sharma', phone: '+91 98123 45670', service: 'Whitening', preferred_date: '2026-10-18', preferred_time: '11:00' }
           return new Response(JSON.stringify({ choices: [{ message: { tool_calls: [{ function: { name: 'book_appointment', arguments: JSON.stringify(args) } }] } }] }), { status: 200 })
         }
         return new Response(JSON.stringify({ choices: [{ message: { content: 'Noted! That day is closed, so I moved it.' } }] }), { status: 200 })

@@ -96,7 +96,13 @@ export async function handleWhatsAppMessage(
       .eq('tenant_id', tenantId)
       .maybeSingle()
 
-    if (!agent?.is_active) return false
+    // Diagnostic logs below were in the original handler and are kept:
+    // they are how a "the bot did not reply" report is traced.
+    console.log('[whatsapp-agent] agent lookup:', JSON.stringify(agent))
+    if (!agent?.is_active) {
+      console.log('[whatsapp-agent] BAIL: agent inactive or not found')
+      return false
+    }
 
     // ── Ask the agent ──
     // runAgent() applies the human-handoff gate itself. A conversation a
@@ -112,7 +118,18 @@ export async function handleWhatsAppMessage(
       agentId,
     })
 
-    if (result?.skipped) return false
+    console.log('[whatsapp-agent] runAgent result:', JSON.stringify({
+      reply: result?.reply?.substring(0, 200),
+      error: result?.error,
+      skipped: result?.skipped,
+      handoffRequested: result?.handoffRequested,
+      mediaCount: result?.mediaToSend?.length ?? 0,
+    }))
+
+    if (result?.skipped) {
+      console.log('[whatsapp-agent] BAIL: engine skipped this message:', result.skipped)
+      return false
+    }
 
     let reply = result?.reply?.trim()
 
@@ -130,6 +147,7 @@ export async function handleWhatsAppMessage(
         // A genuine, deliberate silence from the engine. Let the rest of
         // the pipeline proceed rather than sending filler the merchant
         // never wrote.
+        console.log('[whatsapp-agent] BAIL: runAgent returned no reply and no error')
         return false
       }
     }

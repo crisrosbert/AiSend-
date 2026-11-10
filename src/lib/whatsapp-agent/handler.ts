@@ -25,12 +25,19 @@
 // ── ON BROADCAST REPLIES ─────────────────────────────────────────────
 // This is also what finally answers them. A marketing template costs
 // ₹1.09; when the recipient replies, a 24-hour service window opens and
-// replies inside it are free. Sending 1,000 broadcasts and dropping the
-// 80 conversations they produce is the expensive option — the money is
-// already spent by then.
+// replies inside it are free.
+//
+// ── AI-engineer changes (see CHANGES.md) ─────────────────────────────
+// The "never speak over a human" check used to live here and only here.
+// It is now in runAgent() (src/lib/agent/handoff-gate.ts) so the widget
+// and ads paths get it too; this handler just honours result.skipped.
+// An AI error no longer parks the chat by itself: the engine decides
+// (one error = apology only, repeated errors = handoff) and this handler
+// only chooses the wording.
 
 import { createClient } from '@supabase/supabase-js'
 import { runAgent } from '@/lib/agent/engine'
+import { resolveLanguage, t } from '@/lib/agent/reply-language'
 import { sendTextMessage } from '@/lib/whatsapp/meta-api'
 import { deliverAgentMedia } from '@/lib/whatsapp-agent/deliver-media'
 
@@ -79,10 +86,9 @@ export async function handleWhatsAppMessage(
 
   try {
     // ── The agent must be active ──
-    // "Paused" has to mean paused everywhere. Without this check a
-    // merchant could switch an agent off on the Agents page and have it
-    // keep talking to customers on WhatsApp — the worst possible
-    // failure for a control they believe they just used.
+    // "Paused" has to mean paused everywhere. (runAgent enforces the
+    // same rule for the widget and ads paths; this early check just
+    // saves a model-free round trip here.)
     const { data: agent } = await db()
       .from('agents')
       .select('id, is_active')
@@ -90,29 +96,11 @@ export async function handleWhatsAppMessage(
       .eq('tenant_id', tenantId)
       .maybeSingle()
 
-    console.log('[whatsapp-agent] agent lookup:', JSON.stringify(agent))
-    if (!agent?.is_active) {
-      console.log('[whatsapp-agent] BAIL: agent inactive or not found')
-      return false
-    }
-
-    // ── Never speak over a human ──
-    // Once a teammate takes a conversation (status 'pending'), the bot
-    // stays out of it. Two voices answering one customer is worse than
-    // a slow reply.
-    const { data: conversation } = await db()
-      .from('conversations')
-      .select('status')
-      .eq('id', conversationId)
-      .maybeSingle()
-
-    console.log('[whatsapp-agent] conversation status:', conversation?.status)
-    if (conversation?.status === 'pending') {
-      console.log('[whatsapp-agent] BAIL: conversation is pending (human took over)')
-      return false
-    }
+    if (!agent?.is_active) return false
 
     // ── Ask the agent ──
+    // runAgent() applies the human-handoff gate itself. A conversation a
+    // teammate has taken comes back as result.skipped and we stay quiet.
     const result = await runAgent({
       tenantId,
       orgId: null,
@@ -124,44 +112,31 @@ export async function handleWhatsAppMessage(
       agentId,
     })
 
-    console.log('[whatsapp-agent] runAgent result:', JSON.stringify({
-      reply: result?.reply?.substring(0, 200),
-      error: result?.error,
-      handoffRequested: result?.handoffRequested,
-      mediaCount: result?.mediaToSend?.length ?? 0,
-    }))
+    if (result?.skipped) return false
 
     let reply = result?.reply?.trim()
-    let brokeDown = false
 
     if (!reply) {
       if (result?.error) {
         // ── The agent broke ──
-        //
-        // This used to return false, which meant the customer got
-        // absolutely nothing — no reply, no explanation, no human — and
-        // the merchant never found out. On WhatsApp that reads as a
-        // business ignoring you, and it is why a customer had to send
-        // "Hello" a second time before the conversation resumed.
-        //
-        // One honest line and a handover is worth far more than silence.
+        // Say one honest line in the customer's language. Whether the
+        // conversation is also handed to a human was already decided
+        // (and recorded) by the engine: result.escalate.
         console.error('[whatsapp-agent] engine failed:', result.error)
         reply =
-          "Sorry — I'm having trouble on my end right now. A member of our team will get back to you shortly."
-        brokeDown = true
+          result.errorReply ??
+          t('ai_error', result.language ?? resolveLanguage(inboundText))
       } else {
         // A genuine, deliberate silence from the engine. Let the rest of
         // the pipeline proceed rather than sending filler the merchant
         // never wrote.
-        console.log('[whatsapp-agent] BAIL: runAgent returned no reply and no error')
         return false
       }
     }
 
     // ── Send it ──
     // Free-form text, valid because the customer messaged first and the
-    // 24-hour service window is open. Service messages cost ₹0, which is
-    // why answering is close to free once the inbound has arrived.
+    // 24-hour service window is open.
     let sentMessageId: string | null = null
     try {
       const sent = await sendTextMessage({
@@ -177,8 +152,6 @@ export async function handleWhatsAppMessage(
     }
 
     // ── Record it so the inbox shows the whole conversation ──
-    // A merchant reading the thread must see what the bot said; an
-    // invisible reply makes handover impossible.
     await db().from('messages').insert({
       conversation_id: conversationId,
       sender_type: 'bot',
@@ -190,10 +163,6 @@ export async function handleWhatsAppMessage(
     })
 
     // ── Send whatever the agent chose to show them ──
-    // The engine resolves images, brochures and videos into
-    // `mediaToSend`; this is where they actually reach the customer.
-    // Without this the agent says "here are the photos" and sends none —
-    // which is exactly what it was doing before.
     let lastPreview = reply
     if (result?.mediaToSend?.length) {
       const delivered = await deliverAgentMedia({
@@ -204,9 +173,7 @@ export async function handleWhatsAppMessage(
       })
 
       for (const d of delivered) {
-        // Log failures too. A merchant reading the thread has to be able
-        // to see that a brochure did not go out, or they will assume the
-        // customer got it.
+        // Log failures too, so a merchant can see a brochure did not go out.
         await db().from('messages').insert({
           conversation_id: conversationId,
           sender_type: 'bot',
@@ -230,25 +197,12 @@ export async function handleWhatsAppMessage(
       })
       .eq('id', conversationId)
 
-    // ── Hand off if the agent asked to, or if it broke ──
-    // Setting the conversation to 'pending' both flags it for the team
-    // and stops this handler replying again on the next message, via
-    // the status check at the top. A breakdown escalates for the same
-    // reason: we have just promised the customer a human, so a human has
-    // to actually see it.
-    if (result?.handoffRequested || brokeDown) {
-      await db()
-        .from('conversations')
-        .update({
-          status: 'pending',
-          needs_attention: true,
-          handoff_reason: brokeDown
-            ? 'AI could not respond — needs human follow-up'
-            : 'Customer needs a human',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', conversationId)
-    }
+    // ── Handoff bookkeeping ──
+    // Nothing to do here any more. When the agent asked for a human, or
+    // AI errors escalated, runAgent() already set status 'pending',
+    // needs_attention and the SPECIFIC handoff_reason (for example an
+    // emergency). This handler used to overwrite that reason with a
+    // generic one, and used to park the chat after a single AI error.
 
     return true
   } catch (err) {

@@ -7,6 +7,7 @@ import {
   countRecentErrors,
   decideGate,
   isAiErrorReason,
+  isParked,
   shouldEscalateErrors,
   type GateFacts,
 } from './handoff-gate'
@@ -35,8 +36,22 @@ describe('decideGate', () => {
     expect(decideGate(facts({ status: 'pending', needsAttention: true, handoffReason: 'Customer needs a human' }))).toBe('block')
   })
 
-  it('blocks on needs_attention even when status is open', () => {
+  it('blocks on needs_attention with a handoff reason even when status is open', () => {
     expect(decideGate(facts({ needsAttention: true, handoffReason: 'Complaint' }))).toBe('block')
+  })
+
+  it('does NOT block on needs_attention alone (widget lead form raises it without a handoff)', () => {
+    // /api/widget/lead sets needs_attention = true and no handoff_reason.
+    expect(decideGate(facts({ needsAttention: true, handoffReason: null }))).toBe('allow')
+    expect(decideGate(facts({ needsAttention: true, handoffReason: '  ' }))).toBe('allow')
+  })
+
+  it('isParked: pending always parks; the flag needs a reason', () => {
+    expect(isParked('pending', false, null)).toBe(true)
+    expect(isParked('open', true, 'Complaint')).toBe(true)
+    expect(isParked('open', true, null)).toBe(false)
+    expect(isParked('open', false, 'stale reason')).toBe(false)
+    expect(isParked(undefined, undefined, undefined)).toBe(false)
   })
 
   it('return-to-bot (open, flags cleared) allows again', () => {

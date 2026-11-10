@@ -6,6 +6,10 @@
 // The engine calls callLLM() and gets back a common shape, regardless
 // of which provider is active. To add Groq/Claude later, add an adapter
 // here — the engine never changes.
+//
+// This file is the ONE source of truth for provider, model and key
+// checks. The engine must ask it (activeProvider / activeModel /
+// hasProviderKey / providerConfigIssue) and never read LLM_PROVIDER itself.
 
 // ── Common types (provider-agnostic) ──
 
@@ -43,20 +47,21 @@ export interface LLMResponse {
   tokens: number
 }
 
-// ── Public entry point ──
+/**
+ * Hard ceiling on one model call. The fetch used to have no timeout, so a
+ * hung provider held the webhook function open until the platform killed
+ * it, and the customer never got a reply.
+ */
+export const LLM_TIMEOUT_MS = 20_000
+
+// ── Provider selection ──
 
 /**
  * Which provider serves this deployment.
  *
- * OpenAI is the default. The default used to be Gemini, which meant a
- * deployment that simply forgot to set LLM_PROVIDER silently ran on a
- * provider nobody had chosen — and, since the key check is done per
- * provider, could report "no API key" while a perfectly good
- * OPENAI_API_KEY sat in the environment.
- *
- * One exported reader rather than three inlined `process.env` reads,
- * because they had already drifted: the engine defaulted one way and
- * logged a hardcoded Gemini model name regardless of what actually ran.
+ * OpenAI is the default. A value that is not "openai" or "gemini" still
+ * resolves to the default here (a typo must not crash the module), but
+ * providerConfigIssue() reports it so the engine can log it loudly.
  */
 export function activeProvider(): 'openai' | 'gemini' {
   return (process.env.LLM_PROVIDER || 'openai').toLowerCase() === 'gemini'
@@ -78,21 +83,60 @@ export function hasProviderKey(): boolean {
     : !!process.env.OPENAI_API_KEY
 }
 
-export interface CallOptions {
-  /** Use this model instead of the deployment default (same provider). */
-  model?: string
+/**
+ * A human-readable problem with the provider configuration, or null.
+ *
+ * Two cases the old code handled by staying quiet:
+ *   • LLM_PROVIDER set to something unrecognised ("gemni", "claude")
+ *   • no API key for the provider that will actually be used
+ *
+ * The engine logs this at error level on every affected call so it
+ * shows up in the deployment logs, instead of the customer-facing
+ * symptom (silence or an apology on every message) being the only clue.
+ * Never includes a key value.
+ */
+export function providerConfigIssue(): string | null {
+  const raw = (process.env.LLM_PROVIDER ?? '').trim()
+  const lowered = raw.toLowerCase()
+  if (raw && lowered !== 'openai' && lowered !== 'gemini') {
+    return `LLM_PROVIDER="${raw}" is not valid (use "openai" or "gemini"); using the default "${activeProvider()}"`
+  }
+  if (!hasProviderKey()) {
+    const keyName = activeProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY'
+    return `${keyName} is not set but provider "${activeProvider()}" is active`
+  }
+  return null
+}
+
+export type LLMErrorKind = 'config' | 'transient'
+
+/**
+ * Is this failure something a retry could fix?
+ *
+ * 'config': missing key, 401/403 (bad key), 404 (bad model name). Retrying
+ *           or apologising again changes nothing; a human has to fix it.
+ * 'transient': timeouts, network errors, 429, 5xx, anything else.
+ */
+export function classifyLLMError(err: unknown): LLMErrorKind {
+  const msg = err instanceof Error ? err.message : String(err)
+  if (/API_KEY not set/i.test(msg)) return 'config'
+  const m = msg.match(/API (\d{3})/)
+  if (m) {
+    const status = Number(m[1])
+    if (status === 401 || status === 403 || status === 404) return 'config'
+  }
+  return 'transient'
 }
 
 export async function callLLM(
   systemPrompt: string,
   turns: LLMTurn[],
   tools: LLMTool[],
-  options: CallOptions = {},
 ): Promise<LLMResponse> {
   if (activeProvider() === 'gemini') {
-    return callGemini(systemPrompt, turns, tools, options.model)
+    return callGemini(systemPrompt, turns, tools)
   }
-  return callOpenAI(systemPrompt, turns, tools, options.model)
+  return callOpenAI(systemPrompt, turns, tools)
 }
 
 // ════════════════════════════════════════════════════════════
@@ -103,12 +147,11 @@ async function callGemini(
   systemPrompt: string,
   turns: LLMTurn[],
   tools: LLMTool[],
-  modelOverride?: string,
 ): Promise<LLMResponse> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
-  const model = modelOverride || process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
 
   // Convert common turns → Gemini "contents" format
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -146,7 +189,12 @@ async function callGemini(
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    },
   )
 
   if (!res.ok) {
@@ -180,12 +228,11 @@ async function callOpenAI(
   systemPrompt: string,
   turns: LLMTurn[],
   tools: LLMTool[],
-  modelOverride?: string,
 ): Promise<LLMResponse> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY not set')
 
-  const model = modelOverride || process.env.OPENAI_MODEL || 'gpt-4o-mini'
+  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
   // Convert common turns → OpenAI messages format
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -240,6 +287,7 @@ async function callOpenAI(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   })
 
   if (!res.ok) {

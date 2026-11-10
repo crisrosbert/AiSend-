@@ -16,6 +16,15 @@
 // and clears handoff_reason. That is exactly what this gate reads, so the
 // existing button keeps working with no change.
 //
+// ── needs_attention alone is NOT a handoff ───────────────────────────
+// /api/widget/lead sets needs_attention = true (with no handoff_reason)
+// when a visitor submits the lead form, only to put the chat in the
+// team's attention list. The first version of this gate treated that flag
+// as "a human has the chat", so the bot went silent right after a lead
+// was captured. A conversation is now parked when status is 'pending', or
+// when needs_attention is true AND a handoff_reason is recorded (every
+// handoff written by the engine records one).
+//
 // ── Auto-recovery from AI errors ─────────────────────────────────────
 // A chat parked only because the AI broke (handoff_reason is
 // AI_ERROR_REASON) is NOT a human conversation. It resumes by itself
@@ -57,10 +66,23 @@ export function isAiErrorReason(reason: string | null | undefined): boolean {
   return (reason ?? '').trim() === AI_ERROR_REASON
 }
 
+/**
+ * Is the conversation parked for a human? 'pending' always is. The
+ * needs_attention flag only counts together with a handoff_reason, because
+ * other code (the widget lead form) raises the flag without a handoff.
+ */
+export function isParked(
+  status: string | null | undefined,
+  needsAttention: boolean | null | undefined,
+  handoffReason: string | null | undefined,
+): boolean {
+  if (status === 'pending') return true
+  return needsAttention === true && (handoffReason ?? '').trim().length > 0
+}
+
 /** Pure decision. All the policy is here so it can be tested without a DB. */
 export function decideGate(f: GateFacts): GateDecision {
-  const parked = f.status === 'pending' || f.needsAttention === true
-  if (!parked) return 'allow'
+  if (!isParked(f.status, f.needsAttention, f.handoffReason)) return 'allow'
 
   if (!isAiErrorReason(f.handoffReason)) return 'block'
 
@@ -111,8 +133,7 @@ export async function checkBotGate(db: Db, conversationId: string, now: Date = n
       .maybeSingle()
     if (error || !conv) return { allowed: true, resumed: false }
 
-    const parked = conv.status === 'pending' || conv.needs_attention === true
-    if (!parked) return { allowed: true, resumed: false }
+    if (!isParked(conv.status, conv.needs_attention, conv.handoff_reason)) return { allowed: true, resumed: false }
 
     let lastErrorAt: Date | null = null
     let lastHumanAt: Date | null = null

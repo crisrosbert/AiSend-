@@ -5,11 +5,25 @@
 // provides data-agent; otherwise falls back to the tenant's legacy
 // (agent_id IS NULL) row. This keeps old org-only embeds (Kalosa)
 // working even when multiple agent configs exist for the same tenant.
+//
+// AI-engineer changes (see CHANGES.md):
+//   • visitor text is type-checked, cleaned and capped before it is
+//     stored or sent to the model
+//   • the engine now owns the "human is handling this chat" gate and the
+//     handoff/pending bookkeeping; this route only turns its result into
+//     a reply (result.skipped, result.errorReply)
+//   • canned replies follow the visitor's language
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { runAgent } from '@/lib/agent/engine'
 import { allowlistFromConfig, originAllowed, corsHeaders } from '@/lib/widget/origin'
+import {
+  MAX_WIDGET_MESSAGE_CHARS,
+  MAX_WIDGET_RAW_CHARS,
+  sanitizeInboundText,
+} from '@/lib/agent/input-guard'
+import { resolveLanguage, t } from '@/lib/agent/reply-language'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -85,9 +99,24 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json().catch(() => ({}))
-    const { org_id, agent_id, visitor_id, message, page_url, page_title } = body
+    const { org_id, agent_id, visitor_id, page_url, page_title } = body
 
-    if (!org_id || !visitor_id || !message?.trim()) {
+    // ── Visitor text: type-check, clean, cap ──
+    // `message` used to be assumed to be a string and passed on after
+    // trim() with no length limit, so one request could send tens of
+    // thousands of characters to a paid model. A bubble-sized message is
+    // never near the limit; anything absurd is rejected, anything merely
+    // long is cut.
+    const rawMessage: unknown = body.message
+    if (typeof rawMessage === 'string' && rawMessage.length > MAX_WIDGET_RAW_CHARS) {
+      return NextResponse.json(
+        { error: 'Message is too long. Please send a shorter message.' },
+        { status: 400, headers: CORS },
+      )
+    }
+    const message = sanitizeInboundText(rawMessage, MAX_WIDGET_MESSAGE_CHARS).text
+
+    if (!org_id || !visitor_id || !message) {
       return NextResponse.json(
         { error: 'org_id, visitor_id, and message are required' },
         { status: 400, headers: CORS },
@@ -117,10 +146,6 @@ export async function POST(req: Request) {
     // writes the tenant's org-wide row — so without this fallback every
     // embed copied from the Agents page resolves to nothing and the
     // visitor is told the chat "is not configured yet".
-    //
-    // Falling back keeps per-agent configs available for anyone who
-    // later wants a different colour or greeting per agent, while making
-    // the common case work with no extra setup.
     if (!config && agent_id) {
       const { data: orgConfig } = await db()
         .from('widget_configs')
@@ -164,14 +189,6 @@ export async function POST(req: Request) {
 
     // ── Which agent is actually answering ──
     //
-    // The fallback above deliberately keeps an agent-scoped embed working
-    // against the tenant's org-wide config row. But that row has
-    // agent_id NULL, so reading the agent from it discarded the agent the
-    // embed asked for — and the engine then ran its legacy path, where
-    // send_media, the lead form and the agent's own capability flags do
-    // not exist at all. The visible symptom was an agent insisting it
-    // could not share images while its library sat full of them.
-    //
     // The embed's data-agent is honoured, but only after checking the
     // agent belongs to this tenant. data-agent arrives from a public
     // script tag, so without that check a page could name another
@@ -202,11 +219,6 @@ export async function POST(req: Request) {
     // ── Which business owns this conversation ──
     //
     // The agent's, not the config's, whenever an agent is answering.
-    // On the shared-config fallback above, `config` is the tenant's
-    // org-wide row and its business is the tenant default — which is
-    // not necessarily the business this agent belongs to. Reading it
-    // from the config there would file a real-estate lead under the
-    // fashion business, and the number would look plausible.
     const businessId = agentBusinessId ?? config.business_id ?? null
 
     // 2. Find existing session
@@ -329,12 +341,12 @@ export async function POST(req: Request) {
       )
     }
 
-    // 4. Save the visitor's message
+    // 4. Save the visitor's message (the cleaned, capped text)
     const { error: msgErr } = await db().from('messages').insert({
       conversation_id: conversationId,
       sender_type: 'customer',
       content_type: 'text',
-      content_text: message.trim(),
+      content_text: message,
       status: 'delivered',
       created_at: new Date().toISOString(),
     })
@@ -345,7 +357,7 @@ export async function POST(req: Request) {
     await db()
       .from('conversations')
       .update({
-        last_message_text: message.trim(),
+        last_message_text: message,
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -354,10 +366,7 @@ export async function POST(req: Request) {
     // 5. Load persona for the linked journey (legacy path). When an agent
     //    is set, the engine loads the agent's own persona via agentId.
     //    A borrowed row's journey belongs to another business, so its
-    //    persona does too — loading it here is how the estate agency
-    //    ended up speaking in the clinic's voice. The engine prefers
-    //    agents.persona anyway; this stops the wrong one being offered
-    //    as a fallback for an agent that simply has none yet.
+    //    persona does too.
     let systemPrompt: string | undefined
     if (config.journey_id && !(usedSharedConfig && resolvedAgentId)) {
       const { data: persona } = await db()
@@ -368,7 +377,9 @@ export async function POST(req: Request) {
       systemPrompt = persona?.raw_prompt ?? undefined
     }
 
-    // 6. Call the AI engine
+    // 6. Call the AI engine. It owns: the human-handoff gate, emergency
+    //    handling, the pending/needs_attention bookkeeping, and the
+    //    one-retry-then-escalate policy for AI errors.
     const result = await runAgent({
       tenantId: org_id,
       orgId: null,
@@ -376,16 +387,35 @@ export async function POST(req: Request) {
       conversationId,
       contactId,
       customerPhone: `web_${String(visitor_id).slice(0, 12)}`,
-      inboundText: message.trim(),
+      inboundText: message,
       journeyId: config.journey_id ?? undefined,
       systemPromptOverride: systemPrompt,
       agentId: resolvedAgentId,
     })
 
+    const lang = result.language ?? resolveLanguage(message)
+
+    // 6b. The engine chose not to answer. Show a short note; do not
+    //     store it as a bot message and do not touch the conversation.
+    if (result.skipped) {
+      return NextResponse.json(
+        {
+          reply: t(result.skipped === 'human_handling' ? 'human_active' : 'unavailable', lang),
+          media: [],
+          handoff: result.skipped === 'human_handling',
+          human_active: result.skipped === 'human_handling',
+          business_phone: config.business_phone,
+          lead_form: null,
+        },
+        { headers: CORS },
+      )
+    }
+
     const aiFailed = !result.reply
     const reply =
       result.reply ||
-      'Thanks for your message! Let me connect you with our team — someone will follow up with you shortly.'
+      result.errorReply ||
+      t('thanks_team_follow_up', lang)
 
     // 7. Save the AI reply
     await db().from('messages').insert({
@@ -406,20 +436,11 @@ export async function POST(req: Request) {
       })
       .eq('id', conversationId)
 
-    // 7b. Flag for human follow-up if the AI failed or asked for handoff
-    if (aiFailed || result.handoffRequested) {
-      await db()
-        .from('conversations')
-        .update({
-          status: 'pending',
-          needs_attention: true,
-          handoff_reason: aiFailed
-            ? 'AI could not respond — needs human follow-up'
-            : 'Visitor wants to book / needs a human',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', conversationId)
-    }
+    // 7b. No pending/needs_attention update here any more. The engine
+    //     already parked the conversation when a handoff was requested
+    //     (with the specific reason, e.g. an emergency) or when AI errors
+    //     repeated. Doing it here too overwrote that reason and parked
+    //     the chat after a single transient error.
 
     // 8. Return reply + any media the AI chose to send
     return NextResponse.json(
@@ -433,7 +454,8 @@ export async function POST(req: Request) {
           url: m.url,
           description: m.description,
         })),
-        handoff: result.handoffRequested,
+        handoff: result.handoffRequested || (aiFailed && result.escalate === true),
+        emergency: result.emergency === true,
         business_phone: config.business_phone,
         // Present when the AI decided to ask for contact details. The widget
         // renders these as a form and POSTs the result to /api/widget/lead.

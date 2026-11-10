@@ -54,14 +54,24 @@ export interface LLMResponse {
  */
 export const LLM_TIMEOUT_MS = 20_000
 
-// ── Provider selection ──
+// ── Public entry point ──
 
 /**
  * Which provider serves this deployment.
  *
- * OpenAI is the default. A value that is not "openai" or "gemini" still
- * resolves to the default here (a typo must not crash the module), but
- * providerConfigIssue() reports it so the engine can log it loudly.
+ * OpenAI is the default. The default used to be Gemini, which meant a
+ * deployment that simply forgot to set LLM_PROVIDER silently ran on a
+ * provider nobody had chosen — and, since the key check is done per
+ * provider, could report "no API key" while a perfectly good
+ * OPENAI_API_KEY sat in the environment.
+ *
+ * One exported reader rather than three inlined `process.env` reads,
+ * because they had already drifted: the engine defaulted one way and
+ * logged a hardcoded Gemini model name regardless of what actually ran.
+ *
+ * A value that is not "openai" or "gemini" still resolves to the default
+ * here (a typo must not crash the module), but providerConfigIssue()
+ * reports it so the engine can log it loudly.
  */
 export function activeProvider(): 'openai' | 'gemini' {
   return (process.env.LLM_PROVIDER || 'openai').toLowerCase() === 'gemini'
@@ -116,6 +126,10 @@ export type LLMErrorKind = 'config' | 'transient'
  * 'config': missing key, 401/403 (bad key), 404 (bad model name). Retrying
  *           or apologising again changes nothing; a human has to fix it.
  * 'transient': timeouts, network errors, 429, 5xx, anything else.
+ *
+ * Works on the error text produced by the adapters below
+ * ("<Provider> API <status>: ...", "<KEY> not set"), so it is independent
+ * of which model a caller asked for through CallOptions.
  */
 export function classifyLLMError(err: unknown): LLMErrorKind {
   const msg = err instanceof Error ? err.message : String(err)
@@ -128,15 +142,21 @@ export function classifyLLMError(err: unknown): LLMErrorKind {
   return 'transient'
 }
 
+export interface CallOptions {
+  /** Use this model instead of the deployment default (same provider). */
+  model?: string
+}
+
 export async function callLLM(
   systemPrompt: string,
   turns: LLMTurn[],
   tools: LLMTool[],
+  options: CallOptions = {},
 ): Promise<LLMResponse> {
   if (activeProvider() === 'gemini') {
-    return callGemini(systemPrompt, turns, tools)
+    return callGemini(systemPrompt, turns, tools, options.model)
   }
-  return callOpenAI(systemPrompt, turns, tools)
+  return callOpenAI(systemPrompt, turns, tools, options.model)
 }
 
 // ════════════════════════════════════════════════════════════
@@ -147,11 +167,12 @@ async function callGemini(
   systemPrompt: string,
   turns: LLMTurn[],
   tools: LLMTool[],
+  modelOverride?: string,
 ): Promise<LLMResponse> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
+  const model = modelOverride || process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
 
   // Convert common turns → Gemini "contents" format
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -228,11 +249,12 @@ async function callOpenAI(
   systemPrompt: string,
   turns: LLMTurn[],
   tools: LLMTool[],
+  modelOverride?: string,
 ): Promise<LLMResponse> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY not set')
 
-  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+  const model = modelOverride || process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
   // Convert common turns → OpenAI messages format
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

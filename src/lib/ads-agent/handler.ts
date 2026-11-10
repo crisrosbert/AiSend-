@@ -9,9 +9,17 @@
 //       → store/tag the lead as source 'meta_ads' with the ad id.
 //
 // This module reuses NOTHING from the journey/automation code paths.
+//
+// AI-engineer changes (see CHANGES.md):
+//   • honours result.skipped from runAgent(): a conversation a human has
+//     taken is NOT answered by the ads agent any more, and a paused or
+//     missing agent falls through to normal handling
+//   • the fallback line follows the customer's language
+//   • a reply that Meta did not accept is stored as 'failed', not 'sent'
 
 import { createClient } from '@supabase/supabase-js'
 import { runAgent } from '@/lib/agent/engine'
+import { resolveLanguage, t } from '@/lib/agent/reply-language'
 import { deliverAgentMedia } from '@/lib/whatsapp-agent/deliver-media'
 import { businessIdForAgent } from '@/lib/business/server'
 import { ingestLead } from '@/lib/leads/ingest'
@@ -56,7 +64,6 @@ export interface AdLeadInput {
 /**
  * Send a plain free-form WhatsApp text message via Meta Cloud API.
  * Self-contained so this module doesn't depend on meta-api.ts internals.
- * (If your meta-api.ts already exports a text sender, you can swap it in.)
  */
 async function sendWhatsAppText(
   phoneNumberId: string,
@@ -96,7 +103,7 @@ async function sendWhatsAppText(
 
 /**
  * Main entry — handle one inbound ad-lead message end to end.
- * Returns true if the AI handled + replied (so the webhook can skip
+ * Returns true if the AI handled the message (so the webhook can skip
  * the normal journey/automation path for this message).
  */
 export async function handleAdLead(input: AdLeadInput): Promise<boolean> {
@@ -107,6 +114,8 @@ export async function handleAdLead(input: AdLeadInput): Promise<boolean> {
 
   try {
     // 1. Run the tenant's OWN agent (its persona + its RAG knowledge).
+    //    runAgent() applies the human-handoff gate and the paused-agent
+    //    check, so this path no longer talks over a teammate.
     const result = await runAgent({
       tenantId,
       orgId: null,
@@ -118,9 +127,22 @@ export async function handleAdLead(input: AdLeadInput): Promise<boolean> {
       agentId,
     })
 
+    if (result?.skipped === 'human_handling') {
+      // A human has this conversation. Handled = true so the webhook does
+      // not push the message into journeys either. Nothing is sent.
+      return true
+    }
+    if (result?.skipped) {
+      // Paused or missing agent: behave as if the ads agent were not
+      // configured and let normal handling continue.
+      return false
+    }
+
+    const lang = result?.language ?? resolveLanguage(inboundText)
     const reply =
       result?.reply ||
-      'Thanks for reaching out! Someone from our team will get back to you shortly.'
+      result?.errorReply ||
+      t('thanks_team_follow_up', lang)
 
     // 2. Send the AI reply back on WhatsApp (free-form service message).
     const sentMsgId = await sendWhatsAppText(
@@ -134,13 +156,12 @@ export async function handleAdLead(input: AdLeadInput): Promise<boolean> {
       content_type: 'text',
       content_text: reply,
       message_id: sentMsgId,
-      status: 'sent',
+      status: sentMsgId ? 'sent' : 'failed',
       created_at: new Date().toISOString(),
     })
 
     // 3b. Send any media the agent chose — property photos, brochures,
-    //     price lists. Ad leads ask to see things more than any other
-    //     source, and this path used to drop all of it.
+    //     price lists.
     let lastPreview = reply
     if (result?.mediaToSend?.length) {
       const delivered = await deliverAgentMedia({
@@ -173,26 +194,15 @@ export async function handleAdLead(input: AdLeadInput): Promise<boolean> {
       })
       .eq('id', conversationId)
 
-    // 4. Record the lead through the shared intake — this is what gives
-    //    a Click-to-WhatsApp lead the SAME dedupe-by-phone and
-    //    cross-source merge as every other channel (website form, Meta
-    //    Lead Form, Google Ads). Previously this upserted directly with
-    //    onConflict 'tenant_id,contact_id', which meant a second ad
-    //    click from someone WITHOUT a contact yet (contact_id null)
-    //    could never match the conflict target and silently duplicated;
-    //    phone-based dedupe in ingestLead() doesn't have that gap.
-    //
-    //    `ctwa_clid` and `source_url` used to be parsed off the Meta
-    //    referral and then thrown away — not written anywhere. They are
-    //    exactly what lets a merchant later reconcile this lead against
-    //    Meta Ads Manager spend, so they're captured now.
+    // 4. Record the lead through the shared intake — same dedupe-by-phone
+    //    and cross-source merge as every other channel. `ctwa_clid` and
+    //    `source_url` are captured so a merchant can reconcile this lead
+    //    against Meta Ads Manager spend.
     const source = referral?.source_type === 'ad' || referral?.source_id
       ? 'meta_ads'
       : 'whatsapp'
 
-    // The agent's business, not the WhatsApp number's. One number can
-    // route ads for several businesses; the agent answering is what
-    // says whose lead this is.
+    // The agent's business, not the WhatsApp number's.
     const businessId = await businessIdForAgent(db(), agentId)
 
     const ingestResult = await ingestLead({
@@ -209,11 +219,6 @@ export async function handleAdLead(input: AdLeadInput): Promise<boolean> {
       ctwaClid: referral?.ctwa_clid ?? null,
       lastMessage: inboundText,
       extra: referral?.source_url ? { source_url: referral.source_url } : undefined,
-      // The WhatsApp webhook already fires 'new_contact_created' for a
-      // brand-new contact; firing 'lead_created' too (which it does,
-      // inside ingestLead) is intentional — a merchant may have
-      // automations on either or both, and ad leads are exactly the
-      // case where "treat every source as a lead" matters most.
     })
 
     // 5. If the agent flagged handoff, mark the lead hot for a human.

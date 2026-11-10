@@ -4,6 +4,30 @@
 // number safe. Handles STOP/START keywords, records consent with an
 // audit trail, and exposes helpers the broadcast sender uses to filter
 // to ONLY opted-in contacts.
+//
+// ── ISSUE-2 FIX (v3) ─────────────────────────────────────────────────
+// Before: any message that STARTED with "stop" (e.g. "stop the booking")
+// was an opt-out, and plain "yes" / "haan" / "ha" was always an opt-in.
+// The webhook returns early on a handled consent message, so the
+// customer got no answer at all.
+//
+// Now:
+//   * Opt-out is an EXACT match of a small phrase set after normalising
+//     (lower-case, punctuation/emoji stripped, spaces collapsed).
+//     "STOP." and "stop!!" are opt-outs; "stop the booking" is not.
+//     "ruko" (= "wait") is NOT an opt-out any more.
+//   * Explicit opt-in words (start / subscribe / opt in) still work as an
+//     exact match.
+//   * Casual words (yes / haan / ha / ok ...) count as opt-in ONLY when
+//     the contact is not already opted in AND our previous outbound
+//     message looked like a consent request. Otherwise they fall through
+//     to journeys / the agent like any other message.
+//   * Repeating the same keyword does not write a second audit row.
+//
+// Policy note (verified on Meta's "Get Opt-in for WhatsApp" page): Meta
+// requires clear opt-in that names the business, and says businesses
+// should give clear opt-out instructions and honor them. It does not
+// prescribe a keyword list, so the list below is a product decision.
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -19,11 +43,91 @@ function db() {
   return _db
 }
 
-// Keywords a customer can send to opt out / opt back in.
-const OPT_OUT_WORDS = ['stop', 'unsubscribe', 'opt out', 'optout', 'band karo', 'ruko']
-const OPT_IN_WORDS = ['start', 'subscribe', 'yes', 'haan', 'ha', 'opt in', 'optin']
+// Whole-message phrases (already normalised) that mean "stop messaging me".
+// "ruko" was removed on purpose: it means "wait / hold on" and is used
+// mid-conversation all the time. "band karo" is kept: as a whole message
+// it reads as "stop it".
+const OPT_OUT_PHRASES: ReadonlySet<string> = new Set([
+  'stop',
+  'stop all',
+  'stopall',
+  'unsubscribe',
+  'opt out',
+  'optout',
+  'band karo',
+])
+
+// Explicit opt-in words: valid as a whole message at any time.
+const EXPLICIT_OPT_IN_PHRASES: ReadonlySet<string> = new Set([
+  'start',
+  'subscribe',
+  'opt in',
+  'optin',
+])
+
+// Casual agreement words: only an opt-in when answering a consent request.
+const CASUAL_OPT_IN_PHRASES: ReadonlySet<string> = new Set([
+  'yes',
+  'y',
+  'yes please',
+  'haan',
+  'haa',
+  'han',
+  'ha',
+  'haan ji',
+  'ok',
+  'okay',
+])
 
 export type OptInStatus = 'opted_in' | 'opted_out' | 'pending' | 'unknown'
+
+/**
+ * Lower-case, NFKC-normalise, replace punctuation / emoji / symbols with
+ * spaces and collapse whitespace. "STOP." -> "stop", "Opt-out!" -> "opt out".
+ */
+export function normalizeConsentText(text: string | null | undefined): string {
+  return (text ?? '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * True when a database error says column `column` does not exist
+ * (Postgres 42703 "column ... does not exist", or PostgREST PGRST204
+ * "Could not find the '...' column ... in the schema cache").
+ */
+export function isMissingColumnError(
+  err: { code?: string | null; message?: string | null } | null | undefined,
+  column: string,
+): boolean {
+  if (!err) return false
+  const msg = (err.message ?? '').toLowerCase()
+  if (!msg.includes(column.toLowerCase())) return false
+  return err.code === '42703' || err.code === 'PGRST204' || /does not exist|could not find/.test(msg)
+}
+
+/**
+ * Update the contact row. If the ONLY problem is that the optional
+ * `opted_out_at` column is missing, retry once without it so the
+ * essential fields (opt_in_status, opt_out_at) are still saved.
+ * Any other error is returned unchanged.
+ */
+async function updateContactConsent(
+  contactId: string,
+  patch: Record<string, unknown>,
+): Promise<{ error: { code?: string | null; message: string } | null }> {
+  const first = await db().from('contacts').update(patch).eq('id', contactId)
+  if (first.error && 'opted_out_at' in patch && isMissingColumnError(first.error, 'opted_out_at')) {
+    console.warn('[optin] contacts.opted_out_at missing, retrying without it (run migration 040)')
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { opted_out_at: _skip, ...rest } = patch
+    return db().from('contacts').update(rest).eq('id', contactId)
+  }
+  return first
+}
 
 /** Record an opt-in or opt-out, updating the contact + writing an audit row. */
 export async function recordConsent(params: {
@@ -37,14 +141,26 @@ export async function recordConsent(params: {
   const { userId, contactId, phone, event, source, note } = params
   const now = new Date().toISOString()
 
-  const patch =
+  // `opted_out_at` is the column the contacts page, resend-unread and the
+  // campaign audience filters read. `opt_out_at` is the older column this
+  // file always wrote. Write both so a WhatsApp STOP shows up everywhere.
+  // `opted_out_at` is optional: if the database has no such column the
+  // update is retried without it (see updateContactConsent).
+  const patch: Record<string, unknown> =
     event === 'opt_in'
-      ? { opt_in_status: 'opted_in', opt_in_source: source, opt_in_at: now, opt_out_at: null }
-      : { opt_in_status: 'opted_out', opt_out_at: now }
+      ? {
+          opt_in_status: 'opted_in',
+          opt_in_source: source,
+          opt_in_at: now,
+          opt_out_at: null,
+          opted_out_at: null,
+        }
+      : { opt_in_status: 'opted_out', opt_out_at: now, opted_out_at: now }
 
-  await db().from('contacts').update(patch).eq('id', contactId)
+  const { error: updErr } = await updateContactConsent(contactId, patch)
+  if (updErr) console.error('[optin] contact update failed:', updErr.message)
 
-  await db().from('optin_events').insert({
+  const { error: evErr } = await db().from('optin_events').insert({
     user_id: userId,
     contact_id: contactId,
     phone: phone ?? null,
@@ -53,25 +169,113 @@ export async function recordConsent(params: {
     note: note ?? null,
     created_at: now,
   })
+  if (evErr) console.error('[optin] audit insert failed:', evErr.message)
 }
 
 /**
- * Inspect an inbound message for STOP/START intent. Returns the detected
- * event (or null). Call this from the WhatsApp webhook on inbound text so
- * opt-outs are honored INSTANTLY (required by policy + protects rating).
+ * Inspect an inbound message for an UNAMBIGUOUS STOP/START intent.
+ * Returns 'opt_out' for an exact stop phrase, 'opt_in' for an exact
+ * explicit opt-in phrase (start / subscribe / opt in), else null.
+ *
+ * Casual words like "yes" / "haan" return null here on purpose: whether
+ * they mean consent depends on context. See decideConsentAction().
  */
 export function detectConsentKeyword(text: string): 'opt_in' | 'opt_out' | null {
-  const t = (text || '').trim().toLowerCase()
+  const t = normalizeConsentText(text)
   if (!t) return null
-  if (OPT_OUT_WORDS.some((w) => t === w || t.startsWith(w))) return 'opt_out'
-  if (OPT_IN_WORDS.some((w) => t === w)) return 'opt_in'
+  if (OPT_OUT_PHRASES.has(t)) return 'opt_out'
+  if (EXPLICIT_OPT_IN_PHRASES.has(t)) return 'opt_in'
   return null
+}
+
+/** True for a bare casual agreement word ("yes", "haan", "ha", "ok" ...). */
+export function isCasualOptInReply(text: string): boolean {
+  return CASUAL_OPT_IN_PHRASES.has(normalizeConsentText(text))
+}
+
+const CONSENT_TERMS =
+  /\b(opt in|optin|subscribe|subscription|consent|permission|updates?|offers?|notifications?|alerts?|promotions?|newsletter)\b/
+const ASK_TERMS =
+  /\b(reply|send|type|text|say|respond|confirm|press|tap|likhein|likho|bhejein|bhejo)\b/
+
+/**
+ * Heuristic: does this OUTBOUND message look like a request for consent
+ * to receive messages? Needs both a consent-ish word (updates, offers,
+ * subscribe, opt in, ...) and a call to reply. A booking question such as
+ * "Shall I confirm your 5pm slot? Reply yes" does NOT match.
+ *
+ * It is a heuristic because no code in this repo sends consent prompts
+ * (merchants write their own template text). If the prompt text is not
+ * stored in messages.content_text it will not match, and a casual "yes"
+ * then simply falls through to the normal bot flow — the safe default.
+ */
+export function looksLikeConsentRequest(text: string | null | undefined): boolean {
+  const t = normalizeConsentText(text)
+  if (!t) return false
+  return CONSENT_TERMS.test(t) && ASK_TERMS.test(t)
+}
+
+/**
+ * Pure decision: given the inbound text, the contact's current consent
+ * status and the previous outbound message, what consent event (if any)
+ * should be recorded? null means "not a consent message, carry on".
+ */
+export function decideConsentAction(input: {
+  text: string
+  optInStatus: string | null | undefined
+  lastOutboundText: string | null | undefined
+}): 'opt_in' | 'opt_out' | null {
+  const exact = detectConsentKeyword(input.text)
+  if (exact) return exact
+  if (!isCasualOptInReply(input.text)) return null
+  if (input.optInStatus === 'opted_in') return null // already consented
+  if (!looksLikeConsentRequest(input.lastOutboundText)) return null
+  return 'opt_in'
+}
+
+/** Current opt_in_status of a contact, or undefined if it cannot be read. */
+async function readContactStatus(contactId: string): Promise<string | null | undefined> {
+  const { data, error } = await db()
+    .from('contacts')
+    .select('opt_in_status')
+    .eq('id', contactId)
+    .maybeSingle()
+  if (error) {
+    console.warn('[optin] status read failed:', error.message)
+    return undefined
+  }
+  return (data?.opt_in_status as string | null | undefined) ?? null
+}
+
+/** Text of the most recent message WE sent to this contact, if any. */
+async function readLastOutboundText(userId: string, contactId: string): Promise<string | null> {
+  const { data: conv, error: convErr } = await db()
+    .from('conversations')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('contact_id', contactId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (convErr || !conv) return null
+
+  const { data: msg, error: msgErr } = await db()
+    .from('messages')
+    .select('content_text')
+    .eq('conversation_id', conv.id)
+    .in('sender_type', ['agent', 'bot', 'system'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (msgErr || !msg) return null
+  return (msg.content_text as string | null) ?? null
 }
 
 /**
  * Handle a consent keyword end-to-end from the webhook: record it and,
- * for opt-out, that's it (don't message them again). Returns true if a
- * keyword was handled (so the webhook can skip other processing).
+ * for opt-out, that's it (don't message them again). Returns true ONLY
+ * if the message was consumed as a consent message (so the webhook skips
+ * journeys/agents); false means "treat it like any other message".
  */
 export async function handleInboundConsent(params: {
   userId: string
@@ -79,8 +283,39 @@ export async function handleInboundConsent(params: {
   phone: string
   inboundText: string
 }): Promise<boolean> {
-  const event = detectConsentKeyword(params.inboundText)
+  const t = normalizeConsentText(params.inboundText)
+  // Fast path: almost every message is neither a keyword nor a casual
+  // reply, so no database query is made for them.
+  if (!t || (!OPT_OUT_PHRASES.has(t) && !EXPLICIT_OPT_IN_PHRASES.has(t) && !CASUAL_OPT_IN_PHRASES.has(t))) {
+    return false
+  }
+
+  const status = await readContactStatus(params.contactId)
+  const exact = detectConsentKeyword(params.inboundText)
+
+  let event: 'opt_in' | 'opt_out' | null
+  if (exact) {
+    event = exact
+  } else {
+    // Casual word. If we cannot read the status, do NOT guess: fall through.
+    if (status === undefined) return false
+    const lastOutbound = status === 'opted_in' ? null : await readLastOutboundText(params.userId, params.contactId)
+    event = decideConsentAction({
+      text: params.inboundText,
+      optInStatus: status,
+      lastOutboundText: lastOutbound,
+    })
+  }
   if (!event) return false
+
+  // Idempotency.
+  //  - STOP from someone already opted out: nothing to write, but still
+  //    swallow it (never message them again).
+  //  - START from someone already opted in: nothing to do, let the normal
+  //    flow answer it.
+  if (event === 'opt_out' && status === 'opted_out') return true
+  if (event === 'opt_in' && status === 'opted_in') return false
+
   await recordConsent({
     userId: params.userId,
     contactId: params.contactId,

@@ -254,6 +254,10 @@
         if (data.handoff && data.business_phone) {
           addWhatsAppButton(data.business_phone, text);
         }
+        // After a handoff the bot stays quiet until a person returns the chat
+        // to it. Say so once and let the visitor start fresh, so an unrelated
+        // question is not stuck behind "our team has your message".
+        if (data.handoff) addNewChatButton();
         // The AI decided it is time to ask for contact details.
         if (data.lead_form && data.lead_form.fields && !leadCaptured) {
           addLeadForm(data.lead_form.fields);
@@ -263,6 +267,33 @@
         hideTyping();
         addMessage('bot', 'Sorry, I had trouble connecting. Please try again.');
       });
+  }
+
+  // Offered once per handoff. A new chat is a new visitor id, which the server
+  // treats as a new conversation; the team keeps the flagged one.
+  function addNewChatButton() {
+    if (document.getElementById('aisend-newchat')) return;
+    var container = document.getElementById('aisend-messages');
+    var wrap = el('div', 'aisend-msg aisend-msg-bot');
+    wrap.id = 'aisend-newchat';
+    wrap.innerHTML = '<button type="button" class="aisend-newchat-btn">Have a different question? Start a new chat</button>';
+    wrap.querySelector('button').onclick = startNewChat;
+    container.appendChild(wrap);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function startNewChat() {
+    visitorId = 'v_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try {
+      localStorage.setItem(VISITOR_KEY, visitorId);
+      localStorage.removeItem(VISITOR_KEY + '_lead');
+    } catch (e) { /* private mode */ }
+    leadCaptured = false;
+    messages = [];
+    var container = document.getElementById('aisend-messages');
+    container.innerHTML = '';
+    addMessage('bot', config.welcome_message);
+    renderSuggestions();
   }
 
   function addMessage(role, text) {
@@ -553,6 +584,8 @@
       '.aisend-input:focus{border-color:var(--aisend-primary)}' +
       '.aisend-send{width:42px;height:42px;border:none;border-radius:50%;background:var(--aisend-primary);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}' +
       '.aisend-wa-btn{display:inline-block;background:#25D366;color:#fff;padding:10px 18px;border-radius:22px;text-decoration:none;font-size:14px;font-weight:600}' +
+      '.aisend-newchat-btn{font:inherit;font-size:13px;padding:8px 14px;border-radius:18px;cursor:pointer;background:#fff;color:var(--aisend-primary);border:1.5px solid var(--aisend-primary)}' +
+      '.aisend-newchat-btn:hover{background:var(--aisend-primary);color:#fff}' +
       '.aisend-typing{display:flex;gap:4px;align-items:center}' +
       '.aisend-typing span{width:7px;height:7px;border-radius:50%;background:#bbb;animation:aisendBlink 1.4s infinite both}' +
       '.aisend-typing span:nth-child(2){animation-delay:.2s}' +

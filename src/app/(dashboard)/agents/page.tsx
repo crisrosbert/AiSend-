@@ -29,7 +29,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
   Bot, Loader2, Save, Plus, Image as ImageIcon, Brain, X, Sparkles,
-  Search, Check, Copy, Globe, MessageCircle, Clock, AlertCircle,
+  Search, Check, Globe, MessageCircle, Clock, AlertCircle,
 } from "lucide-react";
 import { useBusiness } from "@/hooks/use-business";
 import {
@@ -106,7 +106,6 @@ export default function AgentsPage() {
   // Holds the template id currently being turned into an agent, so only
   // that one card shows a spinner.
   const [applying, setApplying] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Which agent answers general WhatsApp messages. Stored on
   // whatsapp_config so it sits beside the ads-agent picker that already
@@ -584,13 +583,30 @@ export default function AgentsPage() {
     }
   }
 
-  /** Copy the embed snippet for a specific agent. */
-  function copyEmbed(agent: Agent) {
-    const snippet = `<script src="${window.location.origin}/widget.js" data-org="${userId}" data-agent="${agent.id}"></script>`;
-    navigator.clipboard.writeText(snippet);
-    setCopiedId(agent.id);
-    toast.success("Embed code copied");
-    setTimeout(() => setCopiedId(null), 2000);
+  /**
+   * Open this agent's knowledge (FAQs, pages, files).
+   *
+   * An agent that has never been trained has no knowledge space yet, and the
+   * old button then opened the Chat Flows list: owners added FAQs to some
+   * other journey and the agent never saw them. This creates the agent's own
+   * space first (idempotent on the server), then opens it.
+   *
+   * The embed code is no longer copied from here. There is ONE place for it:
+   * the Website Chat Widget page (/widget), which has an agent picker.
+   */
+  async function openKnowledge(agent: Agent) {
+    try {
+      const res = await fetch("/api/agent/knowledge-space", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_id: agent.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.journey_id) { toast.error(data.error || "Could not open knowledge"); return; }
+      window.location.href = `/journeys/${data.journey_id}/brain?from=agent`;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not open knowledge");
+    }
   }
 
   /** Delete an agent and all its associated data. */
@@ -761,16 +777,30 @@ export default function AgentsPage() {
                     Configure
                   </button>
                   <a className="ag-icon-btn" href="/media" title="Media library"><ImageIcon size={15} /></a>
+                  {agent.journey_id ? (
+                    <a
+                      className="ag-icon-btn"
+                      href={`/journeys/${agent.journey_id}/brain?from=agent`}
+                      title="Knowledge: this agent's FAQs, pages and files"
+                    >
+                      <Brain size={15} />
+                    </a>
+                  ) : (
+                    <button
+                      className="ag-icon-btn"
+                      onClick={() => openKnowledge(agent)}
+                      title="Knowledge: this agent's FAQs, pages and files"
+                    >
+                      <Brain size={15} />
+                    </button>
+                  )}
                   <a
                     className="ag-icon-btn"
-                    href={agent.journey_id ? `/journeys/${agent.journey_id}/brain` : "/journeys"}
-                    title="Knowledge"
+                    href={`/widget?agent=${agent.id}`}
+                    title="Install on website: the embed code is on the Website Chat Widget page"
                   >
-                    <Brain size={15} />
+                    <Globe size={15} />
                   </a>
-                  <button className="ag-icon-btn" onClick={() => copyEmbed(agent)} title="Copy embed code">
-                    {copiedId === agent.id ? <Check size={15} /> : <Copy size={15} />}
-                  </button>
                 </div>
               </article>
             ))}

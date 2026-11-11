@@ -17,6 +17,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { embedText, hasEmbeddingKey } from './embed'
+import { extractSearchTerms, rankByTerms } from './keywords'
 
 // Untyped admin client. We cast to `any` because this project does not
 // generate Supabase types — same pattern as src/lib/journeys/runner.ts.
@@ -107,7 +108,11 @@ export async function retrieve(
       return await fallbackIlike(args, max)
     }
 
-    if (!data || data.length === 0) return []
+    // Full-text search can need EVERY word of the question in one chunk, so
+    // "What does X surgery involve?" finds nothing when the FAQ never says
+    // "involve". An empty result is not proof the knowledge is missing:
+    // try a plain keyword search before reporting NOT FOUND.
+    if (!data || data.length === 0) return await fallbackIlike(args, max)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data as any[]).map((row) => ({
@@ -182,10 +187,10 @@ async function fallbackIlike(
   args: RetrieveArgs,
   max: number,
 ): Promise<KnowledgeChunk[]> {
-  const words = args.query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((w) => w.length > 2)
+  // Filler words removed and endings trimmed (see keywords.ts), so the OR
+  // below is not satisfied by "what" or "does" in every chunk. Terms are
+  // letters and digits only, which keeps the filter string safe.
+  const words = extractSearchTerms(args.query)
 
   if (words.length === 0) return []
 
@@ -196,7 +201,7 @@ async function fallbackIlike(
     .select('id, content, source_id, chunk_index')
     .eq('tenant_id', args.tenantId)
     .or(filter)
-    .limit(max)
+    .limit(Math.max(max * 8, 40))
 
   if (args.journeyId) {
     q = q.eq('journey_id', args.journeyId)
@@ -206,12 +211,13 @@ async function fallbackIlike(
 
   if (error || !data) return []
 
+  // Best match first: the chunk containing the most of the question's words.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data as any[]).map((row, i: number) => ({
+  return rankByTerms(data as any[], words, max).map((row, i: number) => ({
     id: row.id,
     content: row.content,
     sourceId: row.source_id,
     chunkIndex: row.chunk_index,
-    score: 1 - i * 0.1,
+    score: Math.max(0.1, 1 - i * 0.1),
   }))
 }

@@ -45,6 +45,7 @@ import {
 const navItems = [
   { path: "dashboard",   label: "Dashboard",        icon: LayoutDashboard },
   { path: "analytics",   label: "Analytics",        icon: BarChart3 },
+  { path: "quick-setup", label: "Quick Setup",      icon: Sparkles },
   { path: "agents",      label: "AI Agents",        icon: Bot },
   { path: "ai-agent",    label: "Shop Agent",       icon: ShoppingCart },
   { path: "inbox",       label: "Live Chat",        icon: MessageSquare },

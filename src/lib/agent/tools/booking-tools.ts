@@ -39,6 +39,7 @@ import {
   type BusinessHours,
 } from '@/lib/agent/business-hours'
 import { findRequestToUpdate, overlaps, pickFreeSlot, RECENT_REQUEST_MS } from '@/lib/agent/tools/booking-logic'
+import { checkPhone, phoneProblemForModel } from '@/lib/phone/validate'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -89,6 +90,14 @@ export async function bookAppointment(
     if (!args.customerName?.trim() || !args.customerPhone?.trim()) {
       return 'Missing name or phone — ask the customer for both before booking.'
     }
+
+    // A booking with a number nobody can ring is worse than no booking: the
+    // team finds out only when they dial it. Indian mobiles are 10 digits;
+    // other countries need "+" and the country code (see lib/phone/validate).
+    // The model is told what to ask for, and nothing is saved.
+    const phoneCheck = checkPhone(args.customerPhone)
+    if (!phoneCheck.ok) return phoneProblemForModel(args.customerPhone, phoneCheck)
+    const customerPhone = phoneCheck.e164
 
     const hours = args.hours ?? parseBusinessHours(null)
 
@@ -169,7 +178,7 @@ export async function bookAppointment(
       contact_id: args.contactId,
       conversation_id: args.conversationId,
       customer_name: args.customerName.trim(),
-      customer_phone: args.customerPhone.trim(),
+      customer_phone: customerPhone,
       service: args.service?.trim() || 'Consultation',
       appointment_at: finalIso,
       // Keep the customer's own words alongside the resolved slot.
@@ -270,7 +279,7 @@ export async function bookAppointment(
         conversationId: args.conversationId,
         source: 'whatsapp',
         name: args.customerName.trim(),
-        phone: args.customerPhone.trim(),
+        phone: customerPhone,
         interest: args.service?.trim() || 'Consultation',
         lastMessage: `Booking requested: ${args.service?.trim() || 'Consultation'}`,
         extra: {
@@ -295,14 +304,14 @@ export async function bookAppointment(
     if (wasUpdated) {
       return [
         `Existing request updated to ${label} (no second booking was created).`,
-        `Customer: ${args.customerName}, phone: ${args.customerPhone}.`,
+        `Customer: ${args.customerName}, phone: ${customerPhone}.`,
         `Confirm the new time ${label} warmly and say the team will call to finalise the details.`,
       ].join(' ')
     }
 
     return [
       `Booking saved for ${label}.`,
-      `Customer: ${args.customerName}, phone: ${args.customerPhone}.`,
+      `Customer: ${args.customerName}, phone: ${customerPhone}.`,
       `Confirm ${label} warmly and say the team will call to finalise the details.`,
     ].join(' ')
   } catch (err) {

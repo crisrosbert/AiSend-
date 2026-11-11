@@ -336,6 +336,22 @@ export function describeHoursForPrompt(hours: BusinessHours, now: Date = new Dat
       : `The business is CLOSED all day today.`,
   ]
 
+  // Tomorrow, stated outright. At 8:28 PM the line above says "CLOSED right
+  // now", and a model reading only that told a visitor asking for "tomorrow
+  // at 6 pm" that the clinic was closed. The code was right (resolveSlot()
+  // books Thursday 6 PM); the prompt never said what tomorrow is. Noon is
+  // used as the anchor so a DST change cannot skip or repeat a calendar day.
+  const noonToday = instantFromLocal(p.year, p.month, p.day, 12, 0, hours.timezone)
+  const tom = localParts(new Date(noonToday.getTime() + 86_400_000), hours.timezone)
+  const tomDay = hours.days[tom.weekday]
+  lines.push(
+    `Tomorrow is ${DAY_NAMES[tom.weekday]} ${tom.day}/${tom.month}: ${
+      tomDay
+        ? `open ${humanTime(toMinutes(tomDay.open))} to ${humanTime(toMinutes(tomDay.close))} (the last appointment starts at ${humanTime(toMinutes(tomDay.close) - hours.slotMinutes)})`
+        : 'closed all day'
+    }.`,
+  )
+
   // The weekly grid, collapsed so identical days share a line.
   const schedule = hours.days
     .map((d, i) => `${DAY_NAMES[i].slice(0, 3)} ${d ? `${humanTime(toMinutes(d.open))}–${humanTime(toMinutes(d.close))}` : 'closed'}`)
@@ -352,7 +368,7 @@ export function describeHoursForPrompt(hours: BusinessHours, now: Date = new Dat
   }
 
   lines.push(
-    `Never offer or accept a time outside these hours. If the customer asks for one, say plainly that the business is closed then and offer the earliest time above.`,
+    `Never offer or accept a time outside these hours. If the customer asks for one, say plainly that the business is closed then and offer the earliest time above. Being closed right now does not mean the business is closed at other times: always check the day and time the customer asked for against the weekly hours and the "Tomorrow is" line.`,
   )
 
   return lines.join('\n')

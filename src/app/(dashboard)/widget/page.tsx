@@ -17,6 +17,14 @@ import {
 } from "lucide-react";
 import { useScopedBusinessId } from "@/hooks/use-business";
 import { ChatbotDraftBanner } from "@/components/widget/chatbot-draft-banner";
+import {
+  WA_BUTTON_TEXT_DEFAULT,
+  WA_BUTTON_TEXT_MAX,
+  buttonTextOrDefault,
+  checkWhatsappSettings,
+  isMissingWhatsappColumnError,
+  withoutWhatsappColumns,
+} from "@/lib/widget/whatsapp-strip";
 
 interface WidgetConfig {
   bot_name: string;
@@ -26,6 +34,10 @@ interface WidgetConfig {
   trigger_delay_seconds: number;
   business_phone: string | null;
   is_active: boolean;
+  /** Optional WhatsApp strip under the chat header. Off by default. */
+  whatsapp_button_enabled: boolean;
+  /** "" = use the default text. */
+  whatsapp_button_text: string;
 }
 
 /** The agents a website can be wired to. The embed code carries the chosen one. */
@@ -44,6 +56,8 @@ const DEFAULTS: WidgetConfig = {
   trigger_delay_seconds: 10,
   business_phone: "",
   is_active: true,
+  whatsapp_button_enabled: false,
+  whatsapp_button_text: "",
 };
 
 const COLOR_PRESETS = [
@@ -117,6 +131,11 @@ export default function WidgetSettingsPage() {
           trigger_delay_seconds: data.trigger_delay_seconds ?? DEFAULTS.trigger_delay_seconds,
           business_phone: data.business_phone ?? "",
           is_active: data.is_active ?? true,
+          // Columns from migration 043. Before it is run they are simply
+          // absent from the row: off, default text.
+          whatsapp_button_enabled: data.whatsapp_button_enabled === true,
+          whatsapp_button_text:
+            typeof data.whatsapp_button_text === "string" ? data.whatsapp_button_text : "",
         });
       }
     } finally {
@@ -128,6 +147,18 @@ export default function WidgetSettingsPage() {
 
     async function save() {
     if (!userId) { toast.error("Please sign in again"); return; }
+
+    // The WhatsApp number is checked BEFORE anything is written. With the
+    // button ON a bad number blocks saving (the error also shows under the
+    // field). With the button OFF the number is only the hand-off number, so
+    // an odd one is kept and only warned about.
+    const wa = checkWhatsappSettings({
+      enabled: config.whatsapp_button_enabled,
+      phone: config.business_phone,
+      text: config.whatsapp_button_text,
+    });
+    if (!wa.ok) { toast.error(wa.message); return; }
+
     setSaving(true);
     try {
       // widget_configs stores one row per agent PLUS a legacy row with
@@ -145,16 +176,50 @@ export default function WidgetSettingsPage() {
         .maybeSingle();
       if (readError) throw readError;
 
-      const payload = { ...config, updated_at: new Date().toISOString() };
+      // business_phone is stored as digits only (no plus), the same value the
+      // AI hand-off button uses. An empty button text is stored as NULL = default.
+      const payload = {
+        ...config,
+        business_phone: wa.phone,
+        whatsapp_button_text: wa.text,
+        updated_at: new Date().toISOString(),
+      };
 
-      const { error } = existing
-        ? await supabase.from("widget_configs").update(payload).eq("id", existing.id)
-        : await supabase
-            .from("widget_configs")
-            .insert({ ...payload, org_user_id: userId, agent_id: null, business_id: businessId });
+      const write = (row: Record<string, unknown>) =>
+        existing
+          ? supabase.from("widget_configs").update(row).eq("id", existing.id)
+          : supabase
+              .from("widget_configs")
+              .insert({ ...row, org_user_id: userId, agent_id: null, business_id: businessId });
+
+      let { error } = await write(payload);
+
+      // Migration 043 not run yet: the two new columns do not exist and the
+      // database refuses the row. Save everything else without them, so
+      // widget settings never stop saving because of this feature.
+      let columnsMissing = false;
+      if (error && isMissingWhatsappColumnError(error)) {
+        columnsMissing = true;
+        ({ error } = await write(withoutWhatsappColumns(payload)));
+      }
       if (error) throw error;
 
-      toast.success("Widget settings saved");
+      // Show what was really stored (digits only, cleaned text).
+      setConfig((c) => ({
+        ...c,
+        business_phone: wa.phone,
+        whatsapp_button_text: wa.text ?? "",
+        whatsapp_button_enabled: columnsMissing ? false : c.whatsapp_button_enabled,
+      }));
+
+      if (columnsMissing && config.whatsapp_button_enabled) {
+        toast.warning(
+          "Saved, but the WhatsApp button is still OFF: your database needs one small update first (migration 043). Ask your developer or support.",
+        );
+      } else {
+        toast.success("Widget settings saved");
+        if (wa.warning) toast.warning(wa.warning);
+      }
     } catch (err) {
       toast.error("Couldn't save: " + (err instanceof Error ? err.message : "unknown error"));
     } finally {
@@ -172,6 +237,22 @@ export default function WidgetSettingsPage() {
       `></script>`,
     [origin, userId, agentId],
   );
+
+  // Live check of the WhatsApp settings: drives the inline error and the
+  // preview. (A hook, so it sits above the loading early-return below.)
+  const waCheck = useMemo(
+    () =>
+      checkWhatsappSettings({
+        enabled: config.whatsapp_button_enabled,
+        phone: config.business_phone,
+        text: config.whatsapp_button_text,
+      }),
+    [config.whatsapp_button_enabled, config.business_phone, config.whatsapp_button_text],
+  );
+  const phoneError = config.whatsapp_button_enabled && !waCheck.ok ? waCheck.message : null;
+  const phoneWarning = !config.whatsapp_button_enabled && waCheck.ok ? waCheck.warning ?? null : null;
+  // The strip shows only with BOTH: switch on AND a valid number (same as the real widget).
+  const stripVisible = config.whatsapp_button_enabled && waCheck.ok;
 
   function copyEmbed() {
     navigator.clipboard.writeText(embedCode);
@@ -322,20 +403,77 @@ export default function WidgetSettingsPage() {
                 </span>
               </div>
             </Field>
+
+            {/* Optional WhatsApp strip. OFF by default. */}
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-[#e7ece9] px-3 py-2.5">
+              <div>
+                <p className="text-xs font-semibold text-slate-700">Add WhatsApp button</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  Adds a small green line under the chat header. Visitors tap it to message you on
+                  WhatsApp. Off by default.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={config.whatsapp_button_enabled}
+                aria-label="Add WhatsApp button"
+                onClick={() => update("whatsapp_button_enabled", !config.whatsapp_button_enabled)}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  config.whatsapp_button_enabled ? "bg-emerald-500" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`absolute left-0.5 top-0.5 size-5 rounded-full bg-[#fff] shadow transition-transform ${
+                    config.whatsapp_button_enabled ? "translate-x-5" : ""
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* One number, one place: this is business_phone, used by the button AND by AI hand-offs. */}
             <Field
-              label="WhatsApp handoff number"
-              hint="Optional. When the AI hands off, visitors get a button to continue on WhatsApp."
+              label="WhatsApp number for the button and for hand-offs"
+              hint="Country code first, for example 919820123987 (India) or +447911123456. Saved as digits only. The same number is used for the green button and for the Continue on WhatsApp button when the AI hands a chat to your team. Optional when the button is off."
             >
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                 <input
                   value={config.business_phone ?? ""}
                   onChange={(e) => update("business_phone", e.target.value)}
-                  placeholder="919876543210"
-                  className={`${INPUT} pl-9`}
+                  placeholder="919820123987"
+                  inputMode="tel"
+                  aria-invalid={phoneError ? true : undefined}
+                  className={`${INPUT} pl-9 ${phoneError ? "border-red-400 focus:border-red-500" : ""}`}
                 />
               </div>
+              {phoneError && (
+                <p role="alert" className="mt-1 text-[11px] font-semibold text-red-600">
+                  {phoneError} Saving is blocked until this is fixed or the button is switched off.
+                </p>
+              )}
+              {phoneWarning && (
+                <p className="mt-1 text-[11px] text-amber-700">{phoneWarning}</p>
+              )}
             </Field>
+
+            {config.whatsapp_button_enabled && (
+              <Field
+                label="Button text"
+                hint="Plain text. Leave empty to use the default."
+              >
+                <input
+                  value={config.whatsapp_button_text}
+                  onChange={(e) => update("whatsapp_button_text", e.target.value)}
+                  maxLength={WA_BUTTON_TEXT_MAX}
+                  placeholder={WA_BUTTON_TEXT_DEFAULT}
+                  className={INPUT}
+                />
+                <p className="mt-1 text-right text-[11px] text-slate-400">
+                  {config.whatsapp_button_text.length}/{WA_BUTTON_TEXT_MAX}
+                </p>
+              </Field>
+            )}
           </Section>
 
           <Section icon={Code2} title="Install" subtitle="Paste this before the closing </body> tag.">
@@ -412,7 +550,7 @@ export default function WidgetSettingsPage() {
           <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
             Live preview
           </p>
-          <WidgetPreview config={config} />
+          <WidgetPreview config={config} stripVisible={stripVisible} />
         </div>
       </div>
     </div>
@@ -457,7 +595,7 @@ function Field({
 }
 
 /** A faithful mock of what widget.js renders, so settings can be judged before publishing. */
-function WidgetPreview({ config }: { config: WidgetConfig }) {
+function WidgetPreview({ config, stripVisible }: { config: WidgetConfig; stripVisible: boolean }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-[#e7ece9] bg-[#f4f6f5] p-4">
       <div className="mx-auto w-full max-w-[300px]">
@@ -477,6 +615,21 @@ function WidgetPreview({ config }: { config: WidgetConfig }) {
               <p className="text-[10px] text-white/85">● Online</p>
             </div>
           </div>
+
+          {/* WhatsApp strip (same look as widget.js): only with the switch on AND a valid number */}
+          {stripVisible && (
+            <div
+              data-testid="preview-wa-strip"
+              className="flex h-7 items-center gap-1.5 border-b border-[#bfe5cd] bg-[#e8f7ee] px-3.5 text-[11.5px] font-medium leading-none text-[#0f6a37]"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
+                <path d="M12 2.5a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l4.8-1.3A9.5 9.5 0 1 0 12 2.5z" fill="#0f6a37" />
+                <path d="M8.6 7.8c-.4 0-.9.3-1 1.1-.2 1.9 1.2 4.1 2.8 5.5 1.5 1.3 3.4 2.1 4.7 1.7.7-.2 1.1-.9 1.1-1.5 0-.2-.1-.3-.3-.4l-1.8-.9c-.2-.1-.4 0-.5.1l-.6.7c-.1.1-.3.2-.5.1-1-.4-2-1.2-2.6-2.2-.1-.2-.1-.3 0-.5l.5-.6c.1-.1.1-.3.1-.4l-.8-1.8c-.1-.2-.3-.3-.5-.3z" fill="#e8f7ee" />
+              </svg>
+              <span className="min-w-0 flex-1 truncate">{buttonTextOrDefault(config.whatsapp_button_text)}</span>
+              <span aria-hidden="true">→</span>
+            </div>
+          )}
 
           {/* Transcript */}
           <div className="space-y-2.5 bg-[#f7faf8] px-3 py-3.5" style={{ minHeight: 190 }}>

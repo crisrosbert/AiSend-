@@ -406,7 +406,9 @@ export default function BrainPage() {
           <div>
             {sources.map((source) => {
               const meta = SOURCE_META[source.type];
-              const status = STATUS_META[source.status];
+              // ingest can leave a source as 'error' or 'pending', which this
+              // table did not know; the page crashed on status.class. Show it as failed.
+              const status = STATUS_META[source.status] ?? STATUS_META.failed;
               const Icon = meta.icon;
               const StatusIcon = status.icon;
 

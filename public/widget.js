@@ -213,28 +213,22 @@
     if (el) el.remove();
   }
 
-  // Phones: when the on-screen keyboard opens, Chrome shrinks only the
-  // VISUAL viewport, so a fixed panel anchored to the page keeps its size
-  // and its top (the header) is pushed off screen. While the keyboard is
-  // up, fit the panel exactly inside the visible area; when it closes,
-  // hand control back to the stylesheet.
+  // Phones: the chat is a full-screen sheet that always equals the VISIBLE area
+  // (below the browser bar, above the on-screen keyboard), like other mobile
+  // chat widgets. Chrome shrinks only the visual viewport when the keyboard opens,
+  // so a fixed 100% height would run under the keyboard and push the header off
+  // screen. Measure the visual viewport instead, and re-measure whenever it changes.
   function fitPanel() {
     var panel = document.getElementById('aisend-panel');
     if (!panel || !isOpen) return;
     var vv = window.visualViewport;
     var phone = window.matchMedia && window.matchMedia('(max-width:480px)').matches;
-    // Two browser behaviours exist: Chrome shrinks only the visual viewport
-    // (vv.height < innerHeight), while some Android browsers shrink the
-    // layout viewport itself (the two stay equal). A focused input on a
-    // phone covers both: size the panel to whatever is really visible.
-    var typing = !!(document.activeElement && document.activeElement.id === 'aisend-input');
-    var vh = vv ? vv.height : window.innerHeight;
-    var top = vv ? vv.offsetTop : 0;
-    var keyboard = !!(phone && (typing || (vv && vv.height < window.innerHeight - 120)));
-    if (keyboard) {
-      panel.style.top = Math.max(0, top + 8) + 'px';
+    if (phone) {
+      var vh = vv ? vv.height : window.innerHeight;
+      var top = vv ? vv.offsetTop : 0;
+      panel.style.top = Math.max(0, top) + 'px';
       panel.style.bottom = 'auto';
-      panel.style.height = Math.max(200, vh - 16) + 'px';
+      panel.style.height = Math.max(200, vh) + 'px';
       panel.style.maxHeight = 'none';
     } else {
       panel.style.top = '';
@@ -810,26 +804,13 @@
       '.aisend-typing span:nth-child(2){animation-delay:.2s}' +
       '.aisend-typing span:nth-child(3){animation-delay:.4s}' +
       '@keyframes aisendBlink{0%,80%,100%{opacity:.3}40%{opacity:1}}' +
-      // Phones: a compact sheet that leaves the page visible above it and the
-      // round button visible below, instead of covering the whole screen.
-      // Host-theme isolation. WordPress themes (Hello Elementor and others) style bare
-      // button / input[type=text] elements with their own colour, border and hover state,
-      // and a plain-class rule here loses to them (that is how the send button turned pink
-      // and the input got a square dark border). ID-scoped !important rules win.
-      '#aisend-panel .aisend-input{border:1px solid #dde2e8!important;border-radius:22px!important;padding:10px 16px!important;background:#fff!important;color:#222!important;box-shadow:none!important;height:auto!important;margin:0!important;line-height:1.4!important}' +
-      '#aisend-panel .aisend-input:focus{border-color:var(--aisend-primary)!important;outline:none!important;background:#fff!important}' +
-      '#aisend-panel .aisend-send,#aisend-panel .aisend-send:hover,#aisend-panel .aisend-send:focus,#aisend-panel .aisend-send:active{background:var(--aisend-primary)!important;color:#fff!important;border:0!important;box-shadow:none!important;padding:0!important;min-width:42px!important}' +
-      '#aisend-panel .aisend-chip{background:#fff!important;color:var(--aisend-primary)!important;border:1.5px solid var(--aisend-primary)!important;text-transform:none!important;letter-spacing:normal!important;box-shadow:none!important}' +
-      '#aisend-panel .aisend-chip:hover,#aisend-panel .aisend-chip:focus,#aisend-panel .aisend-chip:active{background:var(--aisend-primary)!important;color:#fff!important}' +
-      '#aisend-panel .aisend-newchat-btn{background:#fff!important;color:var(--aisend-primary)!important;border:1.5px solid var(--aisend-primary)!important;text-transform:none!important;letter-spacing:normal!important;box-shadow:none!important}' +
-      '#aisend-panel .aisend-newchat-btn:hover,#aisend-panel .aisend-newchat-btn:focus{background:var(--aisend-primary)!important;color:#fff!important}' +
-      '#aisend-panel .aisend-lead-btn,#aisend-panel .aisend-lead-btn:hover,#aisend-panel .aisend-lead-btn:focus{background:var(--aisend-primary)!important;color:#fff!important;border:0!important;box-shadow:none!important;text-transform:none!important}' +
-      '#aisend-panel .aisend-lead-input{border:1px solid #e5e7eb!important;border-radius:9px!important;background:#fff!important;color:#111827!important;box-shadow:none!important}' +
-      '#aisend-panel a.aisend-wa-btn,#aisend-panel a.aisend-wa-btn:hover{background:#25D366!important;color:#fff!important;text-decoration:none!important}' +
-      '#aisend-panel a.aisend-wa-strip,#aisend-panel a.aisend-wa-strip:hover{color:#0f6a37!important;text-decoration:none!important;background:#e8f7ee!important}' +
-      '.aisend-header,.aisend-input-row{flex-shrink:0}' +
-      '.aisend-messages{min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}' +
-      '@media(max-width:480px){.aisend-panel{left:10px;right:10px;bottom:96px;width:auto;max-width:none;height:min(58vh,420px);height:min(58dvh,420px);max-height:calc(100vh - 120px);border-radius:16px}' +
+      // Phones: full-screen chat like other mobile chat widgets. JS (fitPanel)
+      // sets top/height from the visual viewport so the keyboard never covers it.
+      '@media(max-width:480px){' +
+        '.aisend-panel{top:0;left:0;right:0;bottom:0;width:100%;max-width:none;height:100vh;height:100dvh;max-height:none;border-radius:0;box-shadow:none}' +
+        '.aisend-btn.aisend-open{display:none}' +
+        '.aisend-header{padding-top:calc(16px + env(safe-area-inset-top,0px))}' +
+        '.aisend-messages>:first-child{margin-top:auto}' +
         // 16px: iOS Safari zooms the whole page when an input smaller than that is focused.
         '.aisend-input{font-size:16px}' +
         '.aisend-input-row{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}}';

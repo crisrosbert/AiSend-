@@ -44,6 +44,9 @@ import { ingestSource } from '@/lib/agent/rag/ingest'
 import { callLLM } from '@/lib/agent/llm-provider'
 import { crawlSite, withSourceHeader, type CrawlResult } from '@/lib/agent/rag/site-crawler'
 import { factsToText as siteFactsToText } from '@/lib/agent/rag/site-facts'
+import { normaliseDraft } from '@/lib/agent/draft-quality'
+import { finishHealthPersona } from '@/lib/agent/persona-rules'
+import { isHealthContext } from '@/lib/agent/safety'
 
 // Mutating action — never cache it.
 export const dynamic = 'force-dynamic'
@@ -236,7 +239,7 @@ export async function POST(req: Request) {
     // budget at risk on a slow provider.
     const promptText = buildLlmText(crawl)
 
-    const [persona, facts] = await Promise.all([
+    const [rawPersona, rawFacts] = await Promise.all([
       draftPersona({
         text: promptText,
         agentName: agent.name,
@@ -252,12 +255,32 @@ export async function POST(req: Request) {
       }),
     ])
 
+    // ── 4b. Tidy the drafts (no model call) ──
+    // The business name is the one written on the site, never the web
+    // address ("Kalosa Aesthetics", not "kalosaaesthetics"); and a health
+    // business's persona may answer general questions but not give personal
+    // medical advice (see lib/agent/persona-rules.ts).
+    const draft = normaliseDraft(rawFacts, crawl.brand, rawPersona, {
+      host: safeHost(rawUrl),
+      titles: crawl.pages.map((page) => page.title),
+      bodies: crawl.pages.map((page) => page.text),
+    })
+    const facts = draft.facts
+    const brand = draft.brand
+    const healthBusiness = isHealthContext([
+      agent.industry, agent.name, facts.business_name, facts.what_they_do, facts.role,
+      facts.services.join(' '), draft.persona,
+    ])
+    const persona = healthBusiness
+      ? finishHealthPersona(draft.persona, { phone: facts.phone })
+      : draft.persona
+
     return NextResponse.json({
       journey_id: journeyId,
       persona,
       // Read from the site's own metadata, not generated — safe to
       // pre-fill the agent's name, avatar and colour with.
-      brand: crawl.brand,
+      brand,
       // Written by the model — show these for approval before saving.
       facts,
       title,
@@ -372,6 +395,8 @@ Rules for what you write:
 - Include a "Never:" list of 2-3 rules, and ALWAYS include this one verbatim:
   "Never state a price, delivery time or policy that is not in your knowledge base — offer to check with the team instead."
 - Keep it under 220 words. It is a working instruction, not marketing copy.
+- Name the business exactly as the pages write it, with spaces and capital letters (for example "Kalosa Aesthetics"). Never use the web address or domain as the name.
+- If the business is a clinic, hospital, dentist or other health provider: do NOT write "never give medical advice" or "refer every medical question to the doctor". Write instead that the assistant may explain what a treatment is and how it usually goes using only the knowledge base, but must not give personal medical advice, diagnose, suggest medicines, guess prices or promise results.
 
 Rules for accuracy:
 - Use ONLY facts present in the page text. If the pages do not mention prices, delivery, or hours, do not invent them.
@@ -424,14 +449,15 @@ Return ONLY a JSON object with exactly these keys:
 
 Extraction rules (business_name through hours):
 - Use null for anything the text does not state. Do NOT guess or infer.
+- "business_name" is the name exactly as the pages write it, with spaces and capital letters (for example "Kalosa Aesthetics"). Never the web address or domain.
 - "what_they_do" is one plain sentence, at most 25 words.
 - "services" is at most 8 short names taken verbatim from the text. Empty array if none are listed.
 - "hours" is copied as written, e.g. "Mon-Sat 10am-7pm". null if not stated.
 - Copy phone numbers exactly as printed, including the country code if shown.
 
 Drafting rules (role, greeting, suggested_questions):
-- "role" is a short label for what this agent is, at most 8 words, e.g. "Clinic assistant for skin and hair treatments".
-- "greeting" is the agent's first message. One or two sentences, name the business, warm and plain. No emoji unless the site's own copy uses them.
+- "role" is a short internal label for what this agent is, at most 8 words, e.g. "Clinic assistant for skin and hair treatments". It is never shown to visitors, so do not write it as a slogan.
+- "greeting" is the agent's first message. One or two sentences, name the business exactly as the pages write it ("Kalosa Aesthetics", never "kalosaaesthetics" or the web address), warm and plain. No emoji unless the site's own copy uses them.
 - "suggested_questions" is EXACTLY 3 questions a real customer of THIS business would ask, written in the customer's voice ("What does a consultation cost?", not "Ask about pricing").
 - Base all three on what the pages actually describe. A clinic gets questions about treatments and booking; a shop gets questions about delivery and returns.
 - Every question must be one the website's own content could answer. Never invent a service the pages do not mention.

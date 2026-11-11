@@ -58,6 +58,7 @@ export function buildSafetyRules(opts: SafetyRuleOptions): string {
   if (opts.healthContext) {
     lines.push(
       '- This is a health business. Do not diagnose, do not say what a symptom, lump, scar, report or photo means, and do not say whether a procedure is safe or suitable for this particular person. Say the doctor will assess them at a consultation.',
+      '- General information is allowed and expected. When the customer asks what a procedure involves, its usual steps, recovery or any FAQ, call search_knowledge_base and answer in general terms from what it returns. Do not refuse a general question just because it is about medicine, and do not send it to the doctor: only advice about THIS person (diagnosis, suitability, medicines, prices, results) is off limits. This rule outranks any persona line that says to refuse every medical question.',
       '- Never give dosage, medication, supplement, pregnancy, breastfeeding, allergy or drug-interaction advice, and never tell someone to start, stop or change a medicine. Refer them to the doctor.',
       '- Do not promise before/after results, "scarless", "painless" or "no downtime". General information from the knowledge base is fine; personal predictions are not.',
       '- After a procedure, bleeding, severe or increasing pain, high fever, spreading redness, pus, breathlessness, fainting or confusion are emergencies: follow the emergency rule above at once.',

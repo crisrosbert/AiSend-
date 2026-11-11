@@ -135,6 +135,11 @@
     wireWaStrip(panel);
     document.getElementById('aisend-close').onclick = togglePanel;
     document.getElementById('aisend-send').onclick = sendMessage;
+    // The keyboard animates in: re-fit once it has settled.
+    document.getElementById('aisend-input').addEventListener('focus', function () {
+      setTimeout(fitPanel, 300);
+      setTimeout(fitPanel, 700);
+    });
     document.getElementById('aisend-input').addEventListener('keypress', function (e) {
       if (e.key === 'Enter') sendMessage();
     });
@@ -200,10 +205,41 @@
     if (el) el.remove();
   }
 
+  // Phones: when the on-screen keyboard opens, Chrome shrinks only the
+  // VISUAL viewport, so a fixed panel anchored to the page keeps its size
+  // and its top (the header) is pushed off screen. While the keyboard is
+  // up, fit the panel exactly inside the visible area; when it closes,
+  // hand control back to the stylesheet.
+  function fitPanel() {
+    var panel = document.getElementById('aisend-panel');
+    if (!panel || !isOpen) return;
+    var vv = window.visualViewport;
+    var phone = window.matchMedia && window.matchMedia('(max-width:480px)').matches;
+    var keyboard = !!(vv && phone && vv.height < window.innerHeight - 120);
+    if (keyboard) {
+      panel.style.top = Math.max(0, vv.offsetTop + 8) + 'px';
+      panel.style.bottom = 'auto';
+      panel.style.height = Math.max(200, vv.height - 16) + 'px';
+      panel.style.maxHeight = 'none';
+    } else {
+      panel.style.top = '';
+      panel.style.bottom = '';
+      panel.style.height = '';
+      panel.style.maxHeight = '';
+    }
+    var box = document.getElementById('aisend-messages');
+    if (box) box.scrollTop = box.scrollHeight;
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fitPanel);
+    window.visualViewport.addEventListener('scroll', fitPanel);
+  }
+
   function togglePanel() {
     var panel = document.getElementById('aisend-panel');
     isOpen = !isOpen;
     panel.style.display = isOpen ? 'flex' : 'none';
+    if (isOpen) setTimeout(fitPanel, 50); else { panel.style.top = ''; panel.style.bottom = ''; panel.style.height = ''; panel.style.maxHeight = ''; }
     var b = document.querySelector('.aisend-bubble');
     if (b) b.remove();
     if (isOpen && messages.length === 0) {

@@ -19,7 +19,7 @@
 // widget, but it may never name it. Identity comes from the agent.
 
 import { describe, it, expect } from 'vitest'
-import { mergeAgentProfile, agentBubble } from './route'
+import { mergeAgentProfile, agentBubble, isStockBubble } from './route'
 
 /** The clinic, set up first — so its row is the one everyone borrows. */
 const sharedClinicRow = {
@@ -151,13 +151,31 @@ describe('filling blanks', () => {
 // for THIS agent.
 
 describe('agentBubble', () => {
-  it('describes what this agent actually does', () => {
+  it('names the business and never reuses the role text', () => {
+    // Kalosa test: the teaser read "Chat agent for cosmetic surgery
+    // inquiries — ask me anything", which sounds like a job title.
     const bubble = agentBubble({
       name: 'Sobha Projects',
       role: 'Real estate consultant for luxury properties',
       avatar_url: null, greeting: null, suggested_questions: null,
     })
-    expect(bubble).toBe('Hi! 👋 Real estate consultant for luxury properties — ask me anything.')
+    expect(bubble).toBe('Hi! 👋 Questions about Sobha Projects? Ask me anything.')
+    expect(bubble).not.toContain('consultant')
+  })
+
+  it('never uses the role even when it is the only thing the agent has', () => {
+    expect(
+      agentBubble({
+        name: null, role: 'Chat agent for cosmetic surgery inquiries',
+        avatar_url: null, greeting: null, suggested_questions: null,
+      }),
+    ).toBeNull()
+  })
+
+  it('does not say "Questions about New Agent?" for a placeholder name', () => {
+    expect(
+      agentBubble({ name: 'New Agent', role: null, avatar_url: null, greeting: null, suggested_questions: null }),
+    ).toBe('Hi! 👋 Have a question? Ask me here.')
   })
 
   it('never shows one business the teaser written for another', () => {
@@ -221,7 +239,34 @@ describe('agentBubble', () => {
       },
       { shared: false },
     )
-    expect(out.bubble_message).toBe('Hi! 👋 Real estate consultant — ask me anything.')
+    expect(out.bubble_message).toBe('Hi! 👋 Questions about Sobha Projects? Ask me anything.')
+  })
+
+  it('keeps a teaser the OWNER typed on /widget', () => {
+    const out = mergeAgentProfile(
+      { bubble_message: 'Free skin consultation this week, chat with us!' },
+      { name: 'Kalosa Aesthetics', avatar_url: null, greeting: null, suggested_questions: null },
+      { shared: true, sameBusiness: true },
+    )
+    expect(out.bubble_message).toBe('Free skin consultation this week, chat with us!')
+  })
+
+  it('does not lend an owner-typed teaser to another business', () => {
+    const out = mergeAgentProfile(
+      { bubble_message: 'Free skin consultation this week, chat with us!' },
+      { name: 'Skyline Properties', avatar_url: null, greeting: null, suggested_questions: null },
+      { shared: true, sameBusiness: false },
+    )
+    expect(out.bubble_message).toBe('Hi! 👋 Questions about Skyline Properties? Ask me anything.')
+  })
+
+  it('treats the dashboard default and old generated lines as stock, not as the owner\'s words', () => {
+    expect(isStockBubble("Hi! 👋 Have a question? I'm here to help.")).toBe(true)
+    expect(isStockBubble('Hi! 👋 Have a question?')).toBe(true)
+    expect(isStockBubble('Hi! 👋 Questions about gynecomastia treatment? Ask me anything.')).toBe(true)
+    expect(isStockBubble('Hi! 👋 Chat agent for cosmetic surgery inquiries — ask me anything.')).toBe(true)
+    expect(isStockBubble('')).toBe(true)
+    expect(isStockBubble('Free skin consultation this week, chat with us!')).toBe(false)
   })
 })
 

@@ -102,7 +102,8 @@ function industryRules(kind: BusinessKind, phone: string | null): string {
     case 'clinic':
       return [
         '[Clinic rules]',
-        '- Give NO medical advice. Do not diagnose, do not say what a symptom means, do not suggest or comment on any medicine, dose, test or report. Say the doctor will see them at the consultation and offer an appointment.',
+        "- Give NO medical advice about the patient's own case. Do not diagnose, do not say what a symptom means, do not suggest or comment on any medicine, dose, test or report. Say the doctor will see them at the consultation and offer an appointment.",
+        "- You MAY explain in general terms what a treatment is and how it usually goes, but only when the owner's text or the facts above say so. Never invent medical details. If it is not written there, say you do not have that information and offer the team. Do not refuse a general question just because it is about medicine.",
         `- If a customer describes an emergency (severe pain, difficulty breathing, heavy bleeding, fainting, a baby or child who is not responding, an accident, high fever in a small baby), do not book and do not advise. Tell them calmly to ${contact} right now, then hand the conversation to the team.`,
         '- Never promise a cure or a result.',
       ].join('\n')

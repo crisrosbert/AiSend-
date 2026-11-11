@@ -307,7 +307,11 @@
    */
   function deliver(text) {
     showTyping();
-    fetch(API_BASE + '/api/widget/message', {
+    // Never leave the typing dots on screen forever: if the server has not
+    // answered in 45 seconds, stop waiting and say so.
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 45000);
+    var opts = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -318,8 +322,10 @@
         page_url: window.location.href,
         page_title: document.title
       })
-    })
-      .then(function (r) { return r.json(); })
+    };
+    if (ctrl) opts.signal = ctrl.signal;
+    fetch(API_BASE + '/api/widget/message', opts)
+      .then(function (r) { clearTimeout(timer); return r.json(); })
       .then(function (data) {
         hideTyping();
         addMessage('bot', data.reply || 'Sorry, please try again.');
@@ -340,8 +346,11 @@
         }
       })
       .catch(function () {
+        clearTimeout(timer);
         hideTyping();
-        addMessage('bot', 'Sorry, I had trouble connecting. Please try again.');
+        addMessage('bot', 'Sorry, this is taking longer than expected. Please try again in a moment.');
+        // If the business gave a WhatsApp number, offer it as a way through.
+        if (config.business_phone) addWhatsAppButton(config.business_phone, text);
       });
   }
 
@@ -803,6 +812,21 @@
       '@keyframes aisendBlink{0%,80%,100%{opacity:.3}40%{opacity:1}}' +
       // Phones: a compact sheet that leaves the page visible above it and the
       // round button visible below, instead of covering the whole screen.
+      // Host-theme isolation. WordPress themes (Hello Elementor and others) style bare
+      // button / input[type=text] elements with their own colour, border and hover state,
+      // and a plain-class rule here loses to them (that is how the send button turned pink
+      // and the input got a square dark border). ID-scoped !important rules win.
+      '#aisend-panel .aisend-input{border:1px solid #dde2e8!important;border-radius:22px!important;padding:10px 16px!important;background:#fff!important;color:#222!important;box-shadow:none!important;height:auto!important;margin:0!important;line-height:1.4!important}' +
+      '#aisend-panel .aisend-input:focus{border-color:var(--aisend-primary)!important;outline:none!important;background:#fff!important}' +
+      '#aisend-panel .aisend-send,#aisend-panel .aisend-send:hover,#aisend-panel .aisend-send:focus,#aisend-panel .aisend-send:active{background:var(--aisend-primary)!important;color:#fff!important;border:0!important;box-shadow:none!important;padding:0!important;min-width:42px!important}' +
+      '#aisend-panel .aisend-chip{background:#fff!important;color:var(--aisend-primary)!important;border:1.5px solid var(--aisend-primary)!important;text-transform:none!important;letter-spacing:normal!important;box-shadow:none!important}' +
+      '#aisend-panel .aisend-chip:hover,#aisend-panel .aisend-chip:focus,#aisend-panel .aisend-chip:active{background:var(--aisend-primary)!important;color:#fff!important}' +
+      '#aisend-panel .aisend-newchat-btn{background:#fff!important;color:var(--aisend-primary)!important;border:1.5px solid var(--aisend-primary)!important;text-transform:none!important;letter-spacing:normal!important;box-shadow:none!important}' +
+      '#aisend-panel .aisend-newchat-btn:hover,#aisend-panel .aisend-newchat-btn:focus{background:var(--aisend-primary)!important;color:#fff!important}' +
+      '#aisend-panel .aisend-lead-btn,#aisend-panel .aisend-lead-btn:hover,#aisend-panel .aisend-lead-btn:focus{background:var(--aisend-primary)!important;color:#fff!important;border:0!important;box-shadow:none!important;text-transform:none!important}' +
+      '#aisend-panel .aisend-lead-input{border:1px solid #e5e7eb!important;border-radius:9px!important;background:#fff!important;color:#111827!important;box-shadow:none!important}' +
+      '#aisend-panel a.aisend-wa-btn,#aisend-panel a.aisend-wa-btn:hover{background:#25D366!important;color:#fff!important;text-decoration:none!important}' +
+      '#aisend-panel a.aisend-wa-strip,#aisend-panel a.aisend-wa-strip:hover{color:#0f6a37!important;text-decoration:none!important;background:#e8f7ee!important}' +
       '.aisend-header,.aisend-input-row{flex-shrink:0}' +
       '.aisend-messages{min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}' +
       '@media(max-width:480px){.aisend-panel{left:10px;right:10px;bottom:96px;width:auto;max-width:none;height:min(58vh,420px);height:min(58dvh,420px);max-height:calc(100vh - 120px);border-radius:16px}' +

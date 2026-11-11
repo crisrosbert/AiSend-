@@ -632,9 +632,10 @@
       ':root{--aisend-primary:' + config.primary_color + '}' +
       '.aisend-btn{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:var(--aisend-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.22),inset 0 0 0 2px rgba(255,255,255,.22);z-index:999998;transition:transform .2s,box-shadow .2s}' +
       '.aisend-btn:hover{transform:scale(1.08);box-shadow:0 8px 24px rgba(0,0,0,.28),inset 0 0 0 2px rgba(255,255,255,.3)}' +
-      '.aisend-btn::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--aisend-primary);opacity:0;pointer-events:none;animation:aisendRing 2.4s ease-out 1.2s 3}' +
-      '@keyframes aisendRing{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(1.5)}}' +
-      '@media (prefers-reduced-motion:reduce){.aisend-btn::after{animation:none}}' +
+      '.aisend-btn::before,.aisend-btn::after{content:"";position:absolute;inset:0;border-radius:50%;border:3px solid var(--aisend-primary);opacity:0;pointer-events:none;animation:aisendRing 2.2s ease-out 1s 6}' +
+      '.aisend-btn::before{animation-delay:1.8s}' +
+      '@keyframes aisendRing{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(2)}}' +
+      '@media (prefers-reduced-motion:reduce){.aisend-btn::before,.aisend-btn::after{animation:none}}' +
       '.aisend-bubble{position:fixed;bottom:90px;right:20px;max-width:260px;background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:999998;cursor:pointer;animation:aisendPop .3s ease}' +
       '.aisend-bubble-close{position:absolute;top:6px;right:10px;font-size:18px;color:#999;cursor:pointer;line-height:1}' +
       '.aisend-bubble-text{font-size:14px;color:#222;line-height:1.5;padding-right:12px;font-family:-apple-system,system-ui,sans-serif}' +
@@ -661,7 +662,7 @@
       // the VISITOR is about to say, and every other visitor message in
       // this panel sits on the right.
       '.aisend-suggestions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin:2px 0 4px}' +
-      '.aisend-chip{max-width:85%;text-align:left;font:inherit;font-size:13px;line-height:1.4;' +
+      '.aisend-chip{max-width:85%;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;text-align:left;font:inherit;font-size:13px;line-height:1.4;' +
         'padding:9px 14px;border-radius:16px 16px 4px 16px;cursor:pointer;' +
         'background:#fff;color:var(--aisend-primary);border:1.5px solid var(--aisend-primary);' +
         'transition:background .15s,color .15s}' +
@@ -731,7 +732,9 @@
       '.aisend-typing span:nth-child(2){animation-delay:.2s}' +
       '.aisend-typing span:nth-child(3){animation-delay:.4s}' +
       '@keyframes aisendBlink{0%,80%,100%{opacity:.3}40%{opacity:1}}' +
-      '@media(max-width:480px){.aisend-panel{width:100vw;height:100vh;max-width:100vw;max-height:100vh;bottom:0;right:0;border-radius:0}}';
+      // Phones: a compact sheet that leaves the page visible above it and the
+      // round button visible below, instead of covering the whole screen.
+      '@media(max-width:480px){.aisend-panel{left:10px;right:10px;bottom:90px;width:auto;max-width:none;height:min(60vh,420px);height:min(60dvh,420px);max-height:calc(100vh - 110px);border-radius:16px}}';
     var style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);

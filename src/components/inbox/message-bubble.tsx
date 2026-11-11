@@ -168,6 +168,18 @@ function MessageContent({ message }: { message: Message }) {
           ) : (
             <MediaUnavailable label="Audio" />
           )}
+          {/* Voice-note transcript (written by the webhook when the
+              tenant has voice notes switched on). Only customer messages
+              can carry one: audio sent from the inbox stores a file name
+              here, and that must not be shown as a transcript. */}
+          {message.sender_type === "customer" && message.content_text && (
+            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+              <span className="mr-1 text-[10px] font-medium uppercase text-slate-400">
+                Voice note text:
+              </span>
+              {message.content_text}
+            </p>
+          )}
         </div>
       );
 

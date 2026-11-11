@@ -28,6 +28,14 @@ interface WidgetConfig {
   is_active: boolean;
 }
 
+/** The agents a website can be wired to. The embed code carries the chosen one. */
+interface AgentOption {
+  id: string;
+  name: string;
+  is_active: boolean | null;
+  business_id: string | null;
+}
+
 const DEFAULTS: WidgetConfig = {
   bot_name: "Assistant",
   welcome_message: "Hello! How can I help you today?",
@@ -54,6 +62,8 @@ export default function WidgetSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("");
+  const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [agentId, setAgentId] = useState("");
 
   // The embed snippet must point at THIS deployment. Hardcoding a domain
   // silently breaks the widget on every other environment.
@@ -65,6 +75,25 @@ export default function WidgetSettingsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
       setUserId(user.id);
+
+      // The agents this website can use. Default: ?agent= from the Agents page,
+      // else a LIVE agent of the selected business, else any live agent.
+      const { data: agentRows } = await supabase
+        .from("agents")
+        .select("id, name, is_active, business_id")
+        .eq("tenant_id", user.id);
+      const list = (agentRows ?? []) as AgentOption[];
+      setAgents(list);
+      const wanted = new URLSearchParams(window.location.search).get("agent");
+      setAgentId((current) => {
+        if (current && list.some((a) => a.id === current)) return current;
+        if (wanted && list.some((a) => a.id === wanted)) return wanted;
+        const pick =
+          list.find((a) => a.is_active !== false && (!businessId || a.business_id === businessId)) ??
+          list.find((a) => a.is_active !== false) ??
+          list[0];
+        return pick ? pick.id : "";
+      });
 
       // Each business gets its own org-wide widget config. Without this
       // filter a second business would load — and then overwrite — the
@@ -132,9 +161,16 @@ export default function WidgetSettingsPage() {
       setSaving(false);
     }
   }
+  const selectedAgent = agents.find((a) => a.id === agentId) ?? null;
+
+  // data-agent makes the chat run THAT agent (its persona, knowledge, booking
+  // and opening hours). Without it the chat runs with no agent at all.
   const embedCode = useMemo(
-    () => `<script src="${origin}/widget.js" data-org="${userId}"></script>`,
-    [origin, userId],
+    () =>
+      `<script src="${origin}/widget.js" data-org="${userId}"` +
+      (agentId ? ` data-agent="${agentId}"` : "") +
+      `></script>`,
+    [origin, userId, agentId],
   );
 
   function copyEmbed() {
@@ -207,6 +243,14 @@ export default function WidgetSettingsPage() {
         {/* ── Settings ── */}
         <div className="space-y-5">
           <Section icon={Bot} title="Identity" subtitle="How the assistant introduces itself.">
+            {selectedAgent && (
+              <p className="rounded-lg bg-[#f4f6f5] px-3 py-2 text-[11px] leading-relaxed text-slate-600">
+                The chat on your website uses <strong>{selectedAgent.name}</strong>. Its name, greeting
+                and logo come from the agent (change them on the{" "}
+                <Link href="/agents" className="font-semibold text-emerald-700 hover:underline">Agents</Link>{" "}
+                page). The colour, teaser, delay and WhatsApp number below are set here.
+              </p>
+            )}
             <Field label="Bot name">
               <input
                 value={config.bot_name}
@@ -295,6 +339,47 @@ export default function WidgetSettingsPage() {
           </Section>
 
           <Section icon={Code2} title="Install" subtitle="Paste this before the closing </body> tag.">
+            <p className="text-xs text-slate-600">
+              This is the <strong>only</strong> place to copy your website code. Pick the agent that
+              should answer, then copy.
+            </p>
+
+            {agents.length === 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                You have no agent yet, so this code would run a chat with no persona or knowledge.{" "}
+                <Link href="/agents" className="font-semibold underline">Create an agent first</Link>.
+              </div>
+            ) : (
+              <Field
+                label="Which agent answers on your website?"
+                hint={
+                  agents.length > 1
+                    ? `You have ${agents.length} agents. The code below includes the one you pick here.`
+                    : "The code below includes this agent."
+                }
+              >
+                <select
+                  value={agentId}
+                  onChange={(e) => setAgentId(e.target.value)}
+                  className={INPUT}
+                >
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}{a.is_active === false ? " (paused)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
+            {selectedAgent && selectedAgent.is_active === false && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <strong>{selectedAgent.name}</strong> is paused, so visitors will not get answers. Open{" "}
+                <Link href="/agents" className="font-semibold underline">Agents</Link>, press Configure
+                and switch it to Live.
+              </div>
+            )}
+
             <div className="overflow-x-auto rounded-lg bg-[#0c1f17] p-3">
               <code className="whitespace-pre text-xs text-emerald-300">{embedCode}</code>
             </div>
@@ -310,7 +395,7 @@ export default function WidgetSettingsPage() {
                 href="/agents"
                 className="flex items-center gap-1.5 rounded-lg border border-[#e7ece9] px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
               >
-                Per-agent embed codes <ExternalLink className="size-3" />
+                Manage agents <ExternalLink className="size-3" />
               </Link>
             </div>
             <p className="text-xs text-slate-500">

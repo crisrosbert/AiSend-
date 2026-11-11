@@ -240,6 +240,10 @@
     isOpen = !isOpen;
     panel.style.display = isOpen ? 'flex' : 'none';
     if (isOpen) setTimeout(fitPanel, 50); else { panel.style.top = ''; panel.style.bottom = ''; panel.style.height = ''; panel.style.maxHeight = ''; }
+    // No waves around the button while the chat is open: they spread over
+    // the panel edge on phones and look like an overlap.
+    var launcher = document.querySelector('.aisend-btn');
+    if (launcher) launcher.className = isOpen ? 'aisend-btn aisend-open' : 'aisend-btn';
     var b = document.querySelector('.aisend-bubble');
     if (b) b.remove();
     if (isOpen && messages.length === 0) {
@@ -671,6 +675,7 @@
       '.aisend-btn::before,.aisend-btn::after{content:"";position:absolute;inset:0;border-radius:50%;border:3px solid var(--aisend-primary);opacity:0;pointer-events:none;animation:aisendRing 2.2s ease-out 1s 6}' +
       '.aisend-btn::before{animation-delay:1.8s}' +
       '@keyframes aisendRing{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(2)}}' +
+      '.aisend-btn.aisend-open::before,.aisend-btn.aisend-open::after{animation:none;opacity:0}' +
       '@media (prefers-reduced-motion:reduce){.aisend-btn::before,.aisend-btn::after{animation:none}}' +
       '.aisend-bubble{position:fixed;bottom:90px;right:20px;max-width:260px;background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:999998;cursor:pointer;animation:aisendPop .3s ease}' +
       '.aisend-bubble-close{position:absolute;top:6px;right:10px;font-size:18px;color:#999;cursor:pointer;line-height:1}' +
@@ -770,7 +775,7 @@
       '@keyframes aisendBlink{0%,80%,100%{opacity:.3}40%{opacity:1}}' +
       // Phones: a compact sheet that leaves the page visible above it and the
       // round button visible below, instead of covering the whole screen.
-      '@media(max-width:480px){.aisend-panel{left:10px;right:10px;bottom:90px;width:auto;max-width:none;height:min(60vh,420px);height:min(60dvh,420px);max-height:calc(100vh - 110px);border-radius:16px}}';
+      '@media(max-width:480px){.aisend-panel{left:10px;right:10px;bottom:96px;width:auto;max-width:none;height:min(58vh,420px);height:min(58dvh,420px);max-height:calc(100vh - 120px);border-radius:16px}}';
     var style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);

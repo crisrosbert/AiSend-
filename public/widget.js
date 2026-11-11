@@ -52,7 +52,11 @@
     // Up to three questions shown as tappable chips under the greeting.
     // These are what turn an open panel into a conversation: a visitor
     // who has to think of a question usually closes the window instead.
-    suggested_questions: []
+    suggested_questions: [],
+    // Optional slim WhatsApp line under the header. OFF unless the server says
+    // so (owner switched it on AND a valid number is saved).
+    whatsapp_button_enabled: false,
+    whatsapp_button_text: ''
   };
   var isOpen = false;
   var messages = []; // {role:'user'|'bot', text}
@@ -119,12 +123,16 @@
           '<div class="aisend-close" id="aisend-close">&times;</div>' +
         '</div>' +
       '</div>' +
+      // Optional WhatsApp strip: a flex row between the header and the
+      // messages. Empty string (nothing at all) unless it is switched on.
+      waStripHtml() +
       '<div class="aisend-messages" id="aisend-messages"></div>' +
       '<div class="aisend-input-row">' +
         '<input type="text" class="aisend-input" id="aisend-input" placeholder="Type your message..." />' +
         '<button class="aisend-send" id="aisend-send">' + sendIcon() + '</button>' +
       '</div>';
     document.body.appendChild(panel);
+    wireWaStrip(panel);
     document.getElementById('aisend-close').onclick = togglePanel;
     document.getElementById('aisend-send').onclick = sendMessage;
     document.getElementById('aisend-input').addEventListener('keypress', function (e) {
@@ -462,11 +470,17 @@
   }
 
   function addWhatsAppButton(phone, context) {
+    // Kept on purpose even when the WhatsApp strip is on: this button carries
+    // what the visitor just asked, the strip does not. The number is reduced
+    // to digits first, so a saved "+91 98201 23987" still makes a working link
+    // and nothing unescaped reaches innerHTML.
+    var digits = waDigits(phone) || String(phone).replace(/\D/g, '');
+    if (!digits) return;
     var container = document.getElementById('aisend-messages');
     var wrap = el('div', 'aisend-msg aisend-msg-bot');
     var waText = encodeURIComponent('Hi, I was chatting on your website about: ' + context);
     wrap.innerHTML =
-      '<a class="aisend-wa-btn" href="https://wa.me/' + phone + '?text=' + waText + '" target="_blank">' +
+      '<a class="aisend-wa-btn" href="https://wa.me/' + digits + '?text=' + waText + '" target="_blank" rel="noopener noreferrer">' +
       'Continue on WhatsApp →</a>';
     container.appendChild(wrap);
     container.scrollTop = container.scrollHeight;
@@ -485,6 +499,111 @@
     if (t) t.remove();
   }
 
+  // ── WhatsApp strip (optional, OFF unless the server turns it on) ──
+  // Shown only when BOTH: the owner switched "Add WhatsApp button" on (the
+  // server then sends whatsapp_button_enabled = true) AND the saved number
+  // is usable. A click opens https://wa.me/<digits>?text=<message> in a new tab.
+  function waStripOn() {
+    return config.whatsapp_button_enabled === true && !!waDigits(config.business_phone);
+  }
+  // Only static markup plus esc()-escaped text, never raw config values.
+  function waStripHtml() {
+    if (!waStripOn()) return '';
+    return '<a class="aisend-wa-strip" id="aisend-wa-strip" href="#" target="_blank" rel="noopener noreferrer">' +
+      waIcon() +
+      '<span class="aisend-wa-strip-text">' + esc(waStripText(config.whatsapp_button_text)) + '</span>' +
+      '<span class="aisend-wa-strip-arrow" aria-hidden="true">&rarr;</span>' +
+      '</a>';
+  }
+  // The link is rebuilt just before it is used, so the message carries the
+  // page the visitor is on NOW (single-page sites change title and URL
+  // without reloading the widget).
+  function wireWaStrip(panel) {
+    var a = panel.querySelector('#aisend-wa-strip');
+    if (!a) return;
+    var refresh = function () {
+      a.href = waLink(waDigits(config.business_phone), document.title, window.location.href);
+    };
+    refresh();
+    a.addEventListener('mouseenter', refresh);
+    a.addEventListener('focus', refresh);
+    a.addEventListener('click', refresh);
+  }
+  function waIcon() {
+    return '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<path d="M12 2.5a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l4.8-1.3A9.5 9.5 0 1 0 12 2.5z" fill="#0f6a37"/>' +
+      '<path d="M8.6 7.8c-.4 0-.9.3-1 1.1-.2 1.9 1.2 4.1 2.8 5.5 1.5 1.3 3.4 2.1 4.7 1.7.7-.2 1.1-.9 1.1-1.5 0-.2-.1-.3-.3-.4l-1.8-.9c-.2-.1-.4 0-.5.1l-.6.7c-.1.1-.3.2-.5.1-1-.4-2-1.2-2.6-2.2-.1-.2-.1-.3 0-.5l.5-.6c.1-.1.1-.3.1-.4l-.8-1.8c-.1-.2-.3-.3-.5-.3z" fill="#e8f7ee"/>' +
+      '</svg>';
+  }
+
+  // WA-HELPERS-START
+  // Pure helpers (no DOM, no network). Unit-tested by
+  // src/lib/widget/whatsapp-strip.test.ts, which cuts this block out of the
+  // file and runs it, so keep the START/END markers.
+  var WA_TEXT_DEFAULT = 'Talk to the clinic team directly';
+  var WA_TEXT_MAX = 50;
+
+  // One line, no control characters.
+  function waClean(s) {
+    var str = s == null ? '' : String(s);
+    var out = '';
+    for (var i = 0; i < str.length; i++) {
+      var c = str.charCodeAt(i);
+      out += (c < 32 || (c >= 127 && c <= 159) || c === 8232 || c === 8233) ? ' ' : str.charAt(i);
+    }
+    return out.replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
+  }
+  // Cut to max characters (never half an emoji); dots=true ends with "...".
+  function waCut(s, max, dots) {
+    if (s.length <= max) return s;
+    var keep = dots ? max - 3 : max;
+    var t = s.slice(0, keep);
+    var last = t.charCodeAt(t.length - 1);
+    if (last >= 0xd800 && last <= 0xdbff) t = t.slice(0, -1);
+    t = t.replace(/\s+$/g, '');
+    return dots ? t + '...' : t;
+  }
+  // The strip text: owner's text (plain, one line, max 50), else the default.
+  function waStripText(raw) {
+    var t = waCut(waClean(raw).replace(/[<>]/g, ''), WA_TEXT_MAX, false);
+    return t || WA_TEXT_DEFAULT;
+  }
+  // Digits for wa.me, or null. Accepts 10-digit Indian mobile, 91XXXXXXXXXX,
+  // +91..., 0091..., and other international numbers (8 to 15 digits).
+  function waDigits(raw) {
+    if (raw == null) return null;
+    var s = String(raw).replace(/^\s+|\s+$/g, '');
+    if (/[a-z]/i.test(s)) return null;
+    var plus = s.charAt(0) === '+';
+    var d = s.replace(/\D/g, '');
+    if (!plus && d.slice(0, 2) === '00') d = d.slice(2);
+    if (!plus) {
+      if (d.length === 10) { if (!/^[6-9]/.test(d)) return null; d = '91' + d; }
+      else if (d.length === 11 && d.charAt(0) === '0' && /^[6-9]/.test(d.slice(1))) d = '91' + d.slice(1);
+    }
+    if (d.length < 8 || d.length > 15 || d.charAt(0) === '0') return null;
+    return d;
+  }
+  // "Hi, I'm on "<title>" <url> and I'd like to talk to the team."
+  // Title max 60 characters. The URL is the page address WITHOUT ?query and
+  // #hash (they can hold tracking codes or personal data); if it is still
+  // longer than 150 characters only the site address is used.
+  function waPrefill(title, url) {
+    var t = waCut(waClean(title).replace(/"/g, "'"), 60, true);
+    var u = waClean(url).replace(/\s/g, '').split('#')[0].split('?')[0];
+    if (u.length > 150) { var m = u.match(/^https?:\/\/[^\/]+/i); u = m ? m[0] : ''; }
+    u = waCut(u, 150, false);
+    var where = t && u ? '"' + t + '" ' + u : (t ? '"' + t + '"' : u);
+    return where
+      ? "Hi, I'm on " + where + " and I'd like to talk to the team."
+      : "Hi, I'd like to talk to the team.";
+  }
+  function waLink(digits, title, url) {
+    if (!digits) return '';
+    return 'https://wa.me/' + digits + '?text=' + encodeURIComponent(waPrefill(title, url));
+  }
+  // WA-HELPERS-END
+
   // ── Helpers ──
   function el(tag, cls) { var e = document.createElement(tag); if (cls) e.className = cls; return e; }
   function esc(s) {
@@ -493,8 +612,17 @@
     });
   }
   function chatIcon(white) {
+    // White speech bubble with three dots in the brand colour. The dots
+    // read the same CSS variable as the button, so every client's colour
+    // is picked up automatically.
     var color = white ? '#fff' : '#fff';
-    return '<svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.04 2 11c0 2.5 1.14 4.75 3 6.36V22l3.6-2c1.06.32 2.2.5 3.4.5 5.52 0 10-4.04 10-9S17.52 2 12 2z" fill="' + color + '"/></svg>';
+    var dot = 'style="fill:var(--aisend-primary)"';
+    return '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">' +
+      '<path d="M14 3C7.9 3 3 7.4 3 12.8c0 2.8 1.3 5.3 3.4 7.1L5.6 25l4.9-2.6c1.1.3 2.3.5 3.5.5 6.1 0 11-4.4 11-9.8S20.1 3 14 3z" fill="' + color + '"/>' +
+      '<circle cx="9.5" cy="12.9" r="1.6" ' + dot + '/>' +
+      '<circle cx="14" cy="12.9" r="1.6" ' + dot + '/>' +
+      '<circle cx="18.5" cy="12.9" r="1.6" ' + dot + '/>' +
+      '</svg>';
   }
   function sendIcon() {
     return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z" fill="#fff"/></svg>';
@@ -502,8 +630,11 @@
   function injectStyles() {
     var css =
       ':root{--aisend-primary:' + config.primary_color + '}' +
-      '.aisend-btn{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:var(--aisend-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);z-index:999998;transition:transform .2s}' +
-      '.aisend-btn:hover{transform:scale(1.08)}' +
+      '.aisend-btn{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:var(--aisend-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.22),inset 0 0 0 2px rgba(255,255,255,.22);z-index:999998;transition:transform .2s,box-shadow .2s}' +
+      '.aisend-btn:hover{transform:scale(1.08);box-shadow:0 8px 24px rgba(0,0,0,.28),inset 0 0 0 2px rgba(255,255,255,.3)}' +
+      '.aisend-btn::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--aisend-primary);opacity:0;pointer-events:none;animation:aisendRing 2.4s ease-out 1.2s 3}' +
+      '@keyframes aisendRing{0%{opacity:.55;transform:scale(1)}100%{opacity:0;transform:scale(1.5)}}' +
+      '@media (prefers-reduced-motion:reduce){.aisend-btn::after{animation:none}}' +
       '.aisend-bubble{position:fixed;bottom:90px;right:20px;max-width:260px;background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:999998;cursor:pointer;animation:aisendPop .3s ease}' +
       '.aisend-bubble-close{position:absolute;top:6px;right:10px;font-size:18px;color:#999;cursor:pointer;line-height:1}' +
       '.aisend-bubble-text{font-size:14px;color:#222;line-height:1.5;padding-right:12px;font-family:-apple-system,system-ui,sans-serif}' +
@@ -541,6 +672,15 @@
       '.aisend-header-actions{display:flex;align-items:center;gap:10px}' +
       '.aisend-close{color:#fff;font-size:26px;cursor:pointer;line-height:1;opacity:.9}' +
       '.aisend-close:hover{opacity:1}' +
+      // WhatsApp strip: one 28px row between the header and the messages.
+      // flex-shrink:0 keeps it a fixed height, so the messages area (flex:1,
+      // scrolls) simply starts below it, on desktop and in the mobile sheet.
+      '.aisend-wa-strip{display:flex;align-items:center;gap:6px;flex-shrink:0;box-sizing:border-box;height:28px;padding:0 14px;background:#e8f7ee;border-bottom:1px solid #bfe5cd;color:#0f6a37;font-family:inherit;font-size:12px;line-height:1;font-weight:500;text-decoration:none;cursor:pointer}' +
+      '.aisend-wa-strip:hover,.aisend-wa-strip:focus,.aisend-wa-strip:visited{background:#dcf2e5;color:#0f6a37;text-decoration:none}' +
+      '.aisend-wa-strip:focus-visible{outline:2px solid #0f6a37;outline-offset:-2px}' +
+      '.aisend-wa-strip svg{flex-shrink:0;display:block}' +
+      '.aisend-wa-strip-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '.aisend-wa-strip-arrow{flex-shrink:0;font-size:13px}' +
       // Patterned message ground.
       //
       // A flat panel makes the bubbles float in nothing; a texture

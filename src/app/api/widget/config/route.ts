@@ -94,6 +94,8 @@ interface AgentProfile {
    * written before it have no value.
    */
   role?: string | null
+  /** Used only to decide whether a stored teaser belongs to this agent's business. */
+  business_id?: string | null
 }
 
 /**
@@ -112,15 +114,33 @@ interface AgentProfile {
  * every agent has.
  */
 export function agentBubble(agent: AgentProfile): string | null {
-  const role = agent.role?.trim()
-  // Long roles get truncated to nothing useful in a 260px bubble, and a
-  // teaser that wraps to five lines is worse than a generic one.
-  if (role && role.length <= 60) return `Hi! 👋 ${role} — ask me anything.`
-
+  // The role is NOT used here. It is an internal label ("Chat agent for
+  // cosmetic surgery inquiries"), and showing it made the teaser read like
+  // a job title: "Hi! 👋 Chat agent for cosmetic surgery inquiries — ask me
+  // anything." A visitor wants a friendly line, not a description of the bot.
   const name = agent.name?.trim()
-  if (name) return `Hi! 👋 Questions about ${name}? Ask me anything.`
+  if (name) {
+    // A placeholder name ("New Agent") would read as "Questions about New Agent?".
+    if (name.length > 40 || GENERIC_AGENT_NAME.test(name)) return 'Hi! 👋 Have a question? Ask me here.'
+    return `Hi! 👋 Questions about ${name}? Ask me anything.`
+  }
 
   return null
+}
+
+/** Names an agent has before anyone has named it, or that say nothing about the business. */
+const GENERIC_AGENT_NAME = /^(?:new agent|untitled(?: agent)?|agent|assistant|chat agent|ai agent|my agent|clinic front desk)$/i
+
+/**
+ * Is this teaser one the app wrote (the dashboard default, or a line built by
+ * agentBubble) rather than one the owner typed? Only a line the owner typed
+ * is allowed to beat the agent-based teaser.
+ */
+export function isStockBubble(value: string | null | undefined): boolean {
+  const s = (value ?? '').trim()
+  if (!s) return true
+  if (s.length > 200) return false
+  return /^hi!?\s*(?:\u{1F44B}\s*)?(?:have a question\??(?:\s*(?:i'?m here to help|ask me here)\.?)?|questions about .+\?\s*ask me anything\.?|.+\s[\u2014-]\s*ask me anything\.?)$/iu.test(s)
 }
 
 /**
@@ -159,13 +179,21 @@ export function agentBubble(agent: AgentProfile): string | null {
 export function mergeAgentProfile(
   view: Record<string, unknown>,
   agent: AgentProfile | null,
-  opts: { shared?: boolean } = {},
+  opts: { shared?: boolean; sameBusiness?: boolean } = {},
 ): Record<string, unknown> {
   if (!agent) return view
 
   const merged = { ...view }
   const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
   const name = agent.name?.trim()
+
+  // A teaser the OWNER typed on /widget (not the stock one, not one built by
+  // agentBubble) is kept, as long as the row is for this agent's business.
+  // Without this the Bubble teaser box on /widget did nothing once the embed
+  // carried data-agent.
+  const storedBubble = text(view.bubble_message)
+  const ownerWroteBubble =
+    storedBubble !== '' && !isStockBubble(storedBubble) && opts.sameBusiness !== false
 
   // ── A borrowed row contributes NO identity, not "identity the agent
   //    happens to be missing" ─────────────────────────────────────────
@@ -196,7 +224,7 @@ export function mergeAgentProfile(
       delete merged.suggested_questions
     }
 
-    merged.bubble_message = agentBubble(agent) ?? undefined
+    merged.bubble_message = ownerWroteBubble ? storedBubble : (agentBubble(agent) ?? undefined)
     return merged
   }
 
@@ -223,8 +251,10 @@ export function mergeAgentProfile(
   // a teaser loses it. That is worth fixing properly by giving agents
   // their own teaser field, not by leaving every multi-business tenant
   // advertising the wrong business.
-  const bubble = agentBubble(agent)
-  if (bubble) merged.bubble_message = bubble
+  if (!ownerWroteBubble) {
+    const bubble = agentBubble(agent)
+    if (bubble) merged.bubble_message = bubble
+  }
 
   return merged
 }
@@ -314,15 +344,20 @@ export async function GET(req: Request) {
     if (agentId) {
       const { data: row } = await db()
         .from('agents')
-        .select('name, avatar_url, greeting, suggested_questions, role')
+        .select('name, avatar_url, greeting, suggested_questions, role, business_id')
         .eq('id', agentId)
         .eq('tenant_id', config.org_user_id)
         .maybeSingle()
       if (row) profile = row
     }
 
+    // The stored teaser may only be kept when the config row and the agent
+    // belong to the same business (or when either does not say).
+    const sameBusiness =
+      config.business_id && profile?.business_id ? config.business_id === profile.business_id : true
+
     return NextResponse.json(
-      mergeAgentProfile(publicView(config), profile, { shared: usedSharedConfig }),
+      mergeAgentProfile(publicView(config), profile, { shared: usedSharedConfig, sameBusiness }),
       { headers: CORS },
     )
   } catch (err) {

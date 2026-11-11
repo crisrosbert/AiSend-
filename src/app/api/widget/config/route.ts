@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { allowlistFromConfig, originAllowed, corsHeaders } from '@/lib/widget/origin'
+import { whatsappStripView } from '@/lib/widget/whatsapp-strip'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -68,6 +69,11 @@ export const PUBLIC_FIELDS = [
   // has no value of its own. Listed here so the field test counts them
   // as served.
   'suggested_questions',
+  // The optional WhatsApp strip. READ BY public/widget.js. The route
+  // replaces both with checked values (whatsappStripView), so a missing
+  // column or a bad number can only ever mean "off".
+  'whatsapp_button_enabled',
+  'whatsapp_button_text',
 ] as const
 
 /** Drop anything not on the public list, and never echo the allowlist itself. */
@@ -356,8 +362,13 @@ export async function GET(req: Request) {
     const sameBusiness =
       config.business_id && profile?.business_id ? config.business_id === profile.business_id : true
 
+    // The WhatsApp strip is on only when the owner switched it on AND a valid
+    // number is saved. A column that does not exist yet reads as off (the
+    // query is select('*'), so a missing column is just an absent key).
+    const view = { ...publicView(config), ...whatsappStripView(config) }
+
     return NextResponse.json(
-      mergeAgentProfile(publicView(config), profile, { shared: usedSharedConfig, sameBusiness }),
+      mergeAgentProfile(view, profile, { shared: usedSharedConfig, sameBusiness }),
       { headers: CORS },
     )
   } catch (err) {

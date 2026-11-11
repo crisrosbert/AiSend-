@@ -59,6 +59,7 @@
     whatsapp_button_text: ''
   };
   var isOpen = false;
+  var lockedOverflow = null;
   var messages = []; // {role:'user'|'bot', text}
   var bubbleShown = false;
   // Once details are captured we never show the form again this session, even
@@ -137,9 +138,16 @@
     document.getElementById('aisend-send').onclick = sendMessage;
     // The keyboard animates in: re-fit once it has settled.
     document.getElementById('aisend-input').addEventListener('focus', function () {
+      fitPanel();
       setTimeout(fitPanel, 300);
       setTimeout(fitPanel, 700);
     });
+    document.getElementById('aisend-input').addEventListener('blur', function () {
+      setTimeout(fitPanel, 150);
+      setTimeout(fitPanel, 500);
+    });
+    window.addEventListener('resize', fitPanel);
+    window.addEventListener('orientationchange', function () { setTimeout(fitPanel, 300); });
     document.getElementById('aisend-input').addEventListener('keypress', function (e) {
       if (e.key === 'Enter') sendMessage();
     });
@@ -215,11 +223,18 @@
     if (!panel || !isOpen) return;
     var vv = window.visualViewport;
     var phone = window.matchMedia && window.matchMedia('(max-width:480px)').matches;
-    var keyboard = !!(vv && phone && vv.height < window.innerHeight - 120);
+    // Two browser behaviours exist: Chrome shrinks only the visual viewport
+    // (vv.height < innerHeight), while some Android browsers shrink the
+    // layout viewport itself (the two stay equal). A focused input on a
+    // phone covers both: size the panel to whatever is really visible.
+    var typing = !!(document.activeElement && document.activeElement.id === 'aisend-input');
+    var vh = vv ? vv.height : window.innerHeight;
+    var top = vv ? vv.offsetTop : 0;
+    var keyboard = !!(phone && (typing || (vv && vv.height < window.innerHeight - 120)));
     if (keyboard) {
-      panel.style.top = Math.max(0, vv.offsetTop + 8) + 'px';
+      panel.style.top = Math.max(0, top + 8) + 'px';
       panel.style.bottom = 'auto';
-      panel.style.height = Math.max(200, vv.height - 16) + 'px';
+      panel.style.height = Math.max(200, vh - 16) + 'px';
       panel.style.maxHeight = 'none';
     } else {
       panel.style.top = '';
@@ -244,6 +259,19 @@
     // the panel edge on phones and look like an overlap.
     var launcher = document.querySelector('.aisend-btn');
     if (launcher) launcher.className = isOpen ? 'aisend-btn aisend-open' : 'aisend-btn';
+    // Like other chat widgets on phones: freeze the page behind the chat so
+    // it cannot scroll or pan (a panning page is what drags the header off
+    // screen), and restore exactly what the site had when the chat closes.
+    var isPhone = window.matchMedia && window.matchMedia('(max-width:480px)').matches;
+    if (isPhone) {
+      if (isOpen) {
+        lockedOverflow = document.documentElement.style.overflow;
+        document.documentElement.style.overflow = 'hidden';
+      } else if (lockedOverflow !== null) {
+        document.documentElement.style.overflow = lockedOverflow;
+        lockedOverflow = null;
+      }
+    }
     var b = document.querySelector('.aisend-bubble');
     if (b) b.remove();
     if (isOpen && messages.length === 0) {
@@ -775,7 +803,12 @@
       '@keyframes aisendBlink{0%,80%,100%{opacity:.3}40%{opacity:1}}' +
       // Phones: a compact sheet that leaves the page visible above it and the
       // round button visible below, instead of covering the whole screen.
-      '@media(max-width:480px){.aisend-panel{left:10px;right:10px;bottom:96px;width:auto;max-width:none;height:min(58vh,420px);height:min(58dvh,420px);max-height:calc(100vh - 120px);border-radius:16px}}';
+      '.aisend-header,.aisend-input-row{flex-shrink:0}' +
+      '.aisend-messages{min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}' +
+      '@media(max-width:480px){.aisend-panel{left:10px;right:10px;bottom:96px;width:auto;max-width:none;height:min(58vh,420px);height:min(58dvh,420px);max-height:calc(100vh - 120px);border-radius:16px}' +
+        // 16px: iOS Safari zooms the whole page when an input smaller than that is focused.
+        '.aisend-input{font-size:16px}' +
+        '.aisend-input-row{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}}';
     var style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);

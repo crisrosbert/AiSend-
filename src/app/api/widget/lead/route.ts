@@ -16,6 +16,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { allowlistFromConfig, originAllowed, corsHeaders } from '@/lib/widget/origin'
 import { businessIdForAgent } from '@/lib/business/server'
+import { checkPhone } from '@/lib/phone/validate'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -109,6 +110,22 @@ export async function POST(req: Request) {
     const businessId =
       (await businessIdForAgent(db(), config.agent_id)) ?? config.business_id ?? null
 
+    // A typed phone number must be a real one. Indian mobiles are 10 digits;
+    // other countries need "+" and the country code. An empty phone is still
+    // fine when an email is given (checked below).
+    const typedPhone = clean(fields.phone, 24)
+    let phone: string | null = null
+    if (typedPhone) {
+      const phoneCheck = checkPhone(typedPhone)
+      if (!phoneCheck.ok) {
+        return NextResponse.json(
+          { error: 'Please enter a valid 10-digit mobile number (or add + and your country code).' },
+          { status: 400, headers: CORS },
+        )
+      }
+      phone = phoneCheck.e164
+    }
+
     const record = {
       tenant_id: config.org_user_id,
       business_id: businessId,
@@ -116,7 +133,7 @@ export async function POST(req: Request) {
       conversation_id: conversationId,
       first_name: clean(fields.first_name, 80),
       last_name: clean(fields.last_name, 80),
-      phone: clean(fields.phone, 24),
+      phone,
       email: clean(fields.email, 160),
       company_name: clean(fields.company_name, 120),
       source: 'website_widget',

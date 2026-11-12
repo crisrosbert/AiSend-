@@ -272,7 +272,7 @@ describe('widget.js helpers: wa.me link and prefilled message', () => {
 describe('widget.js source safety and wiring', () => {
   it('strip is built only from escaped text; click opens a new tab with noopener', () => {
     expect(widgetSource).toContain("esc(waStripText(config.whatsapp_button_text))")
-    expect(widgetSource).toMatch(/aisend-wa-strip"[^']*target="_blank" rel="noopener noreferrer"/)
+    expect(widgetSource).toMatch(/aisend-wa-chat"[^']*target="_blank" rel="noopener noreferrer"/)
   })
   it('strip is off unless the server flag is strictly true and the number is usable', () => {
     expect(widgetSource).toContain('config.whatsapp_button_enabled === true && !!waDigits(config.business_phone)')

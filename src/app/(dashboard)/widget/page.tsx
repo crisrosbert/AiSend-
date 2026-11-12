@@ -25,6 +25,15 @@ import {
   isMissingWhatsappColumnError,
   withoutWhatsappColumns,
 } from "@/lib/widget/whatsapp-strip";
+import {
+  AUTO_OPEN_SECONDS_DEFAULT,
+  AUTO_OPEN_SECONDS_MAX,
+  AUTO_OPEN_SECONDS_MIN,
+  cleanAutoOpenSeconds,
+  cleanExcludeText,
+  isMissingAutoOpenColumnError,
+  withoutAutoOpenColumns,
+} from "@/lib/widget/auto-open";
 
 interface WidgetConfig {
   bot_name: string;
@@ -38,6 +47,11 @@ interface WidgetConfig {
   whatsapp_button_enabled: boolean;
   /** "" = use the default text. */
   whatsapp_button_text: string;
+  /** Chat window opens by itself after N seconds, once per visit. Off by default. */
+  auto_open_enabled: boolean;
+  auto_open_seconds: number;
+  /** Pages where it must not open, one per line. */
+  auto_open_exclude: string;
 }
 
 /** The agents a website can be wired to. The embed code carries the chosen one. */
@@ -58,6 +72,9 @@ const DEFAULTS: WidgetConfig = {
   is_active: true,
   whatsapp_button_enabled: false,
   whatsapp_button_text: "",
+  auto_open_enabled: false,
+  auto_open_seconds: AUTO_OPEN_SECONDS_DEFAULT,
+  auto_open_exclude: "",
 };
 
 const COLOR_PRESETS = [
@@ -136,6 +153,10 @@ export default function WidgetSettingsPage() {
           whatsapp_button_enabled: data.whatsapp_button_enabled === true,
           whatsapp_button_text:
             typeof data.whatsapp_button_text === "string" ? data.whatsapp_button_text : "",
+          // Columns from migration 044 (absent until it is run: off).
+          auto_open_enabled: data.auto_open_enabled === true,
+          auto_open_seconds: cleanAutoOpenSeconds(data.auto_open_seconds),
+          auto_open_exclude: typeof data.auto_open_exclude === "string" ? data.auto_open_exclude : "",
         });
       }
     } finally {
@@ -182,6 +203,8 @@ export default function WidgetSettingsPage() {
         ...config,
         business_phone: wa.phone,
         whatsapp_button_text: wa.text,
+        auto_open_seconds: cleanAutoOpenSeconds(config.auto_open_seconds),
+        auto_open_exclude: cleanExcludeText(config.auto_open_exclude),
         updated_at: new Date().toISOString(),
       };
 
@@ -198,9 +221,19 @@ export default function WidgetSettingsPage() {
       // database refuses the row. Save everything else without them, so
       // widget settings never stop saving because of this feature.
       let columnsMissing = false;
-      if (error && isMissingWhatsappColumnError(error)) {
-        columnsMissing = true;
-        ({ error } = await write(withoutWhatsappColumns(payload)));
+      let autoOpenMissing = false;
+      // A missing column (migration 043 or 044 not run yet) must never stop the
+      // other settings from saving: drop only the missing family and retry.
+      let row: Record<string, unknown> = payload;
+      for (let attempt = 0; attempt < 2 && error; attempt++) {
+        if (isMissingWhatsappColumnError(error) && !columnsMissing) {
+          columnsMissing = true;
+          row = withoutWhatsappColumns(row);
+        } else if (isMissingAutoOpenColumnError(error) && !autoOpenMissing) {
+          autoOpenMissing = true;
+          row = withoutAutoOpenColumns(row);
+        } else break;
+        ({ error } = await write(row));
       }
       if (error) throw error;
 
@@ -210,7 +243,17 @@ export default function WidgetSettingsPage() {
         business_phone: wa.phone,
         whatsapp_button_text: wa.text ?? "",
         whatsapp_button_enabled: columnsMissing ? false : c.whatsapp_button_enabled,
+        auto_open_seconds: cleanAutoOpenSeconds(c.auto_open_seconds),
+        auto_open_exclude: cleanExcludeText(c.auto_open_exclude),
+        auto_open_enabled: autoOpenMissing ? false : c.auto_open_enabled,
       }));
+
+      if (autoOpenMissing && config.auto_open_enabled) {
+        toast.warning(
+          "Saved, but Auto-open is still OFF: your database needs one small update first (migration 044). Ask your developer or support.",
+        );
+        return;
+      }
 
       if (columnsMissing && config.whatsapp_button_enabled) {
         toast.warning(
@@ -403,6 +446,65 @@ export default function WidgetSettingsPage() {
                 </span>
               </div>
             </Field>
+
+            {/* Optional auto-open. OFF by default. */}
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-[#e7ece9] px-3 py-2.5">
+              <div>
+                <p className="text-xs font-semibold text-slate-700">Auto-open chat window</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  Opens the chat by itself on desktop and phone, once per visit. It replaces the
+                  teaser bubble and never reopens after the visitor closes it. Off by default.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={config.auto_open_enabled}
+                aria-label="Auto-open chat window"
+                onClick={() => update("auto_open_enabled", !config.auto_open_enabled)}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  config.auto_open_enabled ? "bg-emerald-500" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`absolute left-0.5 top-0.5 size-5 rounded-full bg-[#fff] shadow transition-transform ${
+                    config.auto_open_enabled ? "translate-x-5" : ""
+                  }`}
+                />
+              </button>
+            </div>
+
+            {config.auto_open_enabled && (
+              <>
+                <Field label="Open after" hint="Seconds after the page loads.">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={AUTO_OPEN_SECONDS_MIN}
+                      max={AUTO_OPEN_SECONDS_MAX}
+                      value={config.auto_open_seconds}
+                      onChange={(e) => update("auto_open_seconds", Number(e.target.value))}
+                      className="flex-1 accent-emerald-500"
+                    />
+                    <span className="w-16 shrink-0 text-sm font-semibold text-[#0c1f17]">
+                      {config.auto_open_seconds}s
+                    </span>
+                  </div>
+                </Field>
+                <Field
+                  label="Do not auto-open on these pages"
+                  hint="One per line. /checkout = any page starting with /checkout. contact = any page with contact in its address. Visitors can still open the chat themselves."
+                >
+                  <textarea
+                    value={config.auto_open_exclude}
+                    onChange={(e) => update("auto_open_exclude", e.target.value)}
+                    rows={3}
+                    placeholder={"/checkout\n/book-appointment\ncontact"}
+                    className={INPUT}
+                  />
+                </Field>
+              </>
+            )}
 
             {/* Optional WhatsApp strip. OFF by default. */}
             <div className="flex items-start justify-between gap-3 rounded-lg border border-[#e7ece9] px-3 py-2.5">

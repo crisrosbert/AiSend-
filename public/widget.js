@@ -56,7 +56,11 @@
     // Optional slim WhatsApp line under the header. OFF unless the server says
     // so (owner switched it on AND a valid number is saved).
     whatsapp_button_enabled: false,
-    whatsapp_button_text: ''
+    whatsapp_button_text: '',
+    // Optional: open the chat window by itself. OFF unless the owner switched it on.
+    auto_open_enabled: false,
+    auto_open_seconds: 5,
+    auto_open_exclude: ''
   };
   var isOpen = false;
   var lockedOverflow = null;
@@ -84,23 +88,37 @@
     btn.innerHTML = chatIcon();
     btn.onclick = togglePanel;
     document.body.appendChild(btn);
-    // ── Notification bubble (after delay) ──
-    setTimeout(function () {
-      if (!isOpen && !bubbleShown) {
-        bubbleShown = true;
-        var bubble = el('div', 'aisend-bubble');
-        bubble.innerHTML =
-          '<div class="aisend-bubble-close">&times;</div>' +
-          '<div class="aisend-bubble-text">' + esc(config.bubble_message) + '</div>';
-        bubble.querySelector('.aisend-bubble-close').onclick = function (e) {
-          e.stopPropagation();
-          bubble.remove();
-        };
-        bubble.onclick = function () { bubble.remove(); togglePanel(); };
-        document.body.appendChild(bubble);
-        setTimeout(function () { if (bubble.parentNode) bubble.remove(); }, 15000);
-      }
-    }, (config.trigger_delay_seconds || 10) * 1000);
+    // ── Teaser bubble, or auto-open ──
+    function showBubble() {
+      if (isOpen || bubbleShown) return;
+      bubbleShown = true;
+      var bubble = el('div', 'aisend-bubble');
+      bubble.innerHTML =
+        '<div class="aisend-bubble-close">&times;</div>' +
+        '<div class="aisend-bubble-text">' + esc(config.bubble_message) + '</div>';
+      bubble.querySelector('.aisend-bubble-close').onclick = function (e) {
+        e.stopPropagation();
+        bubble.remove();
+      };
+      bubble.onclick = function () { bubble.remove(); togglePanel(); };
+      document.body.appendChild(bubble);
+      setTimeout(function () { if (bubble.parentNode) bubble.remove(); }, 15000);
+    }
+    if (autoOpenAllowed()) {
+      // Replaces the bubble. If the moment is wrong when the timer fires
+      // (visitor is typing in a form, tab in background) the bubble is shown instead.
+      var autoSecs = Math.max(1, Math.min(120, Math.round(Number(config.auto_open_seconds)) || 5));
+      setTimeout(function () {
+        if (isOpen || !autoOpenAllowed()) return;
+        var ae = document.activeElement;
+        var typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && ae.id !== 'aisend-input';
+        if (typing || document.hidden) { showBubble(); return; }
+        autoOpening = true;
+        try { togglePanel(); } finally { autoOpening = false; }
+      }, autoSecs * 1000);
+    } else {
+      setTimeout(showBubble, (config.trigger_delay_seconds || 10) * 1000);
+    }
     // ── Chat panel (hidden initially) ──
     var panel = el('div', 'aisend-panel');
     panel.id = 'aisend-panel';
@@ -247,9 +265,48 @@
     window.visualViewport.addEventListener('scroll', fitPanel);
   }
 
+  // ── Auto-open helpers ──
+  // At most once per browser session (sessionStorage), never after the visitor
+  // closed the chat, never on an excluded page. Storage can throw (private
+  // mode): then we simply treat it as "not yet used".
+  var AUTO_KEY = 'aisend_auto_' + ORG_ID + (AGENT_ID ? '_' + AGENT_ID : '');
+  var autoOpening = false;
+  function autoFlag() { try { return sessionStorage.getItem(AUTO_KEY); } catch (e) { return null; } }
+  function setAutoFlag(v) { try { sessionStorage.setItem(AUTO_KEY, v); } catch (e) {} }
+  // AUTO-OPEN-HELPERS-START
+  function parseExcludeList(v) {
+    var out = [];
+    if (typeof v !== 'string') return out;
+    var parts = v.split(/[\n,]+/);
+    for (var i = 0; i < parts.length && out.length < 20; i++) {
+      var t = parts[i].replace(/^\s+|\s+$/g, '').toLowerCase().slice(0, 100);
+      if (t && out.indexOf(t) === -1) out.push(t);
+    }
+    return out;
+  }
+  function isPathExcluded(pathname, list) {
+    var path = String(pathname || '/').toLowerCase();
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i].replace(/\*+$/, '');
+      if (!p) continue;
+      if (p.charAt(0) === '/') { if (path.indexOf(p) === 0) return true; }
+      else if (path.indexOf(p) !== -1) return true;
+    }
+    return false;
+  }
+  // AUTO-OPEN-HELPERS-END
+  function autoOpenAllowed() {
+    if (config.auto_open_enabled !== true) return false;
+    if (autoFlag()) return false;
+    return !isPathExcluded(window.location.pathname, parseExcludeList(config.auto_open_exclude));
+  }
+
   function togglePanel() {
     var panel = document.getElementById('aisend-panel');
     isOpen = !isOpen;
+    // Remember: opened (auto or by the visitor) = no second auto-open this session;
+    // closed by the visitor = never auto-open again this session.
+    if (isOpen) { if (!autoFlag()) setAutoFlag('done'); } else setAutoFlag('closed');
     panel.style.display = isOpen ? 'flex' : 'none';
     if (isOpen) setTimeout(fitPanel, 50); else { panel.style.top = ''; panel.style.bottom = ''; panel.style.height = ''; panel.style.maxHeight = ''; }
     // No waves around the button while the chat is open: they spread over
@@ -275,7 +332,7 @@
       addMessage('bot', config.welcome_message);
       renderSuggestions();
     }
-    if (isOpen) {
+    if (isOpen && !autoOpening) {
       setTimeout(function () {
         var inp = document.getElementById('aisend-input');
         if (inp) inp.focus();

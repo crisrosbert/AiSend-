@@ -223,6 +223,9 @@
     if (!panel || !isOpen) return;
     var vv = window.visualViewport;
     var phone = window.matchMedia && window.matchMedia('(max-width:480px)').matches;
+    var kb = !!(phone && ((vv && vv.height < window.innerHeight - 120) ||
+      (document.activeElement && document.activeElement.id === 'aisend-input')));
+    if (panel.classList) { if (kb) panel.classList.add('aisend-kb'); else panel.classList.remove('aisend-kb'); }
     if (phone) {
       var vh = vv ? vv.height : window.innerHeight;
       var top = vv ? vv.offsetTop : 0;
@@ -375,11 +378,31 @@
     renderSuggestions();
   }
 
+  // Escaped text with **bold** support. Escaping happens first, so the only
+  // markup that can appear is the <strong> tags added here.
+  function richText(s) {
+    return esc(s).replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+  }
   function addMessage(role, text) {
     messages.push({ role: role, text: text });
     var container = document.getElementById('aisend-messages');
     var msg = el('div', 'aisend-msg aisend-msg-' + role);
-    msg.innerHTML = '<div class="aisend-bubble-msg">' + esc(text) + '</div>';
+    var bubble = el('div', 'aisend-bubble-msg');
+    if (role === 'bot') {
+      bubble.innerHTML = richText(text);
+      if (config.avatar_url) {
+        msg.className += ' aisend-has-av';
+        var av = document.createElement('img');
+        av.className = 'aisend-msg-av';
+        av.alt = '';
+        av.onerror = function () { if (av.parentNode) av.parentNode.removeChild(av); msg.className = msg.className.replace(' aisend-has-av', ''); };
+        av.src = config.avatar_url;
+        msg.appendChild(av);
+      }
+    } else {
+      bubble.textContent = text;
+    }
+    msg.appendChild(bubble);
     container.appendChild(msg);
     container.scrollTop = container.scrollHeight;
   }
@@ -578,19 +601,29 @@
     return config.whatsapp_button_enabled === true && !!waDigits(config.business_phone);
   }
   // Only static markup plus esc()-escaped text, never raw config values.
+  // Design B: icon badge, two-line copy, "Call now" (phones only) and "Chat".
+  function waCallOn() {
+    // tel: links only make sense on a phone; on a desktop they do nothing.
+    return !!(window.matchMedia && window.matchMedia('(max-width:480px), (pointer:coarse)').matches);
+  }
   function waStripHtml() {
     if (!waStripOn()) return '';
-    return '<a class="aisend-wa-strip" id="aisend-wa-strip" href="#" target="_blank" rel="noopener noreferrer">' +
-      waIcon() +
-      '<span class="aisend-wa-strip-text">' + esc(waStripText(config.whatsapp_button_text)) + '</span>' +
-      '<span class="aisend-wa-strip-arrow" aria-hidden="true">&rarr;</span>' +
-      '</a>';
+    var digits = waDigits(config.business_phone);
+    return '<div class="aisend-wa-strip" id="aisend-wa-strip">' +
+      '<span class="aisend-wa-badge">' + waIcon() + '</span>' +
+      '<span class="aisend-wa-copy">' +
+        '<span class="aisend-wa-title">' + esc(waStripText(config.whatsapp_button_text)) + '</span>' +
+        '<span class="aisend-wa-sub">Reply on WhatsApp</span>' +
+      '</span>' +
+      (waCallOn() ? '<a class="aisend-wa-call" id="aisend-wa-call" href="tel:+' + digits + '">Call now</a>' : '') +
+      '<a class="aisend-wa-chat" id="aisend-wa-chat" href="#" target="_blank" rel="noopener noreferrer">Chat</a>' +
+      '</div>';
   }
   // The link is rebuilt just before it is used, so the message carries the
   // page the visitor is on NOW (single-page sites change title and URL
   // without reloading the widget).
   function wireWaStrip(panel) {
-    var a = panel.querySelector('#aisend-wa-strip');
+    var a = panel.querySelector('#aisend-wa-chat');
     if (!a) return;
     var refresh = function () {
       a.href = waLink(waDigits(config.business_phone), document.title, window.location.href);
@@ -601,9 +634,9 @@
     a.addEventListener('click', refresh);
   }
   function waIcon() {
-    return '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
-      '<path d="M12 2.5a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l4.8-1.3A9.5 9.5 0 1 0 12 2.5z" fill="#0f6a37"/>' +
-      '<path d="M8.6 7.8c-.4 0-.9.3-1 1.1-.2 1.9 1.2 4.1 2.8 5.5 1.5 1.3 3.4 2.1 4.7 1.7.7-.2 1.1-.9 1.1-1.5 0-.2-.1-.3-.3-.4l-1.8-.9c-.2-.1-.4 0-.5.1l-.6.7c-.1.1-.3.2-.5.1-1-.4-2-1.2-2.6-2.2-.1-.2-.1-.3 0-.5l.5-.6c.1-.1.1-.3.1-.4l-.8-1.8c-.1-.2-.3-.3-.5-.3z" fill="#e8f7ee"/>' +
+    return '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<path d="M12 2.5a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l4.8-1.3A9.5 9.5 0 1 0 12 2.5z" fill="#073b1f"/>' +
+      '<path d="M8.6 7.8c-.4 0-.9.3-1 1.1-.2 1.9 1.2 4.1 2.8 5.5 1.5 1.3 3.4 2.1 4.7 1.7.7-.2 1.1-.9 1.1-1.5 0-.2-.1-.3-.3-.4l-1.8-.9c-.2-.1-.4 0-.5.1l-.6.7c-.1.1-.3.2-.5.1-1-.4-2-1.2-2.6-2.2-.1-.2-.1-.3 0-.5l.5-.6c.1-.1.1-.3.1-.4l-.8-1.8c-.1-.2-.3-.3-.5-.3z" fill="#25D366"/>' +
       '</svg>';
   }
 
@@ -748,12 +781,22 @@
       // WhatsApp strip: one 28px row between the header and the messages.
       // flex-shrink:0 keeps it a fixed height, so the messages area (flex:1,
       // scrolls) simply starts below it, on desktop and in the mobile sheet.
-      '.aisend-wa-strip{display:flex;align-items:center;gap:6px;flex-shrink:0;box-sizing:border-box;height:28px;padding:0 14px;background:#e8f7ee;border-bottom:1px solid #bfe5cd;color:#0f6a37;font-family:inherit;font-size:12px;line-height:1;font-weight:500;text-decoration:none;cursor:pointer}' +
-      '.aisend-wa-strip:hover,.aisend-wa-strip:focus,.aisend-wa-strip:visited{background:#dcf2e5;color:#0f6a37;text-decoration:none}' +
-      '.aisend-wa-strip:focus-visible{outline:2px solid #0f6a37;outline-offset:-2px}' +
-      '.aisend-wa-strip svg{flex-shrink:0;display:block}' +
-      '.aisend-wa-strip-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-      '.aisend-wa-strip-arrow{flex-shrink:0;font-size:13px}' +
+      '.aisend-wa-strip{display:flex;align-items:center;gap:10px;flex-shrink:0;box-sizing:border-box;min-height:46px;padding:7px 10px;background:#fff;border-bottom:1px solid #bfe5cd;font-family:inherit}' +
+      '.aisend-wa-badge{position:relative;width:32px;height:32px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;flex-shrink:0}' +
+      '.aisend-wa-badge::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid #25D366;opacity:0;pointer-events:none;animation:aisendWaRing 1.8s ease-out .6s 3}' +
+      '@keyframes aisendWaRing{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(1.9)}}' +
+      '@media (prefers-reduced-motion:reduce){.aisend-wa-badge::after{animation:none}}' +
+      '.aisend-wa-copy{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}' +
+      '.aisend-wa-title{font-size:13px;font-weight:600;color:#073b1f}' +
+      '.aisend-wa-sub{font-size:11px;color:#4a6556}' +
+      '.aisend-wa-chat,.aisend-wa-call{flex-shrink:0;border-radius:16px;padding:7px 13px;font-size:12px;font-weight:600;line-height:1.2;white-space:nowrap;text-decoration:none;cursor:pointer}' +
+      '.aisend-wa-chat{background:#25D366;color:#073b1f;border:1px solid #25D366}' +
+      '.aisend-wa-call{background:#fff;color:#0e7a3f;border:1px solid #0e7a3f}' +
+      '.aisend-wa-chat:focus-visible,.aisend-wa-call:focus-visible{outline:2px solid #073b1f;outline-offset:2px}' +
+      '.aisend-panel.aisend-kb #aisend-wa-strip{display:none}' +
+      '.aisend-msg-bot.aisend-has-av{display:flex;align-items:flex-end;gap:8px;max-width:94%}' +
+      '.aisend-msg-av{width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#eee}' +
+      '.aisend-has-av .aisend-bubble-msg{min-width:0}' +
       // Patterned message ground.
       //
       // A flat panel makes the bubbles float in nothing; a texture
@@ -804,6 +847,24 @@
       '.aisend-typing span:nth-child(2){animation-delay:.2s}' +
       '.aisend-typing span:nth-child(3){animation-delay:.4s}' +
       '@keyframes aisendBlink{0%,80%,100%{opacity:.3}40%{opacity:1}}' +
+      // Host-theme isolation. WordPress themes (Hello Elementor and others) style bare
+      // button / input[type=text] / a elements with their own colour, border and hover
+      // state, and a plain-class rule here loses to them (the send button turned pink,
+      // the input got a square dark border). ID-scoped !important rules win.
+      '#aisend-panel .aisend-input{border:1px solid #dde2e8!important;border-radius:22px!important;padding:10px 16px!important;background:#fff!important;color:#222!important;box-shadow:none!important;height:auto!important;margin:0!important;line-height:1.4!important}' +
+      '#aisend-panel .aisend-input:focus{border-color:var(--aisend-primary)!important;outline:none!important;background:#fff!important}' +
+      '#aisend-panel .aisend-send,#aisend-panel .aisend-send:hover,#aisend-panel .aisend-send:focus,#aisend-panel .aisend-send:active{background:var(--aisend-primary)!important;color:#fff!important;border:0!important;box-shadow:none!important;padding:0!important;min-width:42px!important}' +
+      '#aisend-panel .aisend-chip{background:#fff!important;color:var(--aisend-primary)!important;border:1.5px solid var(--aisend-primary)!important;text-transform:none!important;letter-spacing:normal!important;box-shadow:none!important}' +
+      '#aisend-panel .aisend-chip:hover,#aisend-panel .aisend-chip:focus,#aisend-panel .aisend-chip:active{background:var(--aisend-primary)!important;color:#fff!important}' +
+      '#aisend-panel .aisend-newchat-btn{background:#fff!important;color:var(--aisend-primary)!important;border:1.5px solid var(--aisend-primary)!important;text-transform:none!important;letter-spacing:normal!important;box-shadow:none!important}' +
+      '#aisend-panel .aisend-newchat-btn:hover,#aisend-panel .aisend-newchat-btn:focus{background:var(--aisend-primary)!important;color:#fff!important}' +
+      '#aisend-panel .aisend-lead-btn,#aisend-panel .aisend-lead-btn:hover,#aisend-panel .aisend-lead-btn:focus{background:var(--aisend-primary)!important;color:#fff!important;border:0!important;box-shadow:none!important;text-transform:none!important}' +
+      '#aisend-panel .aisend-lead-input{border:1px solid #e5e7eb!important;border-radius:9px!important;background:#fff!important;color:#111827!important;box-shadow:none!important}' +
+      '#aisend-panel a.aisend-wa-btn,#aisend-panel a.aisend-wa-btn:hover{background:#25D366!important;color:#fff!important;text-decoration:none!important}' +
+      '#aisend-panel a.aisend-wa-chat,#aisend-panel a.aisend-wa-chat:hover,#aisend-panel a.aisend-wa-chat:focus{background:#25D366!important;color:#073b1f!important;border:1px solid #25D366!important;text-decoration:none!important;box-shadow:none!important}' +
+      '#aisend-panel a.aisend-wa-call,#aisend-panel a.aisend-wa-call:hover,#aisend-panel a.aisend-wa-call:focus{background:#fff!important;color:#0e7a3f!important;border:1px solid #0e7a3f!important;text-decoration:none!important;box-shadow:none!important}' +
+      '.aisend-header,.aisend-input-row{flex-shrink:0}' +
+      '.aisend-messages{min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}' +
       // Phones: full-screen chat like other mobile chat widgets. JS (fitPanel)
       // sets top/height from the visual viewport so the keyboard never covers it.
       '@media(max-width:480px){' +

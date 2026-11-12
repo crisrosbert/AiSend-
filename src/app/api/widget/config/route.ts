@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { allowlistFromConfig, originAllowed, corsHeaders } from '@/lib/widget/origin'
 import { whatsappStripView } from '@/lib/widget/whatsapp-strip'
+import { autoOpenView } from '@/lib/widget/auto-open'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -74,6 +75,11 @@ export const PUBLIC_FIELDS = [
   // column or a bad number can only ever mean "off".
   'whatsapp_button_enabled',
   'whatsapp_button_text',
+  // Optional auto-open of the chat window. READ BY public/widget.js. The route
+  // replaces all three with cleaned values (autoOpenView): missing column = off.
+  'auto_open_enabled',
+  'auto_open_seconds',
+  'auto_open_exclude',
 ] as const
 
 /** Drop anything not on the public list, and never echo the allowlist itself. */
@@ -365,7 +371,7 @@ export async function GET(req: Request) {
     // The WhatsApp strip is on only when the owner switched it on AND a valid
     // number is saved. A column that does not exist yet reads as off (the
     // query is select('*'), so a missing column is just an absent key).
-    const view = { ...publicView(config), ...whatsappStripView(config) }
+    const view = { ...publicView(config), ...whatsappStripView(config), ...autoOpenView(config) }
 
     return NextResponse.json(
       mergeAgentProfile(view, profile, { shared: usedSharedConfig, sameBusiness }),

@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 import { allowlistFromConfig, originAllowed, corsHeaders } from '@/lib/widget/origin'
 import { whatsappStripView } from '@/lib/widget/whatsapp-strip'
 import { autoOpenView } from '@/lib/widget/auto-open'
+import { waRedirectView } from '@/lib/widget/wa-redirect'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: any = null
@@ -80,6 +81,10 @@ export const PUBLIC_FIELDS = [
   'auto_open_enabled',
   'auto_open_seconds',
   'auto_open_exclude',
+  // Direct-to-WhatsApp mode. READ BY public/widget.js. Replaced by checked values
+  // (waRedirectView): ON only with a valid number.
+  'wa_redirect_enabled',
+  'wa_redirect_number',
 ] as const
 
 /** Drop anything not on the public list, and never echo the allowlist itself. */
@@ -371,7 +376,7 @@ export async function GET(req: Request) {
     // The WhatsApp strip is on only when the owner switched it on AND a valid
     // number is saved. A column that does not exist yet reads as off (the
     // query is select('*'), so a missing column is just an absent key).
-    const view = { ...publicView(config), ...whatsappStripView(config), ...autoOpenView(config) }
+    const view = { ...publicView(config), ...whatsappStripView(config), ...autoOpenView(config), ...waRedirectView(config) }
 
     return NextResponse.json(
       mergeAgentProfile(view, profile, { shared: usedSharedConfig, sameBusiness }),

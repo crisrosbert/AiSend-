@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 /**
  * The footer's promotional banner image. Renders the pasted-in banner once
@@ -20,12 +20,19 @@ export function FooterPromoBanner({
 }) {
   const [loaded, setLoaded] = useState(false)
 
+  // The image can finish loading before React attaches onLoad (server-rendered
+  // <img> + preload), in which case onLoad never fires. Check on attach.
+  const imgRef = useCallback((img: HTMLImageElement | null) => {
+    if (img && img.complete && img.naturalWidth > 0) setLoaded(true)
+  }, [])
+
   return (
     <a className="block w-full mb-14" href={href}>
       {src ? (
         // Pasted-in URL, any host; next/image would need it added to remotePatterns.
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          ref={imgRef}
           className="w-full h-auto rounded-2xl shadow-2xl border border-neutral-100"
           src={src}
           alt={alt}

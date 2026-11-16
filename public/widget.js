@@ -60,7 +60,10 @@
     // Optional: open the chat window by itself. OFF unless the owner switched it on.
     auto_open_enabled: false,
     auto_open_seconds: 5,
-    auto_open_exclude: ''
+    auto_open_exclude: '',
+    // Optional: the send arrow opens WhatsApp with the message instead of asking the AI.
+    wa_redirect_enabled: false,
+    wa_redirect_number: ''
   };
   var isOpen = false;
   var lockedOverflow = null;
@@ -350,6 +353,30 @@
     deliver(text);
   }
 
+  // Open WhatsApp on the owner's number with the visitor's message filled in.
+  // Page address without ?query/#hash is added so the team knows where it came from.
+  function redirectToWhatsapp(text) {
+    var digits = waDigits(config.wa_redirect_number);
+    if (!digits) return;
+    var page = waClean(window.location.href).replace(/\s/g, '').split('#')[0].split('?')[0];
+    var body = waCut(String(text), 1000, false) + (page ? '\n\n(Sent from: ' + waCut(page, 150, false) + ')' : '');
+    var link = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(body);
+    addMessage('bot', 'Opening WhatsApp with your message...');
+    var box = document.getElementById('aisend-messages');
+    var last = box && box.lastChild ? box.lastChild.querySelector('.aisend-bubble-msg') : null;
+    if (last) {
+      last.appendChild(document.createElement('br'));
+      var a = document.createElement('a');
+      a.href = link; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.textContent = 'Tap here if it did not open';
+      a.style.cssText = 'color:inherit;text-decoration:underline;font-weight:600';
+      last.appendChild(a);
+    }
+    var w = null;
+    try { w = window.open(link, '_blank', 'noopener,noreferrer'); } catch (e) {}
+    if (!w) { try { window.location.href = link; } catch (e2) {} }
+  }
+
   /**
    * Send text that is already on screen.
    *
@@ -360,6 +387,11 @@
    * rendering images or lead forms one day.
    */
   function deliver(text) {
+    // Direct-to-WhatsApp mode: no AI, the message goes to the owner's WhatsApp.
+    if (config.wa_redirect_enabled === true && waDigits(config.wa_redirect_number)) {
+      redirectToWhatsapp(text);
+      return;
+    }
     showTyping();
     // Never leave the typing dots on screen forever: if the server has not
     // answered in 45 seconds, stop waiting and say so.

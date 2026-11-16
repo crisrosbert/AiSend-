@@ -383,4 +383,34 @@
     sendLead({ name: d.name, phone: d.phone, email: d.email, message: d.message, interest: d.interest, form: d.form || 'custom' });
   };
   log('ready, posting to', API);
+
+  // ── 5) Optional: also start the website chat agent from this one tag ──
+  //   <script src=".../aisend.js" data-key="pk_x" data-org="ORG_ID" data-agent="AGENT_ID" async></script>
+  // Without data-org nothing changes. With it, the chat widget file is fetched
+  // AFTER the page has finished loading and the browser is idle, so it never
+  // competes with the page itself. It is the same widget.js, unchanged: it
+  // reads data-org / data-agent from the tag we create here.
+  (function () {
+    var ORG = tag.getAttribute('data-org');
+    if (!ORG) return;
+    // Already on the page (old two-tag install, or loaded twice): do nothing.
+    if (window.__aisendWidgetLoaded || document.querySelector('script[src*="/widget.js"][data-org]')) { log('chat widget already present'); return; }
+    function startWidget() {
+      if (window.__aisendWidgetLoaded || document.querySelector('script[src*="/widget.js"][data-org]')) return;
+      var s = document.createElement('script');
+      s.src = tag.src.replace(/[^\/?#]*([?#].*)?$/, 'widget.js');
+      s.async = true;
+      s.setAttribute('data-org', ORG);
+      var ag = tag.getAttribute('data-agent');
+      if (ag) s.setAttribute('data-agent', ag);
+      document.head.appendChild(s);
+      log('chat widget requested');
+    }
+    function whenIdle() {
+      if (window.requestIdleCallback) window.requestIdleCallback(startWidget, { timeout: 3000 });
+      else setTimeout(startWidget, 1200);
+    }
+    if (document.readyState === 'complete') whenIdle();
+    else window.addEventListener('load', whenIdle);
+  })();
 })();

@@ -34,6 +34,11 @@ import {
   isMissingAutoOpenColumnError,
   withoutAutoOpenColumns,
 } from "@/lib/widget/auto-open";
+import {
+  checkWaRedirect,
+  isMissingWaRedirectColumnError,
+  withoutWaRedirectColumns,
+} from "@/lib/widget/wa-redirect";
 
 interface WidgetConfig {
   bot_name: string;
@@ -52,6 +57,10 @@ interface WidgetConfig {
   auto_open_seconds: number;
   /** Pages where it must not open, one per line. */
   auto_open_exclude: string;
+  /** Send arrow opens WhatsApp with the visitor message (no AI). Off by default. */
+  wa_redirect_enabled: boolean;
+  /** Number that receives the chats. "" = use the business number above. */
+  wa_redirect_number: string;
 }
 
 /** The agents a website can be wired to. The embed code carries the chosen one. */
@@ -75,6 +84,8 @@ const DEFAULTS: WidgetConfig = {
   auto_open_enabled: false,
   auto_open_seconds: AUTO_OPEN_SECONDS_DEFAULT,
   auto_open_exclude: "",
+  wa_redirect_enabled: false,
+  wa_redirect_number: "",
 };
 
 const COLOR_PRESETS = [
@@ -157,6 +168,9 @@ export default function WidgetSettingsPage() {
           auto_open_enabled: data.auto_open_enabled === true,
           auto_open_seconds: cleanAutoOpenSeconds(data.auto_open_seconds),
           auto_open_exclude: typeof data.auto_open_exclude === "string" ? data.auto_open_exclude : "",
+          // Columns from migration 045 (absent until it is run: off).
+          wa_redirect_enabled: data.wa_redirect_enabled === true,
+          wa_redirect_number: typeof data.wa_redirect_number === "string" ? data.wa_redirect_number : "",
         });
       }
     } finally {
@@ -179,6 +193,13 @@ export default function WidgetSettingsPage() {
       text: config.whatsapp_button_text,
     });
     if (!wa.ok) { toast.error(wa.message); return; }
+
+    const redirect = checkWaRedirect({
+      enabled: config.wa_redirect_enabled,
+      number: config.wa_redirect_number,
+      fallback: config.business_phone,
+    });
+    if (!redirect.ok) { toast.error(redirect.message); return; }
 
     setSaving(true);
     try {
@@ -205,6 +226,7 @@ export default function WidgetSettingsPage() {
         whatsapp_button_text: wa.text,
         auto_open_seconds: cleanAutoOpenSeconds(config.auto_open_seconds),
         auto_open_exclude: cleanExcludeText(config.auto_open_exclude),
+        wa_redirect_number: redirect.number,
         updated_at: new Date().toISOString(),
       };
 
@@ -222,16 +244,20 @@ export default function WidgetSettingsPage() {
       // widget settings never stop saving because of this feature.
       let columnsMissing = false;
       let autoOpenMissing = false;
+      let redirectMissing = false;
       // A missing column (migration 043 or 044 not run yet) must never stop the
       // other settings from saving: drop only the missing family and retry.
       let row: Record<string, unknown> = payload;
-      for (let attempt = 0; attempt < 2 && error; attempt++) {
+      for (let attempt = 0; attempt < 3 && error; attempt++) {
         if (isMissingWhatsappColumnError(error) && !columnsMissing) {
           columnsMissing = true;
           row = withoutWhatsappColumns(row);
         } else if (isMissingAutoOpenColumnError(error) && !autoOpenMissing) {
           autoOpenMissing = true;
           row = withoutAutoOpenColumns(row);
+        } else if (isMissingWaRedirectColumnError(error) && !redirectMissing) {
+          redirectMissing = true;
+          row = withoutWaRedirectColumns(row);
         } else break;
         ({ error } = await write(row));
       }
@@ -246,7 +272,16 @@ export default function WidgetSettingsPage() {
         auto_open_seconds: cleanAutoOpenSeconds(c.auto_open_seconds),
         auto_open_exclude: cleanExcludeText(c.auto_open_exclude),
         auto_open_enabled: autoOpenMissing ? false : c.auto_open_enabled,
+        wa_redirect_enabled: redirectMissing ? false : c.wa_redirect_enabled,
+        wa_redirect_number: redirect.number,
       }));
+
+      if (redirectMissing && config.wa_redirect_enabled) {
+        toast.warning(
+          "Saved, but Direct-to-WhatsApp is still OFF: your database needs one small update first (migration 045). Ask your developer or support.",
+        );
+        return;
+      }
 
       if (autoOpenMissing && config.auto_open_enabled) {
         toast.warning(
@@ -425,6 +460,48 @@ export default function WidgetSettingsPage() {
                 <span className="font-mono text-xs text-slate-500">{config.primary_color}</span>
               </label>
             </div>
+          </Section>
+
+          <Section icon={Phone} title="Direct to WhatsApp" subtitle="Skip the AI: send visitors straight to your WhatsApp.">
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-[#e7ece9] px-3 py-2.5">
+              <div>
+                <p className="text-xs font-semibold text-slate-700">Redirect chat to WhatsApp</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  The visitor types a message and taps the send arrow. WhatsApp opens on your number
+                  with their message ready to send. The AI does not reply. Off by default.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={config.wa_redirect_enabled}
+                aria-label="Redirect chat to WhatsApp"
+                onClick={() => update("wa_redirect_enabled", !config.wa_redirect_enabled)}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  config.wa_redirect_enabled ? "bg-emerald-500" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`absolute left-0.5 top-0.5 size-5 rounded-full bg-[#fff] shadow transition-transform ${
+                    config.wa_redirect_enabled ? "translate-x-5" : ""
+                  }`}
+                />
+              </button>
+            </div>
+            {config.wa_redirect_enabled && (
+              <Field
+                label="WhatsApp number to receive the chats"
+                hint="Country code first, for example 918707879485. Leave empty to use the business number above."
+              >
+                <input
+                  value={config.wa_redirect_number}
+                  onChange={(e) => update("wa_redirect_number", e.target.value)}
+                  placeholder="918707879485"
+                  inputMode="tel"
+                  className={INPUT}
+                />
+              </Field>
+            )}
           </Section>
 
           <Section icon={Clock} title="Behaviour" subtitle="When the widget invites the visitor.">

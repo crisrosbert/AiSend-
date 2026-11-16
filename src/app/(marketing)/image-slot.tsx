@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 /**
  * A picture on the landing page.
@@ -43,6 +43,16 @@ export function ImageSlot({
   // blocked or missing file can never leave a broken icon on the page.
   const [loaded, setLoaded] = useState(false)
 
+  // The server sends this <img> in the HTML and the browser starts fetching it
+  // at once (the page even preloads it), so the picture can finish loading
+  // BEFORE React has attached onLoad. That onLoad then never fires and the
+  // placeholder stays up forever, even though the file is fine. A ref callback
+  // runs when the element is attached, so we check for an image that is already
+  // complete and decoded.
+  const imgRef = useCallback((img: HTMLImageElement | null) => {
+    if (img && img.complete && img.naturalWidth > 0) setLoaded(true)
+  }, [])
+
   const className = [
     'imgslot',
     variant ? `imgslot--${variant}` : '',
@@ -61,6 +71,7 @@ export function ImageSlot({
         // already allows https: images, so this works with no config.
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          ref={imgRef}
           className="imgslot__img"
           src={src}
           alt={alt}

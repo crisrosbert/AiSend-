@@ -17,6 +17,10 @@
   var ORG_ID = scriptTag.getAttribute('data-org');
   if (!ORG_ID) { console.error('[AiSend] data-org is required'); return; }
 
+  // Never start twice on one page (e.g. old tag plus the combined aisend.js tag).
+  if (window.__aisendWidgetLoaded) return;
+  window.__aisendWidgetLoaded = true;
+
   // Optional agent id — when present, this widget runs a specific agent.
   var AGENT_ID = scriptTag.getAttribute('data-agent') || null;
 

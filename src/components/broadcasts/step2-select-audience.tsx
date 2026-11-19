@@ -1,5 +1,8 @@
 'use client';
 
+import { useAuth } from '@/hooks/use-auth';
+import { WaPhonePreview, normalizeTemplateButtons } from '@/components/settings/wa-phone-preview';
+import type { MessageTemplate } from '@/types';
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CustomField, Tag } from '@/types';
@@ -65,6 +68,8 @@ export function recencyBounds(f?: RecencyFilter): { from?: string; to?: string }
 }
 
 interface Step2Props {
+  /** Selected template — drives the phone preview. Optional so older callers still compile. */
+  template?: MessageTemplate | null;
   audience: AudienceConfig;
   onUpdate: (audience: AudienceConfig) => void;
   onNext: () => void;
@@ -110,11 +115,13 @@ const OPERATOR_OPTIONS: { value: CustomFieldOperator; label: string }[] = [
 ];
 
 export function Step2SelectAudience({
+  template,
   audience,
   onUpdate,
   onNext,
   onBack,
 }: Step2Props) {
+  const { profile } = useAuth();
   const [tags, setTags] = useState<Tag[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [loadingTags, setLoadingTags] = useState(false);
@@ -428,6 +435,7 @@ export function Step2SelectAudience({
       audience.csvContacts.length > 0);
 
   return (
+    <div className={template ? 'grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px]' : ''}>
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-white">Select Audience</h2>
@@ -797,6 +805,28 @@ export function Step2SelectAudience({
           <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
+    </div>
+    {template && (
+      <aside className="lg:sticky lg:top-4 lg:self-start">
+        <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Message preview
+        </p>
+        <div className="rounded-3xl bg-gradient-to-b from-[#f4f9f6] to-[#e6efe9] px-3 py-6">
+          <WaPhonePreview
+            businessName={profile?.business_name ?? profile?.full_name ?? 'Your Business'}
+            headerType={template.header_type ?? ''}
+            headerContent={template.header_content ?? ''}
+            body={template.body_text}
+            footer={template.footer_text ?? ''}
+            buttons={normalizeTemplateButtons(template.buttons)}
+            sampleValues={[]}
+          />
+        </div>
+        <p className="mt-2 text-center text-[11px] text-slate-500">
+          Variables show as {'{{1}}'} here — you fill them in the next step.
+        </p>
+      </aside>
+    )}
     </div>
   );
 }

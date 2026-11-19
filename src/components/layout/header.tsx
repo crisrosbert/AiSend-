@@ -69,6 +69,85 @@ function titleForPath(pathname: string): string {
   return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, " ");
 }
 
+type WaState = "checking" | "connected" | "disconnected" | "unknown";
+
+const WA_STATUS_KEY = "aisend_wa_status";
+const WA_STATUS_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Shows whether this account's WhatsApp Business API is really connected.
+ * It asks the same health check the Settings > WhatsApp tab uses
+ * (GET /api/whatsapp/config) and remembers the answer for 5 minutes per
+ * browser tab, so it does not call Meta on every page change.
+ */
+function WhatsappStatusPill() {
+  const [state, setState] = useState<WaState>("checking");
+
+  useEffect(() => {
+    let alive = true;
+    try {
+      const raw = sessionStorage.getItem(WA_STATUS_KEY);
+      if (raw) {
+        const c = JSON.parse(raw) as { s: WaState; t: number };
+        if (Date.now() - c.t < WA_STATUS_TTL_MS && (c.s === "connected" || c.s === "disconnected")) {
+          setState(c.s);
+          return;
+        }
+      }
+    } catch {}
+    fetch("/api/whatsapp/config", { method: "GET" })
+      .then((r) => r.json())
+      .then((p: { connected?: boolean; reason?: string }) => {
+        if (!alive) return;
+        // A temporary Meta or database problem is not "not connected": show it
+        // as unknown and do not remember it.
+        const transient = p && p.connected !== true && (p.reason === "meta_api_error" || p.reason === "db_error");
+        if (transient) { setState("unknown"); return; }
+        const s: WaState = p && p.connected === true ? "connected" : "disconnected";
+        setState(s);
+        try { sessionStorage.setItem(WA_STATUS_KEY, JSON.stringify({ s, t: Date.now() })); } catch {}
+      })
+      .catch(() => { if (alive) setState("unknown"); });
+    return () => { alive = false; };
+  }, []);
+
+  const connected = state === "connected";
+  const notConnected = state === "disconnected";
+  const label = connected ? "LIVE" : notConnected ? "Not connected" : state === "unknown" ? "Status unavailable" : "Checking…";
+
+  const pill = (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+      style={
+        connected
+          ? { background: "var(--brand-50)", color: "var(--brand-deep)", borderColor: "var(--brand-200)" }
+          : notConnected
+            ? { background: "var(--surface)", color: "var(--ink-2)", borderColor: "var(--line-strong)" }
+            : { background: "var(--surface)", color: "var(--ink-3)", borderColor: "var(--line)" }
+      }
+    >
+      <span
+        className="inline-block h-[6px] w-[6px] rounded-full"
+        style={{ background: connected ? "var(--brand)" : notConnected ? "var(--rose)" : "var(--ink-4)" }}
+      />
+      {label}
+    </span>
+  );
+
+  return (
+    <div className="hidden items-center gap-1.5 lg:flex" style={{ color: "var(--ink-3)" }}>
+      <span className="text-[11.5px] font-medium">WhatsApp API:</span>
+      {notConnected ? (
+        <Link href="/settings?tab=whatsapp" title="Connect your WhatsApp Business account">
+          {pill}
+        </Link>
+      ) : (
+        pill
+      )}
+    </div>
+  );
+}
+
 interface HeaderProps {
   onOpenSidebar?: () => void;
 }
@@ -192,27 +271,8 @@ export function Header({ onOpenSidebar }: HeaderProps) {
 
       {/* ── Right — status · plan · avatar ── */}
       <div className="ml-auto flex items-center gap-2">
-        {/* WhatsApp Business API status pill */}
-        <div
-          className="hidden items-center gap-1.5 lg:flex"
-          style={{ color: "var(--ink-3)" }}
-        >
-          <span className="text-[11.5px] font-medium">WhatsApp API:</span>
-          <span
-            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
-            style={{
-              background: "var(--brand-50)",
-              color: "var(--brand-deep)",
-              borderColor: "var(--brand-200)",
-            }}
-          >
-            <span
-              className="inline-block h-[6px] w-[6px] rounded-full"
-              style={{ background: "var(--brand)" }}
-            />
-            LIVE
-          </span>
-        </div>
+        {/* WhatsApp Business API status pill: real state, not a fixed label */}
+        <WhatsappStatusPill />
 
         {/* Explore Plans — dark pill with brand accent icon */}
         <Link

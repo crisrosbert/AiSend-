@@ -1,5 +1,6 @@
 'use client';
 import { TemplateLibrary } from './template-library';
+import { notifyWhatsappError } from '@/lib/whatsapp/connect-toast';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, Trash2, Loader2, RefreshCw, Link2, Upload, Phone, ExternalLink, MessageSquareReply } from 'lucide-react';
@@ -243,7 +244,7 @@ export function TemplateManager() {
       await fetchTemplates(user.id);
     } catch (err) {
       console.error('Save error:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to submit template');
+      notifyWhatsappError(err instanceof Error ? err.message : 'Failed to submit template');
     } finally {
       setSaving(false);
     }
@@ -273,7 +274,7 @@ export function TemplateManager() {
       await fetchTemplates(user.id);
     } catch (err) {
       console.error('Template sync error:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to sync templates');
+      notifyWhatsappError(err instanceof Error ? err.message : 'Failed to sync templates');
     } finally {
       setSyncing(false);
     }

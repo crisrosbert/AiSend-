@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileText, ArrowRight } from 'lucide-react';
+import { Loader2, FileText, ArrowRight, RefreshCw, Plus } from 'lucide-react';
 
 const categoryColors: Record<string, string> = {
   Marketing: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -24,26 +26,47 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchTemplates() {
-      try {
-        const supabase = createClient();
-        const { data, error: fetchError } = await supabase
-          .from('message_templates')
-          .select('*')
-          .order('created_at', { ascending: false });
+  const [syncing, setSyncing] = useState(false);
 
-        if (fetchError) throw fetchError;
-        setTemplates(data ?? []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load templates');
-      } finally {
-        setLoading(false);
-      }
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data, error: fetchError } = await supabase
+        .from('message_templates')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (fetchError) throw fetchError;
+      setTemplates(data ?? []);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load templates');
+    } finally {
+      setLoading(false);
     }
-
-    fetchTemplates();
   }, []);
+
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
+
+  // Same call the Settings > Templates "Sync from Meta" button makes: pulls the
+  // account's templates from WhatsApp Manager into this list, so a user who
+  // already has approved templates never has to leave the campaign flow.
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/whatsapp/templates/sync', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Sync failed (HTTP ${res.status})`);
+      toast.success(`Synced ${data.total ?? 0} template${data.total === 1 ? '' : 's'} from Meta`);
+      await fetchTemplates();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to sync templates');
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -74,9 +97,39 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
         <div className="flex h-48 flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900/50">
           <FileText className="mb-2 h-8 w-8 text-slate-600" />
           <p className="text-sm text-slate-400">No templates available.</p>
-          <p className="mt-1 text-xs text-slate-500">Create a template in Settings first.</p>
+          <p className="mt-1 max-w-sm px-4 text-center text-xs text-slate-500">
+            A campaign needs a template approved by WhatsApp. Create one, or pull the ones you
+            already have in WhatsApp Manager.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <Button onClick={handleSync} disabled={syncing} variant="outline" size="sm">
+              {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Sync from Meta
+            </Button>
+            <Link
+              href="/settings?tab=templates"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-3 text-sm font-medium !text-[#fff] hover:bg-violet-700"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Create template
+            </Link>
+          </div>
         </div>
       ) : (
+        <>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button onClick={handleSync} disabled={syncing} variant="outline" size="sm">
+            {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Sync from Meta
+          </Button>
+          <Link
+            href="/settings?tab=templates"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Create template
+          </Link>
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {templates.map((template) => {
             const isSelected = selectedTemplate?.id === template.id;
@@ -114,6 +167,7 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
             );
           })}
         </div>
+        </>
       )}
 
       <div className="flex items-center justify-between border-t border-slate-800 pt-4">

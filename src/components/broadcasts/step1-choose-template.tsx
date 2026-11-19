@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { notifyWhatsappError } from '@/lib/whatsapp/connect-toast';
+import { useAuth } from '@/hooks/use-auth';
+import { WaPhonePreview, normalizeTemplateButtons } from '@/components/settings/wa-phone-preview';
 import { createClient } from '@/lib/supabase/client';
 import { MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -26,6 +29,7 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { profile } = useAuth();
   const [syncing, setSyncing] = useState(false);
 
   const fetchTemplates = useCallback(async () => {
@@ -62,7 +66,7 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
       toast.success(`Synced ${data.total ?? 0} template${data.total === 1 ? '' : 's'} from Meta`);
       await fetchTemplates();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to sync templates');
+      notifyWhatsappError(err instanceof Error ? err.message : 'Failed to sync templates');
     } finally {
       setSyncing(false);
     }
@@ -116,7 +120,8 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
           </div>
         </div>
       ) : (
-        <>
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button onClick={handleSync} disabled={syncing} variant="outline" size="sm">
             {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -130,7 +135,7 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
             Create template
           </Link>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {templates.map((template) => {
             const isSelected = selectedTemplate?.id === template.id;
             const catColor = categoryColors[template.category] ?? categoryColors.Utility;
@@ -167,7 +172,29 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
             );
           })}
         </div>
-        </>
+        </div>
+
+        {/* Phone preview of the template that is selected */}
+        <aside className="lg:sticky lg:top-4 lg:self-start">
+          <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Live preview
+          </p>
+          <div className="rounded-3xl bg-gradient-to-b from-[#f4f9f6] to-[#e6efe9] px-3 py-6">
+            <WaPhonePreview
+              businessName={profile?.business_name ?? profile?.full_name ?? 'Your Business'}
+              headerType={selectedTemplate?.header_type ?? ''}
+              headerContent={selectedTemplate?.header_content ?? ''}
+              body={selectedTemplate?.body_text ?? ''}
+              footer={selectedTemplate?.footer_text ?? ''}
+              buttons={normalizeTemplateButtons(selectedTemplate?.buttons)}
+              sampleValues={[]}
+            />
+          </div>
+          <p className="mt-2 text-center text-[11px] text-slate-500">
+            {selectedTemplate ? `Previewing "${selectedTemplate.name}"` : 'Pick a template to preview it here.'}
+          </p>
+        </aside>
+        </div>
       )}
 
       <div className="flex items-center justify-between border-t border-slate-800 pt-4">

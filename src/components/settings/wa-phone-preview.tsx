@@ -36,6 +36,27 @@ export interface WaPhonePreviewProps {
   sampleValues: string[];
 }
 
+/**
+ * Saved templates keep buttons as [{ type: 'URL' | 'PHONE_NUMBER' | 'QUICK_REPLY', text, ... }].
+ * The form uses lower-case 'url' | 'phone' | 'quick_reply'. This accepts either, and ignores
+ * anything it does not recognise, so a template with odd data never breaks the preview.
+ */
+export function normalizeTemplateButtons(raw: unknown): PreviewButton[] {
+  if (!Array.isArray(raw)) return [];
+  const out: PreviewButton[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const b = item as Record<string, unknown>;
+    const text = typeof b.text === 'string' ? b.text.trim() : '';
+    if (!text) continue;
+    const t = String(b.type ?? '').toLowerCase();
+    if (t === 'url') out.push({ type: 'url', text, value: String(b.url ?? b.value ?? '') });
+    else if (t === 'phone' || t === 'phone_number') out.push({ type: 'phone', text, value: String(b.phoneNumber ?? b.value ?? '') });
+    else if (t === 'quick_reply') out.push({ type: 'quick_reply', text, value: '' });
+  }
+  return out;
+}
+
 // ── text helpers ───────────────────────────────────────────────────────
 
 /** Replace {{n}} with the sample value when there is one; keep {{n}} otherwise. */

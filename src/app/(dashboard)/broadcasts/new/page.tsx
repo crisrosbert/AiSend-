@@ -346,6 +346,7 @@ function NewBroadcastWizard() {
         )}
         {currentStep === 1 && (
           <Step2SelectAudience
+            template={template}
             audience={audience}
             onUpdate={setAudience}
             onNext={() => goToStep(2)}
@@ -363,6 +364,7 @@ function NewBroadcastWizard() {
         )}
         {currentStep === 3 && template && (
           <Step4ScheduleSend
+            variables={variables}
             name={name}
             onNameChange={setName}
             template={template}

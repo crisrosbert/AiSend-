@@ -257,7 +257,7 @@ function NewBroadcastWizard() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto w-full max-w-[1320px] space-y-8 px-4 sm:px-8 lg:px-12">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>

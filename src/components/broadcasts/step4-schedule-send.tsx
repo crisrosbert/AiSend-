@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, Send, Loader2, Users, Save, Clock, Zap, Calendar } from 'lucide-react';
 import { useBusiness } from '@/hooks/use-business';
+import { useAuth } from '@/hooks/use-auth';
+import { WaPhonePreview, normalizeTemplateButtons } from '@/components/settings/wa-phone-preview';
 import { AgentPicker, type AgentSelection } from '@/components/broadcasts/agent-picker';
 
 interface AudienceConfig {
@@ -25,6 +27,8 @@ interface AudienceConfig {
 }
 
 interface Step4Props {
+  /** Variable mapping from the Personalize step, used to render the preview. */
+  variables?: Record<string, { type: string; value: string }>;
   name: string;
   onNameChange: (name: string) => void;
   template: MessageTemplate;
@@ -39,6 +43,7 @@ interface Step4Props {
 }
 
 export function Step4ScheduleSend({
+  variables,
   name,
   onNameChange,
   template,
@@ -51,6 +56,20 @@ export function Step4ScheduleSend({
   isProcessing,
   progress,
 }: Step4Props) {
+  const { profile } = useAuth();
+  // Sample customer used only for the preview
+  const previewBody = (() => {
+    const sample: Record<string, string> = {
+      name: 'Rahul', phone: '+91 98765 43210', email: 'rahul@example.com', company: 'Acme',
+    };
+    return template.body_text.replace(/\{\{(\d+)\}\}/g, (whole, n: string) => {
+      const v = variables?.[n];
+      if (!v?.value) return whole;
+      if (v.type === 'static') return v.value;
+      if (v.type === 'field') return sample[v.value] ?? whole;
+      return whole;
+    });
+  })();
   const [showConfirm, setShowConfirm] = useState(false);
   const { businessId } = useBusiness();
   const [estimatedReach, setEstimatedReach] = useState<number>(0);
@@ -159,6 +178,7 @@ export function Step4ScheduleSend({
   })();
 
   return (
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-white">Review & Send</h2>
@@ -415,6 +435,28 @@ export function Step4ScheduleSend({
           </Dialog>
         </div>
       </div>
+    </div>
+
+      {/* Phone preview — what the customer will see */}
+      <aside className="lg:sticky lg:top-4 lg:self-start">
+        <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Message preview
+        </p>
+        <div className="rounded-3xl bg-gradient-to-b from-[#f4f9f6] to-[#e6efe9] px-3 py-6">
+          <WaPhonePreview
+            businessName={profile?.business_name ?? profile?.full_name ?? 'Your Business'}
+            headerType={template.header_type ?? ''}
+            headerContent={template.header_content ?? ''}
+            body={previewBody}
+            footer={template.footer_text ?? ''}
+            buttons={normalizeTemplateButtons(template.buttons)}
+            sampleValues={[]}
+          />
+        </div>
+        <p className="mt-2 text-center text-[11px] text-slate-500">
+          Preview with a sample customer. Every recipient gets their own details.
+        </p>
+      </aside>
     </div>
   );
 }

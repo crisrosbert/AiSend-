@@ -9,16 +9,15 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  CheckCheck,
-  ChevronLeft,
   Copy,
-  Loader2,
   Sparkles,
   Tag,
   Type,
   User,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/use-auth';
+import { WaPhonePreview, normalizeTemplateButtons } from '@/components/settings/wa-phone-preview';
 
 type VariableType = 'static' | 'field' | 'custom_field';
 
@@ -66,6 +65,7 @@ export function Step3Personalize({
   onNext,
   onBack,
 }: Step3Props) {
+  const { profile } = useAuth();
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [loadingFields, setLoadingFields] = useState(true);
   const [firstContact, setFirstContact] = useState<Contact | null>(null);
@@ -212,9 +212,6 @@ export function Step3Personalize({
     );
   }
 
-  const now = new Date();
-  const timeLabel = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
   return (
     <div className="space-y-6">
       <div>
@@ -225,7 +222,7 @@ export function Step3Personalize({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* ── Variable mapping ── */}
         <div className="space-y-4">
           {placeholders.length === 0 ? (
@@ -367,68 +364,22 @@ export function Step3Personalize({
             </button>
           </div>
 
-          <div className="overflow-hidden rounded-[22px] border border-[#e7ece9] bg-white shadow-sm">
-            {/* WhatsApp-style header bar */}
-            <div
-              className="flex items-center gap-2 px-3 py-2.5"
-              style={{ background: 'var(--brand-teal-dark, #075E54)' }}
-            >
-              <ChevronLeft className="h-4 w-4 text-white/70" />
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white">
-                {(template.name || 'B').charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-[13px] font-semibold text-white">
-                  {template.name || 'Your Business'}
-                </p>
-                <p className="text-[10px] text-white/60">
-                  {loadingPreview ? 'Loading preview…' : `Previewing as ${previewLabel}`}
-                </p>
-              </div>
-              {loadingPreview && (
-                <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-white/70" />
-              )}
-            </div>
-
-            {/* Chat area */}
-            <div
-              className="p-3"
-              style={{
-                backgroundColor: 'var(--brand-50, #E9FBEF)',
-                backgroundImage:
-                  'radial-gradient(rgba(37,211,102,0.16) 1px, transparent 1.5px), ' +
-                  'radial-gradient(rgba(37,211,102,0.10) 1px, transparent 1.5px)',
-                backgroundSize: '28px 28px, 28px 28px',
-                backgroundPosition: '0 0, 14px 14px',
-                minHeight: 180,
-              }}
-            >
-              <div className="ml-auto max-w-[92%] rounded-lg rounded-tr-sm bg-[var(--brand-100,#C8F5D6)] px-3 py-2 shadow-sm">
-                <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#0c1f17]">
-                  {previewSegments.map((seg, i) =>
-                    seg.dynamic ? (
-                      <mark
-                        key={i}
-                        title={seg.source}
-                        className="rounded bg-emerald-500/20 px-0.5 font-medium text-emerald-900"
-                      >
-                        {seg.text}
-                      </mark>
-                    ) : (
-                      <span key={i}>{seg.text}</span>
-                    ),
-                  )}
-                </p>
-                <div className="mt-1 flex items-center justify-end gap-1">
-                  <span className="text-[10px] text-[#0c1f17]/45">{timeLabel}</span>
-                  <CheckCheck className="h-3 w-3" style={{ color: '#53bdeb' }} />
-                </div>
-              </div>
-            </div>
+          <div className="rounded-3xl bg-gradient-to-b from-[#f4f9f6] to-[#e6efe9] px-3 py-6">
+            <WaPhonePreview
+              businessName={profile?.business_name ?? profile?.full_name ?? 'Your Business'}
+              headerType={template.header_type ?? ''}
+              headerContent={template.header_content ?? ''}
+              body={previewText}
+              footer={template.footer_text ?? ''}
+              buttons={normalizeTemplateButtons(template.buttons)}
+              sampleValues={[]}
+            />
           </div>
+          <p className="mt-2 text-center text-[11px] text-slate-500">
+            {loadingPreview ? 'Loading preview…' : `Previewing as ${previewLabel}`}
+          </p>
           <p className="mt-2 text-[11px] text-slate-400">
-            Highlighted words are filled in per recipient — hover one to see
-            where it comes from.
+            Variables are filled in per recipient when the campaign is sent.
           </p>
         </div>
       </div>

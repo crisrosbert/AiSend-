@@ -12,6 +12,7 @@ import { ingestLead } from '@/lib/leads/ingest'
 import { linkWebsiteWhatsAppLead } from '@/lib/leads/website-whatsapp'
 import { handleWhatsAppMessage } from '@/lib/whatsapp-agent/handler'
 import { handleAiAgentMessage } from '@/lib/ai-agent/engine'
+import { parseEcho, isCoexistenceField } from '@/lib/whatsapp/coexistence'
 import { handleInboundConsent } from '@/lib/optin/manager'
 import { routeMessage, type RoutingDecision } from '@/lib/agent-router/router'
 // Lazy-initialized to avoid build-time crash when env vars are missing
@@ -65,6 +66,8 @@ interface WhatsAppWebhookEntry {
         wa_id: string
       }>
       messages?: WhatsAppMessage[]
+      /** Coexistence: messages the owner sent from the WhatsApp Business app. */
+      message_echoes?: unknown[]
       statuses?: Array<{
         id: string
         status: string
@@ -201,6 +204,17 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
         await handleTemplateStatusUpdate(value)
         continue
       }
+      // Coexistence traffic (owner using the phone while the number is also
+      // on the Cloud API). Handled on its own so it can never affect the
+      // normal inbound path below.
+      if (isCoexistenceField(change.field) || value.message_echoes) {
+        try {
+          await handleCoexistenceChange(change.field, value)
+        } catch (err) {
+          console.error('[webhook] coexistence handling failed:', err)
+        }
+        continue
+      }
       if (value.statuses) {
         for (const status of value.statuses) {
           await handleStatusUpdate(status)
@@ -236,6 +250,74 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           config.business_id ?? null,
         )
       }
+    }
+  }
+}
+/**
+ * Coexistence webhooks.
+ *  - smb_message_echoes: the owner replied from the phone. Save it as an
+ *    outgoing agent message so the team sees the whole conversation in AiSend.
+ *    Never triggers the bot, automations or journeys (it is not an inbound).
+ *  - history / smb_app_state_sync: acknowledged and logged. Importing old chats
+ *    and contacts is a separate step.
+ */
+async function handleCoexistenceChange(
+  field: string,
+  value: {
+    metadata?: { display_phone_number: string; phone_number_id: string }
+    message_echoes?: unknown[]
+  },
+) {
+  if (field !== 'smb_message_echoes' && !value.message_echoes) {
+    console.log('[webhook] coexistence event received:', field)
+    return
+  }
+  const phoneNumberId = value.metadata?.phone_number_id
+  if (!phoneNumberId || !value.message_echoes?.length) return
+
+  const { data: config } = await supabaseAdmin()
+    .from('whatsapp_config')
+    .select('user_id, business_id')
+    .eq('phone_number_id', phoneNumberId)
+    .single()
+  if (!config) {
+    console.error('[webhook] echo for unknown phone_number_id:', phoneNumberId)
+    return
+  }
+
+  for (const raw of value.message_echoes) {
+    const echo = parseEcho(raw)
+    if (!echo) continue
+
+    // Same message delivered twice? Skip.
+    const { data: dup } = await supabaseAdmin()
+      .from('messages')
+      .select('id')
+      .eq('message_id', echo.id)
+      .limit(1)
+      .maybeSingle()
+    if (dup) continue
+
+    const outcome = await findOrCreateContact(config.user_id, normalizePhone(echo.to), '', config.business_id ?? null)
+    if (!outcome) continue
+    const conversation = await findOrCreateConversation(config.user_id, outcome.contact.id, config.business_id ?? null)
+    if (!conversation) continue
+
+    const { error } = await supabaseAdmin().from('messages').insert({
+      conversation_id: conversation.id,
+      sender_type: 'agent',
+      content_type: echo.contentType,
+      content_text: echo.contentText,
+      message_id: echo.id,
+      status: 'sent',
+      created_at: echo.createdAt,
+    })
+    if (error) console.error('[webhook] could not save echo:', error.message)
+    else {
+      await supabaseAdmin()
+        .from('conversations')
+        .update({ last_message_text: echo.contentText, last_message_at: echo.createdAt })
+        .eq('id', conversation.id)
     }
   }
 }

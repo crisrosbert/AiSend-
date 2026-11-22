@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { GRAPH_VERSION } from '@/lib/meta/graph-version'
+import { COEXISTENCE_FEATURE_TYPE } from '@/lib/whatsapp/coexistence'
 import { Card, CardContent } from '@/components/ui/card'
 
 /**
@@ -45,7 +46,7 @@ const CONFIG_ID = process.env.NEXT_PUBLIC_META_CONFIG_ID
 
 export function ConnectWhatsApp({ onConnected }: { onConnected?: () => void }) {
   const [sdkReady, setSdkReady] = useState(false)
-  const [working, setWorking] = useState(false)
+  const [working, setWorking] = useState<false | 'new' | 'coexistence'>(false)
   // Meta delivers the waba_id / phone_number_id through a postMessage
   // event that fires alongside the FB.login callback; we stash it here.
   const sessionInfo = useRef<{ waba_id?: string; phone_number_id?: string }>({})
@@ -92,12 +93,12 @@ export function ConnectWhatsApp({ onConnected }: { onConnected?: () => void }) {
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
-  function launch() {
+  function launch(mode: 'new' | 'coexistence' = 'new') {
     if (!window.FB || !CONFIG_ID) {
       toast.error('WhatsApp signup is not configured yet. Please try again shortly.')
       return
     }
-    setWorking(true)
+    setWorking(mode)
     sessionInfo.current = {}
 
     window.FB.login(
@@ -108,19 +109,29 @@ export function ConnectWhatsApp({ onConnected }: { onConnected?: () => void }) {
           // User closed the popup or denied — not an error worth a toast.
           return
         }
-        exchange(code, response.authResponse?.signedRequest)
+        exchange(code, response.authResponse?.signedRequest, mode === 'coexistence')
       },
       {
         config_id: CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
-        extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
+        extras: {
+          setup: {},
+          // Existing WhatsApp Business app number → coexistence; otherwise a new number.
+          featureType: mode === 'coexistence' ? COEXISTENCE_FEATURE_TYPE : '',
+          sessionInfoVersion: '3',
+        },
       },
     )
   }
 
-  async function exchange(code: string, signedRequest?: string) {
+  async function exchange(code: string, signedRequest?: string, coexistence = false) {
     try {
+      // For a Business app number Meta's postMessage can land a moment after the
+      // login callback; wait briefly for the WABA id instead of failing.
+      for (let i = 0; coexistence && !sessionInfo.current.waba_id && i < 16; i++) {
+        await new Promise((r) => setTimeout(r, 250))
+      }
       const res = await fetch('/api/whatsapp/embedded-signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,12 +142,17 @@ export function ConnectWhatsApp({ onConnected }: { onConnected?: () => void }) {
           signed_request: signedRequest,
           waba_id: sessionInfo.current.waba_id,
           phone_number_id: sessionInfo.current.phone_number_id,
+          coexistence,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || 'Connection failed')
       if (data.warning) toast.warning(data.warning)
-      toast.success('WhatsApp connected! Your number is ready to send.')
+      toast.success(
+        coexistence
+          ? 'Connected! Your WhatsApp Business app keeps working, and your team can now chat from AiSend too.'
+          : 'WhatsApp connected! Your number is ready to send.',
+      )
       onConnected?.()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to connect WhatsApp')
@@ -175,17 +191,41 @@ export function ConnectWhatsApp({ onConnected }: { onConnected?: () => void }) {
             </p>
           </div>
           <button
-            onClick={launch}
-            disabled={!sdkReady || working}
+            onClick={() => launch('new')}
+            disabled={!sdkReady || !!working}
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 disabled:opacity-60"
           >
-            {working ? (
+            {working === 'new' ? (
               <><Loader2 className="size-4 animate-spin" />Connecting…</>
             ) : (
               <>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.3L2 22l4.8-1.5A10 10 0 1 0 12 2Z" /></svg>
                 Connect WhatsApp
               </>
+            )}
+          </button>
+        </div>
+
+        {/* Coexistence: number already used in the WhatsApp Business app */}
+        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-[#e7ece9] bg-[#f7faf8] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[#0c1f17]">
+              Already use this number in the WhatsApp Business app?
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Keep it on your phone and let your team reply from AiSend too. No number change, old chats come along.
+              Needs the WhatsApp Business app (not normal WhatsApp); your linked devices such as WhatsApp Web will be logged out.
+            </p>
+          </div>
+          <button
+            onClick={() => launch('coexistence')}
+            disabled={!sdkReady || !!working}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-600 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-60"
+          >
+            {working === 'coexistence' ? (
+              <><Loader2 className="size-4 animate-spin" />Connecting…</>
+            ) : (
+              'Connect my Business app number'
             )}
           </button>
         </div>

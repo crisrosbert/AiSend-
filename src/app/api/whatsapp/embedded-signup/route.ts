@@ -5,6 +5,7 @@ import { choosePin, registerPhoneNumber } from '@/lib/whatsapp/registration-pin'
 import { currentBusinessId } from '@/lib/business/server'
 import { GRAPH_BASE_URL } from '@/lib/meta/graph-version'
 import { resolveSignupMetaUserId } from '@/lib/meta/signup-user'
+import { pickPhoneNumberId } from '@/lib/whatsapp/coexistence'
 
 /**
  * Embedded Signup — token exchange + auto-connect.
@@ -24,6 +25,12 @@ import { resolveSignupMetaUserId } from '@/lib/meta/signup-user'
  *      deauthorize / data-deletion callbacks can find this client.
  *   5. Register the phone number on Cloud API so it can send, using a
  *      random per-number two-step PIN that is stored encrypted.
+ *
+ * Coexistence (`coexistence: true`): the number is ALSO live in the owner's
+ * WhatsApp Business app. In that case we never call /register (it is already
+ * registered, and re-registering would take it away from the phone), we may
+ * have to look up the phone_number_id ourselves, and we ask Meta to sync the
+ * contacts and recent chat history.
  *
  * Requires env: META_APP_ID, META_APP_SECRET.
  *
@@ -55,17 +62,18 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { code, waba_id, phone_number_id, signed_request } = body as {
+    const { code, waba_id, signed_request } = body as {
       code?: string
       waba_id?: string
-      phone_number_id?: string
       signed_request?: string
     }
+    let phone_number_id = (body as { phone_number_id?: string }).phone_number_id
+    const coexistence = (body as { coexistence?: unknown }).coexistence === true
 
     if (!code) {
       return NextResponse.json({ error: 'Missing authorization code from Meta.' }, { status: 400 })
     }
-    if (!waba_id || !phone_number_id) {
+    if (!waba_id || (!phone_number_id && !coexistence)) {
       return NextResponse.json(
         { error: 'Meta did not return a WABA / phone number. Please complete the signup again.' },
         { status: 400 },
@@ -86,6 +94,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: msg }, { status: 502 })
     }
     const accessToken: string = tokenData.access_token
+
+    // Coexistence: Meta may return only the WABA. Find the number on it.
+    if (coexistence && !phone_number_id) {
+      try {
+        const numRes = await fetch(`${GRAPH}/${waba_id}/phone_numbers?fields=id,display_phone_number`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        const numBody = await numRes.json().catch(() => ({}))
+        phone_number_id = pickPhoneNumberId(numBody?.data) ?? undefined
+      } catch {
+        /* handled below */
+      }
+      if (!phone_number_id) {
+        return NextResponse.json(
+          { error: 'Could not find your WhatsApp number on this account. Please try connecting again.' },
+          { status: 502 },
+        )
+      }
+    }
+    const phoneNumberId: string = phone_number_id as string
 
     // 2) Subscribe our app to the client's WABA so inbound messages +
     //    template status updates reach our webhook. Best-effort: if this
@@ -140,15 +168,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: lookupError.message }, { status: 500 })
     }
 
-    const sameNumber = existing?.phone_number_id === phone_number_id
+    const sameNumber = existing?.phone_number_id === phoneNumberId
     const { pin, reused: pinReused } = choosePin(sameNumber ? existing?.two_step_pin : null, decrypt)
 
-    const row = {
-      phone_number_id,
+    const row: Record<string, unknown> = {
+      phone_number_id: phoneNumberId,
       waba_id,
       access_token: encrypt(accessToken),
       verify_token: null,
-      two_step_pin: encrypt(pin),
+      // A coexistence number is never registered by us, so it has no PIN of ours.
+      ...(coexistence ? {} : { two_step_pin: encrypt(pin) }),
+      connection_mode: coexistence ? 'coexistence' : 'cloud',
       // Only written when learned, so a reconnect that cannot resolve the id
       // does not erase the one recorded earlier.
       ...(signupUser.userId ? { meta_user_id: signupUser.userId } : {}),
@@ -157,30 +187,56 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     }
 
-    if (existing?.id) {
-      const { error } = await supabase.from('whatsapp_config').update(row).eq('user_id', user.id)
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    } else {
-      const { error } = await supabase
-        .from('whatsapp_config')
-        .insert({
-          user_id: user.id,
-          business_id: await currentBusinessId(supabase, user.id, request),
-          ...row,
-        })
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const businessId = existing?.id ? null : await currentBusinessId(supabase, user.id, request)
+    const save = (r: Record<string, unknown>) =>
+      existing?.id
+        ? supabase.from('whatsapp_config').update(r).eq('user_id', user.id)
+        : supabase.from('whatsapp_config').insert({ user_id: user.id, business_id: businessId, ...r })
+
+    let saved = await save(row)
+    // Migration 046 (connection_mode) may not be applied yet: save without it.
+    if (saved.error && /connection_mode/i.test(saved.error.message)) {
+      const { connection_mode: _omit, ...withoutMode } = row
+      void _omit
+      saved = await save(withoutMode)
     }
+    if (saved.error) return NextResponse.json({ error: saved.error.message }, { status: 500 })
 
     // 5) Newer Embedded Signup flows auto-register the number, so a rejection
     // here is not fatal — but it must not be silent, and a brand-new PIN that
     // Meta did not accept must not stay on file as if it were the real one.
     let registerWarning: string | null = null
-    const registration = await registerPhoneNumber({
-      graphBase: GRAPH,
-      phoneNumberId: phone_number_id,
-      accessToken,
-      pin,
-    })
+    let syncWarning: string | null = null
+    const registration = coexistence
+      ? ({ ok: true } as const)
+      : await registerPhoneNumber({
+          graphBase: GRAPH,
+          phoneNumberId,
+          accessToken,
+          pin,
+        })
+
+    if (coexistence) {
+      // Ask Meta to push contacts + chat history to our webhook. Must happen
+      // soon after onboarding (Meta only allows a short window). Best effort.
+      for (const syncType of ['smb_app_state_sync', 'history']) {
+        try {
+          const r = await fetch(`${GRAPH}/${phoneNumberId}/smb_app_data`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messaging_product: 'whatsapp', sync_type: syncType }),
+          })
+          if (!r.ok) {
+            const e = await r.json().catch(() => ({}))
+            console.warn('[embedded-signup] coexistence sync', syncType, 'failed:', e?.error?.message)
+            syncWarning = 'Connected, but your old chats could not be imported. New messages will still arrive.'
+          }
+        } catch {
+          syncWarning = 'Connected, but your old chats could not be imported. New messages will still arrive.'
+        }
+      }
+    }
+
     if (!registration.ok) {
       console.warn('[embedded-signup] register failed:', registration.error)
       registerWarning = `Number registration did not complete: ${registration.error}`
@@ -192,8 +248,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       waba_id,
-      phone_number_id,
-      warning: [subscribeWarning, registerWarning].filter(Boolean).join(' ') || null,
+      phone_number_id: phoneNumberId,
+      connection_mode: coexistence ? 'coexistence' : 'cloud',
+      warning: [subscribeWarning, registerWarning, syncWarning].filter(Boolean).join(' ') || null,
     })
   } catch (error) {
     console.error('Embedded Signup exchange error:', error)

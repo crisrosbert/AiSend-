@@ -2,7 +2,7 @@
 title: Your Post Title (max 60 characters)
 description: One or two sentences for Google results, between 70 and 160 characters, saying what the reader will learn.
 date: 2026-10-05
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp, business-api]
 cover: https://example.com/cover.jpg

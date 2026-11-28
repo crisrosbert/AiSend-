@@ -2,7 +2,7 @@
 title: WhatsApp Business API: A Plain-English Guide
 description: What the WhatsApp Business API is, how it differs from the free app, and what you need to get started.
 date: 2026-10-05
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp, business-api]
 draft: true

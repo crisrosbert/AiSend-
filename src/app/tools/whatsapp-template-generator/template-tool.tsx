@@ -649,7 +649,7 @@ export function TemplateTool() {
 
       <p className="tl-upsell">
         Once a template is approved, send it to thousands of opted-in contacts at once.{' '}
-        <Link href="/signup">Try AiSend free</Link>
+        <Link href="/signup">Try PerfChat free</Link>
       </p>
     </div>
   )

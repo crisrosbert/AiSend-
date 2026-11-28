@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { LogoMark } from "@/components/brand/logo";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import {
@@ -45,7 +46,6 @@ import {
 const navItems = [
   { path: "dashboard",   label: "Dashboard",        icon: LayoutDashboard },
   { path: "analytics",   label: "Analytics",        icon: BarChart3 },
-  { path: "quick-setup", label: "Quick Setup",      icon: Sparkles },
   { path: "agents",      label: "AI Agents",        icon: Bot },
   { path: "ai-agent",    label: "Shop Agent",       icon: ShoppingCart },
   { path: "inbox",       label: "Live Chat",        icon: MessageSquare },
@@ -136,19 +136,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <Link
             href={href("dashboard")}
             className="flex items-center justify-center"
-            title="AiSend"
+            title="PerfChat"
           >
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-xl"
-              style={{ background: "linear-gradient(135deg,var(--brand),var(--brand-deep))" }}
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path
-                  d="M10.5 2L4 10.5H9L7.5 16L14 7.5H9L10.5 2Z"
-                  fill="white"
-                  strokeLinejoin="round"
-                />
-              </svg>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#fff]">
+              <LogoMark size={26} />
             </div>
           </Link>
 

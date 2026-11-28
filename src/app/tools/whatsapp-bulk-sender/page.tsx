@@ -40,15 +40,15 @@ const WHO_FOR = [
 const FAQS = [
   {
     q: 'Why do some bulk WhatsApp senders get numbers banned?',
-    a: 'Most cheap "bulk sender" tools work by automating the WhatsApp Web browser session — logging in as if a human were clicking send hundreds of times. WhatsApp actively detects and bans numbers that behave like this. The official Cloud API (what AiSend uses) is a completely different, sanctioned integration — Meta expects and rate-limits it, rather than treating it as abuse.',
+    a: 'Most cheap "bulk sender" tools work by automating the WhatsApp Web browser session — logging in as if a human were clicking send hundreds of times. WhatsApp actively detects and bans numbers that behave like this. The official Cloud API (what PerfChat uses) is a completely different, sanctioned integration — Meta expects and rate-limits it, rather than treating it as abuse.',
   },
   {
     q: 'Is this the same WhatsApp Business API businesses like Amazon and Zomato use?',
-    a: 'Yes — the exact same Meta Cloud API. AiSend is the dashboard on top of it: templates, contact lists, scheduling, and delivery tracking, without writing any code.',
+    a: 'Yes — the exact same Meta Cloud API. PerfChat is the dashboard on top of it: templates, contact lists, scheduling, and delivery tracking, without writing any code.',
   },
   {
     q: 'How much does sending in bulk actually cost?',
-    a: 'You pay Meta’s own per-message rate (₹1.09 for a marketing message, ₹0.145 for a utility message as of this writing) with no markup from AiSend. Replies inside an open 24-hour conversation are free.',
+    a: 'You pay Meta’s own per-message rate (₹1.09 for a marketing message, ₹0.145 for a utility message as of this writing) with no markup from PerfChat. Replies inside an open 24-hour conversation are free.',
   },
   {
     q: 'Do I need a developer to set this up?',
@@ -60,11 +60,11 @@ const FAQS = [
   },
   {
     q: 'How many people can I actually message in one broadcast?',
-    a: 'There’s no hard cap in AiSend itself — the limit is Meta’s own messaging tier for your number, which starts at 250 unique recipients per rolling 24 hours for a new number and rises automatically as you send quality messages with good delivery and low block rates.',
+    a: 'There’s no hard cap in PerfChat itself — the limit is Meta’s own messaging tier for your number, which starts at 250 unique recipients per rolling 24 hours for a new number and rises automatically as you send quality messages with good delivery and low block rates.',
   },
   {
     q: 'What is a message template, and why can’t I just send free text to everyone?',
-    a: 'Outside a 24-hour conversation window, WhatsApp only allows pre-approved "template" messages — this is a platform-wide anti-spam rule, not an AiSend limitation. You write the template once, Meta reviews it (usually within minutes to a few hours), and you reuse it for every broadcast.',
+    a: 'Outside a 24-hour conversation window, WhatsApp only allows pre-approved "template" messages — this is a platform-wide anti-spam rule, not an PerfChat limitation. You write the template once, Meta reviews it (usually within minutes to a few hours), and you reuse it for every broadcast.',
   },
   {
     q: 'Can I schedule a broadcast for later, or send it right now?',
@@ -88,7 +88,7 @@ export default function WhatsAppBulkSenderPage() {
             </h1>
             <p className="mt-5 text-base sm:text-lg text-gray-600 leading-relaxed">
               Most &ldquo;bulk WhatsApp sender&rdquo; tools automate a browser session behind your back — and WhatsApp bans
-              numbers that do that. AiSend runs on Meta&apos;s own official API, the same one real businesses use.
+              numbers that do that. PerfChat runs on Meta&apos;s own official API, the same one real businesses use.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
@@ -111,7 +111,7 @@ export default function WhatsAppBulkSenderPage() {
               A lot of cheap &ldquo;WhatsApp sender&rdquo; tools work by remote-controlling a browser logged into WhatsApp
               Web — clicking send over and over, faster than a human ever could. WhatsApp&apos;s systems are built to
               spot exactly that pattern, and the number attached to it gets banned, sometimes permanently, with no
-              appeal. AiSend never touches WhatsApp Web. Every message goes through Meta&apos;s official Cloud API —
+              appeal. PerfChat never touches WhatsApp Web. Every message goes through Meta&apos;s official Cloud API —
               the same sanctioned channel Meta itself rate-limits and expects businesses to use.
             </p>
           </section>
@@ -123,7 +123,7 @@ export default function WhatsAppBulkSenderPage() {
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="grid grid-cols-[1fr_110px_130px] sm:grid-cols-[1fr_140px_160px] bg-gray-50 border-b border-gray-100 px-4 sm:px-6 py-3 text-[11px] sm:text-xs font-bold uppercase tracking-wide text-gray-500">
                 <span />
-                <span className="text-center text-[#14523A]">AiSend</span>
+                <span className="text-center text-[#14523A]">PerfChat</span>
                 <span className="text-center">Typical tool</span>
               </div>
               {COMPARE.map((row, i) => (

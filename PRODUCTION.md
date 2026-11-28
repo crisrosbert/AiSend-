@@ -1,4 +1,4 @@
-# AiSend — Production Deployment Guide
+# PerfChat — Production Deployment Guide
 
 This guide takes you from a fresh clone to a live, secure deployment.
 Everything in this repo already passes `typecheck`, `lint` (0 errors),
@@ -187,7 +187,7 @@ npm test            # vitest (82 passing)
   (`display=swap`) plus system-font fallbacks, so `next build` works
   on restricted CI networks. CSP updated to allow
   fonts.googleapis.com / fonts.gstatic.com.
-- **Full rebrand to AiSend** (was "Clickstream WA"/wacrm) across app
+- **Full rebrand to PerfChat** (was "Clickstream WA"/wacrm) across app
   metadata, auth pages, marketing, legal pages, and package.json.
 - **Lint: 30 errors → 0.** Unescaped JSX entities fixed; `useTemplate`
   functions renamed to `applyTemplate` (ESLint hook-name false

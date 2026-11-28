@@ -2,7 +2,7 @@
 title: "WhatsApp Login: How to Log In to WhatsApp Web and Desktop"
 description: Step-by-step WhatsApp login for Web and Desktop on Android, iPhone, Windows and Mac, with fixes for when the login does not work.
 date: 2026-10-13
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-login, whatsapp-web, desktop, qr-code]
 accordion: true

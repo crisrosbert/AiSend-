@@ -1,8 +1,8 @@
 ---
 title: Where to See Leads from Your Website Chatbot
-description: Added the AiSend chatbot to your website? Here is where its chats, leads and contacts appear in your dashboard, and how to follow up on each one.
+description: Added the PerfChat chatbot to your website? Here is where its chats, leads and contacts appear in your dashboard, and how to follow up on each one.
 date: 2026-10-12
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [chatbot, leads, website-widget]
 cover: https://app.performancemktg.net/covers/blog-where-to-see-website-chatbot-leadsdesktop.webp
@@ -13,7 +13,7 @@ coverMobile: https://app.performancemktg.net/covers/blog-where-to-see-website-ch
 
 # The short answer
 
-Once the chatbot is on your website, everything it collects appears in three places inside your AiSend dashboard:
+Once the chatbot is on your website, everything it collects appears in three places inside your PerfChat dashboard:
 
 - **Leads → Website chats** lists every conversation the chatbot handled on your website.
 - **Leads → All leads** shows the people who filled in the lead form inside the chat, together with every other lead source.

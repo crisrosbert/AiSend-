@@ -18,7 +18,7 @@ export default function ContactContent() {
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
 
-  const mailto = `mailto:crisrosbert@gmail.com?subject=${encodeURIComponent(
+  const mailto = `mailto:admin@performancemktg.net?subject=${encodeURIComponent(
     `Contact from ${name || 'website'}`,
   )}&body=${encodeURIComponent(`From: ${name} <${email}>\n\n${message}`)}`
 
@@ -29,7 +29,7 @@ export default function ContactContent() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
           <div style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 18 }}>
             <div style={{ fontSize: 13, color: '#6b7c73', marginBottom: 4 }}>Email</div>
-            <a href="mailto:crisrosbert@gmail.com" style={{ fontSize: 15, fontWeight: 600, color: BRAND_DEEP, textDecoration: 'none' }}>crisrosbert@gmail.com</a>
+            <a href="mailto:admin@performancemktg.net" style={{ fontSize: 15, fontWeight: 600, color: BRAND_DEEP, textDecoration: 'none' }}>admin@performancemktg.net</a>
           </div>
           <div style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 18 }}>
             <div style={{ fontSize: 13, color: '#6b7c73', marginBottom: 4 }}>WhatsApp</div>
@@ -37,7 +37,7 @@ export default function ContactContent() {
           </div>
           <div style={{ background: '#fff', border: '1px solid #e6ece9', borderRadius: 14, padding: 18 }}>
             <div style={{ fontSize: 13, color: '#6b7c73', marginBottom: 4 }}>Business</div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>AiSend</div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>PerfChat</div>
             <div style={{ fontSize: 13, color: '#6b7c73', marginTop: 2 }}>India</div>
           </div>
         </div>

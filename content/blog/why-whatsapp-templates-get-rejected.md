@@ -2,7 +2,7 @@
 title: Why WhatsApp Templates Get Rejected and How to Fix Them
 description: The most common reasons Meta rejects a WhatsApp message template, and a simple checklist to fix each one before you submit again.
 date: 2026-10-11
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-templates, business-api]
 cover: https://app.performancemktg.net/covers/blog-why-whatsapp-templates-get-rejecteddesktop.webp

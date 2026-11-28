@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
 import "./globals.css";
+import { BRAND } from "@/lib/brand";
 
 /**
  * Fonts are loaded at runtime via <link> with display=swap instead of
@@ -15,13 +16,11 @@ const FONTS_HREF =
 
 export const metadata: Metadata = {
   title: {
-    default: "AiSend — WhatsApp CRM",
-    template: "%s — AiSend",
+    default: `${BRAND.name} — WhatsApp CRM`,
+    template: `%s — ${BRAND.name}`,
   },
-  description:
-    "AiSend — The smartest WhatsApp CRM for Indian businesses. Manage conversations, broadcast campaigns, and automate follow-ups.",
+  description: BRAND.description,
   robots: { index: false, follow: false },
-  icons: { icon: [{ url: "/icon" }] },
 };
 
 export const viewport: Viewport = {

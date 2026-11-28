@@ -378,7 +378,7 @@ export function RoiTool() {
 
       <p className="tl-upsell">
         Ready to run the WhatsApp campaigns? Send templates to opted-in contacts and manage the replies in one inbox.{' '}
-        <Link href="/signup">Try AiSend free</Link>
+        <Link href="/signup">Try PerfChat free</Link>
       </p>
     </div>
   )

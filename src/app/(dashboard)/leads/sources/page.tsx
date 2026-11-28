@@ -284,7 +284,7 @@ export default function LeadSourcesPage() {
               <b>Several Pages?</b> Pick the Pages you run ads from. Connect again any time to add more.
             </li>
             <li>
-              Facebook never sees your AiSend password, and you can disconnect a Page here whenever you like.
+              Facebook never sees your PerfChat password, and you can disconnect a Page here whenever you like.
             </li>
           </ul>
         </details>

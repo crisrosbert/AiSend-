@@ -461,7 +461,7 @@ export function QrCodeTool() {
 
       <p className="tl-upsell">
         Want every scan to land in a shared team inbox, with automatic replies and follow-ups?{' '}
-        <Link href="/signup">Try AiSend free</Link>
+        <Link href="/signup">Try PerfChat free</Link>
       </p>
     </div>
   )

@@ -69,7 +69,7 @@ export const SECTIONS: Section[] = [
     id: 'lead-capture',
     h2: 'How the chatbot captures leads',
     paras: [
-      'A chatbot that only answers questions is helpful. A chatbot that also collects leads is profitable. When you run the chatbot from your AiSend account, it does both.',
+      'A chatbot that only answers questions is helpful. A chatbot that also collects leads is profitable. When you run the chatbot from your PerfChat account, it does both.',
       'During a conversation, the assistant recognises buying intent, for example a visitor asking for a quote, a booking or a callback. At that point it can ask for the visitor\'s name and phone number in a short in-chat form, one question at a time rather than a long page of fields. The details are saved as a lead against that conversation, so you can see exactly what the person asked before you reach out.',
       'Every conversation is stored, and you can read it, take it over and reply yourself whenever you like. For serious leads, the chatbot can also hand the visitor over to WhatsApp so the conversation continues on the channel your customers already use every day.',
       'Where you will find these leads in your dashboard is covered step by step in our guide on where to see the leads from your website chatbot.',
@@ -188,7 +188,7 @@ export const SECTIONS: Section[] = [
     id: 'whatsapp',
     h2: 'Connect your website chatbot to WhatsApp',
     paras: [
-      'Visitors who are ready to buy often prefer to continue on WhatsApp, where they can share photos, confirm details and get updates on the same app they use all day. Because the chatbot runs inside AiSend, it can pass a warm lead to your WhatsApp number along with the conversation so far.',
+      'Visitors who are ready to buy often prefer to continue on WhatsApp, where they can share photos, confirm details and get updates on the same app they use all day. Because the chatbot runs inside PerfChat, it can pass a warm lead to your WhatsApp number along with the conversation so far.',
       'That means one system covers the whole journey: a visitor asks a question on your website, becomes a lead, receives a follow-up on WhatsApp and can later be included in your campaigns and reminders. You no longer copy details between tools or lose leads between a website form and a phone.',
     ],
   },
@@ -212,7 +212,7 @@ export const SECTIONS: Section[] = [
     id: 'free',
     h2: 'Is it really free?',
     paras: [
-      'Yes. Building and testing the chatbot costs nothing and needs no card. Creating a free AiSend account lets you embed it on your website and see the conversations and leads it collects. As your usage grows you can move to a paid plan for higher volumes, more team members and WhatsApp automation, but you can start and learn what works without paying anything.',
+      'Yes. Building and testing the chatbot costs nothing and needs no card. Creating a free PerfChat account lets you embed it on your website and see the conversations and leads it collects. As your usage grows you can move to a paid plan for higher volumes, more team members and WhatsApp automation, but you can start and learn what works without paying anything.',
       'Because the same account also runs WhatsApp campaigns, a shared team inbox and automated follow-ups, your website chatbot becomes the first step in a complete system for turning visitors into customers.',
     ],
   },
@@ -223,6 +223,6 @@ export const EXTRA_FAQ = [
   { q: 'Can it answer in Hindi or other languages?', a: 'It replies in the language the visitor writes in, using the information from your website. Answers are best when your pages are written clearly.' },
   { q: 'Will it slow down my website?', a: 'The chat bubble loads after your page and is small, so it should not affect how quickly your content appears.' },
   { q: 'Can I stop it from answering certain things?', a: 'It answers only from your website content. You can edit its role and tone, review its replies and switch it off at any time.' },
-  { q: 'Where do I see the leads and chats?', a: 'In your AiSend dashboard, under Leads and the Website chats tab, and in the Live Chat inbox where you can reply yourself.' },
+  { q: 'Where do I see the leads and chats?', a: 'In your PerfChat dashboard, under Leads and the Website chats tab, and in the Live Chat inbox where you can reply yourself.' },
   { q: 'Can I use it without a website?', a: 'The free tool needs a public website address to learn from. If you do not have one, you can describe your business manually when you create an agent in your account.' },
 ]

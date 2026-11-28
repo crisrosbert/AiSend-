@@ -199,7 +199,7 @@ async function fetchUrlText(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'AiSend-Bot/1.0 (knowledge base indexer)',
+        'User-Agent': 'PerfChat-Bot/1.0 (knowledge base indexer)',
         'Accept': 'text/html,text/plain',
       },
       signal: AbortSignal.timeout(10_000),

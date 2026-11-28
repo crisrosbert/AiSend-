@@ -34,7 +34,7 @@ export const CONTENT: ToolPageContent = {
   toolLabel: 'WhatsApp vs SMS vs email ROI calculator',
 
   seo: {
-    // The site appends " — AiSend", so this stays short enough for a search result.
+    // The site appends " — PerfChat", so this stays short enough for a search result.
     title: 'WhatsApp vs SMS vs Email ROI Calculator',
     description:
       'Free calculator that compares WhatsApp, SMS and email campaigns. Enter your own prices and rates to see profit, return, cost per order and break-even.',
@@ -531,9 +531,9 @@ export const CONTENT: ToolPageContent = {
   },
 
   beyond: {
-    heading: 'The calculator is the plan. AiSend helps you run it.',
+    heading: 'The calculator is the plan. PerfChat helps you run it.',
     intro:
-      'When the numbers say WhatsApp is worth it, you need a way to send well and reply fast. AiSend gives your team one place to do both.',
+      'When the numbers say WhatsApp is worth it, you need a way to send well and reply fast. PerfChat gives your team one place to do both.',
     features: [
       {
         icon: 'megaphone',
@@ -579,11 +579,11 @@ export const CONTENT: ToolPageContent = {
   reviews: REVIEWS,
   reviewsCopy: {
     heading: 'What customers say',
-    intro: 'Words from businesses that use AiSend.',
-    inviteHeading: 'Using AiSend in your business?',
+    intro: 'Words from businesses that use PerfChat.',
+    inviteHeading: 'Using PerfChat in your business?',
     inviteText: 'Tell us how it is going. With your permission, we will share your story here.',
     inviteLabel: 'Share your feedback',
-    inviteMessage: 'Hi, I would like to share my feedback about AiSend.',
+    inviteMessage: 'Hi, I would like to share my feedback about PerfChat.',
   },
 
   postsCopy: {

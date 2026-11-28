@@ -2,7 +2,7 @@
 title: Marketing or Utility? Choosing a WhatsApp Template Category
 description: Marketing, utility or authentication? Learn how Meta decides, why the category changes what you pay, and how to write each type correctly.
 date: 2026-10-11
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-templates, business-api, pricing]
 

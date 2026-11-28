@@ -269,7 +269,7 @@ async function scrapeShopify(storeUrl: string): Promise<ScrapedProduct[]> {
 
   while (page <= maxPages) {
     const res = await fetch(`${base}/products.json?limit=250&page=${page}`, {
-      headers: { 'User-Agent': 'AiSend-Agent/1.0' },
+      headers: { 'User-Agent': 'PerfChat-Agent/1.0' },
       signal: AbortSignal.timeout(8_000),  // 8s timeout per page
     })
 

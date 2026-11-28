@@ -47,7 +47,7 @@ export interface WidgetConfig {
   label: string
   showOn: WidgetScreens
   pulse: boolean
-  /** A small "Made with AiSend" link at the bottom of the popup. */
+  /** A small "Made with PerfChat" link at the bottom of the popup. */
   poweredBy: boolean
   popup: WidgetPopup
 }
@@ -211,7 +211,7 @@ export function buildWidgetSnippet(config: WidgetConfig, options: SnippetOptions
     const message = text(popup.message, MAX.message)
     const cta = text(popup.cta, MAX.cta) || 'Start chat'
     const byHtml = config.poweredBy
-      ? `\n    <a class="aswa__by" href="${escapeHtml(`${SITE_URL}/?utm_source=chat-widget&utm_medium=widget&utm_campaign=made-with`)}" target="_blank" rel="nofollow noopener noreferrer">Made with AiSend</a>`
+      ? `\n    <a class="aswa__by" href="${escapeHtml(`${SITE_URL}/?utm_source=chat-widget&utm_medium=widget&utm_campaign=made-with`)}" target="_blank" rel="nofollow noopener noreferrer">Made with PerfChat</a>`
       : ''
     inner = `
   <div id="aswa-card" class="aswa__card" role="dialog" aria-label="Chat on WhatsApp" hidden>

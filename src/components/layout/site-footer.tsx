@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import Link from 'next/link'
+import { Logo } from '@/components/brand/logo'
 import { FooterPromoBanner } from './footer-promo-banner'
 
 /**
@@ -44,13 +45,8 @@ export function SiteFooter() {
           {/* Column 1: Brand + partner badges */}
           <div className="lg:col-span-4 pr-0 lg:pr-8">
             <div className="mb-4">
-              <Link aria-label="AiSend Home" className="inline-block" href="/">
-                <div className="flex items-baseline space-x-0.5">
-                  <span className="text-xl md:text-[22px] font-black tracking-tight text-[#fff] uppercase">
-                    AISEND
-                  </span>
-                  <span className="text-[10px] text-[#fff] font-bold align-super">®</span>
-                </div>
+              <Link aria-label="PerfChat Home" className="inline-block" href="/">
+                <Logo size={44} onDark />
                 <p className="text-[9px] tracking-[0.22em] text-neutral-300 uppercase font-medium mt-[-2px]">
                   WhatsApp Marketing &amp; Automation
                 </p>
@@ -58,7 +54,7 @@ export function SiteFooter() {
             </div>
 
             <p className="text-neutral-400 leading-relaxed text-[13px] mb-6 max-w-sm">
-              AiSend is a multi-tenant WhatsApp marketing platform built for growing businesses. We
+              PerfChat is a multi-tenant WhatsApp marketing platform built for growing businesses. We
               help you automate broadcasts, run chatbots, and turn conversations into conversions —
               all from one dashboard.
             </p>
@@ -236,7 +232,7 @@ export function SiteFooter() {
         {/* Legal row */}
         <div className="pt-5 border-t border-neutral-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-400 gap-4">
           <p className="text-center sm:text-left">
-            Copyright © {new Date().getFullYear()} AiSend<sup>®</sup>. All rights reserved.
+            Copyright © {new Date().getFullYear()} PerfChat<sup>®</sup>. All rights reserved.
           </p>
           <div className="flex items-center space-x-3 text-neutral-400">
             <a className="hover:text-[#fff] transition-colors" href="#">Sitemap</a>

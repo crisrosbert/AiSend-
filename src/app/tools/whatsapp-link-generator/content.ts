@@ -26,7 +26,7 @@ export const RELATED_POST_TAG = 'whatsapp-link'
 export const LEAD_FORM_ID = 'tool-whatsapp-link-generator'
 
 export const SEO = {
-  // The site appends " — AiSend", so this stays short enough for a search result.
+  // The site appends " — PerfChat", so this stays short enough for a search result.
   title: 'Free WhatsApp Link Generator with QR Code',
   description:
     'Create a free WhatsApp link (wa.me) with a pre-filled message and QR code. Add your number, copy the link and share it anywhere. No signup needed.',
@@ -42,7 +42,7 @@ export const HERO = {
   primaryLabel: 'Create my link',
   primaryHref: '#generator',
   secondaryLabel: 'Chat with our team',
-  whatsappMessage: 'Hi, I just used the WhatsApp link generator and I would like to know more about AiSend.',
+  whatsappMessage: 'Hi, I just used the WhatsApp link generator and I would like to know more about PerfChat.',
   proof: ['Free to use', 'Works with WhatsApp Business', 'Your number stays in your browser'],
 } as const
 
@@ -148,9 +148,9 @@ export const BANNER = {
 }
 
 export const BEYOND = {
-  heading: 'A link starts the chat. AiSend helps you run it.',
+  heading: 'A link starts the chat. PerfChat helps you run it.',
   intro:
-    'A free link gets people to message you. When the messages start coming in, AiSend gives your team one place to answer them.',
+    'A free link gets people to message you. When the messages start coming in, PerfChat gives your team one place to answer them.',
   features: [
     {
       icon: 'inbox',
@@ -201,11 +201,11 @@ export const REVIEWS: Review[] = []
 
 export const REVIEWS_COPY = {
   heading: 'What customers say',
-  intro: 'Words from businesses that use AiSend.',
-  inviteHeading: 'Using AiSend in your business?',
+  intro: 'Words from businesses that use PerfChat.',
+  inviteHeading: 'Using PerfChat in your business?',
   inviteText: 'Tell us how it is going. With your permission, we will share your story here.',
   inviteLabel: 'Share your feedback',
-  inviteMessage: 'Hi, I would like to share my feedback about AiSend.',
+  inviteMessage: 'Hi, I would like to share my feedback about PerfChat.',
 }
 
 export const POSTS_COPY = {

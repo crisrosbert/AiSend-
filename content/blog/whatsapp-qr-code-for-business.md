@@ -2,7 +2,7 @@
 title: WhatsApp QR Code for Business: How to Make and Use One
 description: A QR code can open a WhatsApp chat with your business in one scan. See how to make one, test it and place it so customers use it.
 date: 2026-10-11
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-link, qr-code, click-to-chat]
 ---
@@ -52,4 +52,4 @@ Add a short line next to the code, such as "Scan to chat with us on WhatsApp". P
 
 # Be ready for the replies
 
-A QR code is only useful if someone answers. Decide who looks after the chat, and how quickly. When more than one person replies, a shared inbox keeps things from falling through. [AiSend](/whatsapp-business-api) gives your team one place for those chats.
+A QR code is only useful if someone answers. Decide who looks after the chat, and how quickly. When more than one person replies, a shared inbox keeps things from falling through. [PerfChat](/whatsapp-business-api) gives your team one place for those chats.

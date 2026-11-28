@@ -182,7 +182,7 @@ export function LeadForm({ formId, sourceLabel }: { formId: string; sourceLabel:
         <input id={id('consent')} type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)}
           aria-invalid={invalid('consent')} />
         <span>
-          I agree that AiSend may contact me about this request, as described in the{' '}
+          I agree that PerfChat may contact me about this request, as described in the{' '}
           <Link href="/privacy">Privacy Policy</Link> and <Link href="/terms">Terms</Link>.
         </span>
       </label>

@@ -1,6 +1,6 @@
 // src/lib/meta/tenant-lookup.ts
 //
-// Maps a Meta user id back to the AiSend account it belongs to.
+// Maps a Meta user id back to the PerfChat account it belongs to.
 //
 // Both Meta callbacks need this — Data Deletion to know whose data to
 // remove, Deauthorize to know whose connection to close — and getting

@@ -2,7 +2,7 @@
 title: How to Create a WhatsApp Link with a Pre-filled Message
 description: Learn the wa.me link format, how to add a ready-typed message, and the common mistakes that stop a WhatsApp link from working.
 date: 2026-10-11
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-link, click-to-chat, wa-me]
 cover: https://app.performancemktg.net/covers/blog-whatsapp-link-with-prefilled-message-desktop.webp
@@ -83,4 +83,4 @@ Always open the finished link on a phone before you share it.
 
 If the same link goes on Instagram, your website and your email signature, you will not know where a chat came from. Give each place its own opening message, such as "Hi, I found you on Instagram", and you can see the source in the first line of every conversation.
 
-When the chats start arriving, you will want a way to reply as a team and follow up. That is what [AiSend](/whatsapp-business-api) is for.
+When the chats start arriving, you will want a way to reply as a team and follow up. That is what [PerfChat](/whatsapp-business-api) is for.

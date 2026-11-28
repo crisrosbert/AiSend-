@@ -32,7 +32,7 @@ export const CONTENT: ToolPageContent = {
   toolLabel: 'WhatsApp chat button generator for websites',
 
   seo: {
-    // The site appends " — AiSend", so this stays short enough for a search result.
+    // The site appends " — PerfChat", so this stays short enough for a search result.
     title: 'Free WhatsApp Chat Button for Website',
     description:
       'Make a free WhatsApp chat button for your website. Pick colour, side and a welcome popup, preview it live, then copy one block of code. No plugin or signup.',
@@ -184,7 +184,7 @@ export const CONTENT: ToolPageContent = {
           {
             kind: 'note',
             title: 'What the button does not do',
-            text: 'It starts a chat. It does not read or store messages, and it does not show a live conversation on your site. Your replies happen in WhatsApp, or in a shared inbox such as AiSend if your number is connected to one.',
+            text: 'It starts a chat. It does not read or store messages, and it does not show a live conversation on your site. Your replies happen in WhatsApp, or in a shared inbox such as PerfChat if your number is connected to one.',
           },
         ],
       },
@@ -405,9 +405,9 @@ export const CONTENT: ToolPageContent = {
   },
 
   beyond: {
-    heading: 'A button starts the chat. AiSend helps you run it.',
+    heading: 'A button starts the chat. PerfChat helps you run it.',
     intro:
-      'Once visitors start messaging you, the work is answering well and fast. AiSend gives your team one place to do that.',
+      'Once visitors start messaging you, the work is answering well and fast. PerfChat gives your team one place to do that.',
     features: [
       {
         icon: 'inbox',
@@ -453,11 +453,11 @@ export const CONTENT: ToolPageContent = {
   reviews: REVIEWS,
   reviewsCopy: {
     heading: 'What customers say',
-    intro: 'Words from businesses that use AiSend.',
-    inviteHeading: 'Using AiSend in your business?',
+    intro: 'Words from businesses that use PerfChat.',
+    inviteHeading: 'Using PerfChat in your business?',
     inviteText: 'Tell us how it is going. With your permission, we will share your story here.',
     inviteLabel: 'Share your feedback',
-    inviteMessage: 'Hi, I would like to share my feedback about AiSend.',
+    inviteMessage: 'Hi, I would like to share my feedback about PerfChat.',
   },
 
   postsCopy: {

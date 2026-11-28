@@ -250,7 +250,7 @@ export function LinkGeneratorTool() {
 
       <p className="tl-upsell">
         Want to message thousands of contacts instead of one at a time, with delivery tracking and auto-replies?{' '}
-        <Link href="/signup">Try AiSend free</Link>
+        <Link href="/signup">Try PerfChat free</Link>
       </p>
     </div>
   )

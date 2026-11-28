@@ -1,4 +1,4 @@
-# AiSend — AI-Powered WhatsApp Engagement Platform
+# PerfChat — AI-Powered WhatsApp Engagement Platform
 
 > Self-hostable CRM template for WhatsApp® — shared inbox, contacts,
 > sales pipelines, broadcasts, and no-code automations. Fork it, brand

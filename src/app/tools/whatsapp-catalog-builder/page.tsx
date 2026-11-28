@@ -163,7 +163,7 @@ export default function WhatsAppCatalogBuilderPage() {
             <div className="max-w-lg">
               <h2 className="text-xl font-bold">Want this catalogue live on WhatsApp, not just copied and pasted?</h2>
               <p className="mt-2 text-sm sm:text-base text-gray-600 leading-relaxed">
-                AiSend sends catalogue and broadcast messages straight from your product list on the official
+                PerfChat sends catalogue and broadcast messages straight from your product list on the official
                 WhatsApp API.
               </p>
             </div>

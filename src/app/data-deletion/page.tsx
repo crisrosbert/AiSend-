@@ -54,14 +54,14 @@ function describe(status: string): { headline: string; detail: string; tone: 'do
       return {
         headline: 'Your data has been deleted',
         detail:
-          'Everything associated with your account has been permanently removed from AiSend, including your contacts, conversations and message history. Nothing is recoverable.',
+          'Everything associated with your account has been permanently removed from PerfChat, including your contacts, conversations and message history. Nothing is recoverable.',
         tone: 'done',
       }
     case 'no_data':
       return {
         headline: 'There was nothing to delete',
         detail:
-          'We received your request, but no AiSend account was linked to your Facebook profile. No data about you is held.',
+          'We received your request, but no PerfChat account was linked to your Facebook profile. No data about you is held.',
         tone: 'done',
       }
     case 'processing':
@@ -140,7 +140,7 @@ export default async function DataDeletionPage({
               fontFamily: 'ui-monospace, monospace',
             }}
           >
-            AiSend · Data deletion
+            PerfChat · Data deletion
           </p>
 
           {!code && (
@@ -208,7 +208,7 @@ export default async function DataDeletionPage({
         </div>
 
         <p style={{ margin: '18px 2px 0', fontSize: 12.5, color: '#6e827c', lineHeight: 1.6 }}>
-          Deleting your AiSend account does not delete anything held by WhatsApp or Meta.
+          Deleting your PerfChat account does not delete anything held by WhatsApp or Meta.
           To remove data there, use the privacy settings in your Facebook or WhatsApp
           account. See our <a href="/privacy" style={{ color: '#075E54' }}>privacy policy</a>{' '}
           for what we store and why.

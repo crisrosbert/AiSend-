@@ -1,4 +1,4 @@
-/* AiSend Website Chat Widget
+/* PerfChat Website Chat Widget
  * Embed (single agent):  <script src=".../widget.js" data-org="USER_ID"></script>
  * Embed (multi-agent):   <script src=".../widget.js" data-org="USER_ID" data-agent="AGENT_ID"></script>
  *
@@ -15,11 +15,7 @@
   if (!scriptTag) return;
 
   var ORG_ID = scriptTag.getAttribute('data-org');
-  if (!ORG_ID) { console.error('[AiSend] data-org is required'); return; }
-
-  // Never start twice on one page (e.g. old tag plus the combined aisend.js tag).
-  if (window.__aisendWidgetLoaded) return;
-  window.__aisendWidgetLoaded = true;
+  if (!ORG_ID) { console.error('[PerfChat] data-org is required'); return; }
 
   // Optional agent id — when present, this widget runs a specific agent.
   var AGENT_ID = scriptTag.getAttribute('data-agent') || null;
@@ -56,21 +52,9 @@
     // Up to three questions shown as tappable chips under the greeting.
     // These are what turn an open panel into a conversation: a visitor
     // who has to think of a question usually closes the window instead.
-    suggested_questions: [],
-    // Optional slim WhatsApp line under the header. OFF unless the server says
-    // so (owner switched it on AND a valid number is saved).
-    whatsapp_button_enabled: false,
-    whatsapp_button_text: '',
-    // Optional: open the chat window by itself. OFF unless the owner switched it on.
-    auto_open_enabled: false,
-    auto_open_seconds: 5,
-    auto_open_exclude: '',
-    // Optional: the send arrow opens WhatsApp with the message instead of asking the AI.
-    wa_redirect_enabled: false,
-    wa_redirect_number: ''
+    suggested_questions: []
   };
   var isOpen = false;
-  var lockedOverflow = null;
   var messages = []; // {role:'user'|'bot', text}
   var bubbleShown = false;
   // Once details are captured we never show the form again this session, even
@@ -95,37 +79,23 @@
     btn.innerHTML = chatIcon();
     btn.onclick = togglePanel;
     document.body.appendChild(btn);
-    // ── Teaser bubble, or auto-open ──
-    function showBubble() {
-      if (isOpen || bubbleShown) return;
-      bubbleShown = true;
-      var bubble = el('div', 'aisend-bubble');
-      bubble.innerHTML =
-        '<div class="aisend-bubble-close">&times;</div>' +
-        '<div class="aisend-bubble-text">' + esc(config.bubble_message) + '</div>';
-      bubble.querySelector('.aisend-bubble-close').onclick = function (e) {
-        e.stopPropagation();
-        bubble.remove();
-      };
-      bubble.onclick = function () { bubble.remove(); togglePanel(); };
-      document.body.appendChild(bubble);
-      setTimeout(function () { if (bubble.parentNode) bubble.remove(); }, 15000);
-    }
-    if (autoOpenAllowed()) {
-      // Replaces the bubble. If the moment is wrong when the timer fires
-      // (visitor is typing in a form, tab in background) the bubble is shown instead.
-      var autoSecs = Math.max(1, Math.min(120, Math.round(Number(config.auto_open_seconds)) || 5));
-      setTimeout(function () {
-        if (isOpen || !autoOpenAllowed()) return;
-        var ae = document.activeElement;
-        var typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && ae.id !== 'aisend-input';
-        if (typing || document.hidden) { showBubble(); return; }
-        autoOpening = true;
-        try { togglePanel(); } finally { autoOpening = false; }
-      }, autoSecs * 1000);
-    } else {
-      setTimeout(showBubble, (config.trigger_delay_seconds || 10) * 1000);
-    }
+    // ── Notification bubble (after delay) ──
+    setTimeout(function () {
+      if (!isOpen && !bubbleShown) {
+        bubbleShown = true;
+        var bubble = el('div', 'aisend-bubble');
+        bubble.innerHTML =
+          '<div class="aisend-bubble-close">&times;</div>' +
+          '<div class="aisend-bubble-text">' + esc(config.bubble_message) + '</div>';
+        bubble.querySelector('.aisend-bubble-close').onclick = function (e) {
+          e.stopPropagation();
+          bubble.remove();
+        };
+        bubble.onclick = function () { bubble.remove(); togglePanel(); };
+        document.body.appendChild(bubble);
+        setTimeout(function () { if (bubble.parentNode) bubble.remove(); }, 15000);
+      }
+    }, (config.trigger_delay_seconds || 10) * 1000);
     // ── Chat panel (hidden initially) ──
     var panel = el('div', 'aisend-panel');
     panel.id = 'aisend-panel';
@@ -149,30 +119,14 @@
           '<div class="aisend-close" id="aisend-close">&times;</div>' +
         '</div>' +
       '</div>' +
-      // Optional WhatsApp strip: a flex row between the header and the
-      // messages. Empty string (nothing at all) unless it is switched on.
-      waStripHtml() +
       '<div class="aisend-messages" id="aisend-messages"></div>' +
       '<div class="aisend-input-row">' +
         '<input type="text" class="aisend-input" id="aisend-input" placeholder="Type your message..." />' +
         '<button class="aisend-send" id="aisend-send">' + sendIcon() + '</button>' +
       '</div>';
     document.body.appendChild(panel);
-    wireWaStrip(panel);
     document.getElementById('aisend-close').onclick = togglePanel;
     document.getElementById('aisend-send').onclick = sendMessage;
-    // The keyboard animates in: re-fit once it has settled.
-    document.getElementById('aisend-input').addEventListener('focus', function () {
-      fitPanel();
-      setTimeout(fitPanel, 300);
-      setTimeout(fitPanel, 700);
-    });
-    document.getElementById('aisend-input').addEventListener('blur', function () {
-      setTimeout(fitPanel, 150);
-      setTimeout(fitPanel, 500);
-    });
-    window.addEventListener('resize', fitPanel);
-    window.addEventListener('orientationchange', function () { setTimeout(fitPanel, 300); });
     document.getElementById('aisend-input').addEventListener('keypress', function (e) {
       if (e.key === 'Enter') sendMessage();
     });
@@ -238,108 +192,17 @@
     if (el) el.remove();
   }
 
-  // Phones: the chat is a full-screen sheet that always equals the VISIBLE area
-  // (below the browser bar, above the on-screen keyboard), like other mobile
-  // chat widgets. Chrome shrinks only the visual viewport when the keyboard opens,
-  // so a fixed 100% height would run under the keyboard and push the header off
-  // screen. Measure the visual viewport instead, and re-measure whenever it changes.
-  function fitPanel() {
-    var panel = document.getElementById('aisend-panel');
-    if (!panel || !isOpen) return;
-    var vv = window.visualViewport;
-    var phone = window.matchMedia && window.matchMedia('(max-width:480px)').matches;
-    var kb = !!(phone && ((vv && vv.height < window.innerHeight - 120) ||
-      (document.activeElement && document.activeElement.id === 'aisend-input')));
-    if (panel.classList) { if (kb) panel.classList.add('aisend-kb'); else panel.classList.remove('aisend-kb'); }
-    if (phone) {
-      var vh = vv ? vv.height : window.innerHeight;
-      var top = vv ? vv.offsetTop : 0;
-      panel.style.top = Math.max(0, top) + 'px';
-      panel.style.bottom = 'auto';
-      panel.style.height = Math.max(200, vh) + 'px';
-      panel.style.maxHeight = 'none';
-    } else {
-      panel.style.top = '';
-      panel.style.bottom = '';
-      panel.style.height = '';
-      panel.style.maxHeight = '';
-    }
-    var box = document.getElementById('aisend-messages');
-    if (box) box.scrollTop = box.scrollHeight;
-  }
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', fitPanel);
-    window.visualViewport.addEventListener('scroll', fitPanel);
-  }
-
-  // ── Auto-open helpers ──
-  // At most once per browser session (sessionStorage), never after the visitor
-  // closed the chat, never on an excluded page. Storage can throw (private
-  // mode): then we simply treat it as "not yet used".
-  var AUTO_KEY = 'aisend_auto_' + ORG_ID + (AGENT_ID ? '_' + AGENT_ID : '');
-  var autoOpening = false;
-  function autoFlag() { try { return sessionStorage.getItem(AUTO_KEY); } catch (e) { return null; } }
-  function setAutoFlag(v) { try { sessionStorage.setItem(AUTO_KEY, v); } catch (e) {} }
-  // AUTO-OPEN-HELPERS-START
-  function parseExcludeList(v) {
-    var out = [];
-    if (typeof v !== 'string') return out;
-    var parts = v.split(/[\n,]+/);
-    for (var i = 0; i < parts.length && out.length < 20; i++) {
-      var t = parts[i].replace(/^\s+|\s+$/g, '').toLowerCase().slice(0, 100);
-      if (t && out.indexOf(t) === -1) out.push(t);
-    }
-    return out;
-  }
-  function isPathExcluded(pathname, list) {
-    var path = String(pathname || '/').toLowerCase();
-    for (var i = 0; i < list.length; i++) {
-      var p = list[i].replace(/\*+$/, '');
-      if (!p) continue;
-      if (p.charAt(0) === '/') { if (path.indexOf(p) === 0) return true; }
-      else if (path.indexOf(p) !== -1) return true;
-    }
-    return false;
-  }
-  // AUTO-OPEN-HELPERS-END
-  function autoOpenAllowed() {
-    if (config.auto_open_enabled !== true) return false;
-    if (autoFlag()) return false;
-    return !isPathExcluded(window.location.pathname, parseExcludeList(config.auto_open_exclude));
-  }
-
   function togglePanel() {
     var panel = document.getElementById('aisend-panel');
     isOpen = !isOpen;
-    // Remember: opened (auto or by the visitor) = no second auto-open this session;
-    // closed by the visitor = never auto-open again this session.
-    if (isOpen) { if (!autoFlag()) setAutoFlag('done'); } else setAutoFlag('closed');
     panel.style.display = isOpen ? 'flex' : 'none';
-    if (isOpen) setTimeout(fitPanel, 50); else { panel.style.top = ''; panel.style.bottom = ''; panel.style.height = ''; panel.style.maxHeight = ''; }
-    // No waves around the button while the chat is open: they spread over
-    // the panel edge on phones and look like an overlap.
-    var launcher = document.querySelector('.aisend-btn');
-    if (launcher) launcher.className = isOpen ? 'aisend-btn aisend-open' : 'aisend-btn';
-    // Like other chat widgets on phones: freeze the page behind the chat so
-    // it cannot scroll or pan (a panning page is what drags the header off
-    // screen), and restore exactly what the site had when the chat closes.
-    var isPhone = window.matchMedia && window.matchMedia('(max-width:480px)').matches;
-    if (isPhone) {
-      if (isOpen) {
-        lockedOverflow = document.documentElement.style.overflow;
-        document.documentElement.style.overflow = 'hidden';
-      } else if (lockedOverflow !== null) {
-        document.documentElement.style.overflow = lockedOverflow;
-        lockedOverflow = null;
-      }
-    }
     var b = document.querySelector('.aisend-bubble');
     if (b) b.remove();
     if (isOpen && messages.length === 0) {
       addMessage('bot', config.welcome_message);
       renderSuggestions();
     }
-    if (isOpen && !autoOpening) {
+    if (isOpen) {
       setTimeout(function () {
         var inp = document.getElementById('aisend-input');
         if (inp) inp.focus();
@@ -357,30 +220,6 @@
     deliver(text);
   }
 
-  // Open WhatsApp on the owner's number with the visitor's message filled in.
-  // Page address without ?query/#hash is added so the team knows where it came from.
-  function redirectToWhatsapp(text) {
-    var digits = waDigits(config.wa_redirect_number);
-    if (!digits) return;
-    var page = waClean(window.location.href).replace(/\s/g, '').split('#')[0].split('?')[0];
-    var body = waCut(String(text), 1000, false) + (page ? '\n\n(Sent from: ' + waCut(page, 150, false) + ')' : '');
-    var link = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(body);
-    addMessage('bot', 'Opening WhatsApp with your message...');
-    var box = document.getElementById('aisend-messages');
-    var last = box && box.lastChild ? box.lastChild.querySelector('.aisend-bubble-msg') : null;
-    if (last) {
-      last.appendChild(document.createElement('br'));
-      var a = document.createElement('a');
-      a.href = link; a.target = '_blank'; a.rel = 'noopener noreferrer';
-      a.textContent = 'Tap here if it did not open';
-      a.style.cssText = 'color:inherit;text-decoration:underline;font-weight:600';
-      last.appendChild(a);
-    }
-    var w = null;
-    try { w = window.open(link, '_blank', 'noopener,noreferrer'); } catch (e) {}
-    if (!w) { try { window.location.href = link; } catch (e2) {} }
-  }
-
   /**
    * Send text that is already on screen.
    *
@@ -391,17 +230,8 @@
    * rendering images or lead forms one day.
    */
   function deliver(text) {
-    // Direct-to-WhatsApp mode: no AI, the message goes to the owner's WhatsApp.
-    if (config.wa_redirect_enabled === true && waDigits(config.wa_redirect_number)) {
-      redirectToWhatsapp(text);
-      return;
-    }
     showTyping();
-    // Never leave the typing dots on screen forever: if the server has not
-    // answered in 45 seconds, stop waiting and say so.
-    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 45000);
-    var opts = {
+    fetch(API_BASE + '/api/widget/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -412,10 +242,8 @@
         page_url: window.location.href,
         page_title: document.title
       })
-    };
-    if (ctrl) opts.signal = ctrl.signal;
-    fetch(API_BASE + '/api/widget/message', opts)
-      .then(function (r) { clearTimeout(timer); return r.json(); })
+    })
+      .then(function (r) { return r.json(); })
       .then(function (data) {
         hideTyping();
         addMessage('bot', data.reply || 'Sorry, please try again.');
@@ -426,76 +254,22 @@
         if (data.handoff && data.business_phone) {
           addWhatsAppButton(data.business_phone, text);
         }
-        // After a handoff the bot stays quiet until a person returns the chat
-        // to it. Say so once and let the visitor start fresh, so an unrelated
-        // question is not stuck behind "our team has your message".
-        if (data.handoff) addNewChatButton();
         // The AI decided it is time to ask for contact details.
         if (data.lead_form && data.lead_form.fields && !leadCaptured) {
           addLeadForm(data.lead_form.fields);
         }
       })
       .catch(function () {
-        clearTimeout(timer);
         hideTyping();
-        addMessage('bot', 'Sorry, this is taking longer than expected. Please try again in a moment.');
-        // If the business gave a WhatsApp number, offer it as a way through.
-        if (config.business_phone) addWhatsAppButton(config.business_phone, text);
+        addMessage('bot', 'Sorry, I had trouble connecting. Please try again.');
       });
   }
 
-  // Offered once per handoff. A new chat is a new visitor id, which the server
-  // treats as a new conversation; the team keeps the flagged one.
-  function addNewChatButton() {
-    if (document.getElementById('aisend-newchat')) return;
-    var container = document.getElementById('aisend-messages');
-    var wrap = el('div', 'aisend-msg aisend-msg-bot');
-    wrap.id = 'aisend-newchat';
-    wrap.innerHTML = '<button type="button" class="aisend-newchat-btn">Have a different question? Start a new chat</button>';
-    wrap.querySelector('button').onclick = startNewChat;
-    container.appendChild(wrap);
-    container.scrollTop = container.scrollHeight;
-  }
-
-  function startNewChat() {
-    visitorId = 'v_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    try {
-      localStorage.setItem(VISITOR_KEY, visitorId);
-      localStorage.removeItem(VISITOR_KEY + '_lead');
-    } catch (e) { /* private mode */ }
-    leadCaptured = false;
-    messages = [];
-    var container = document.getElementById('aisend-messages');
-    container.innerHTML = '';
-    addMessage('bot', config.welcome_message);
-    renderSuggestions();
-  }
-
-  // Escaped text with **bold** support. Escaping happens first, so the only
-  // markup that can appear is the <strong> tags added here.
-  function richText(s) {
-    return esc(s).replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
-  }
   function addMessage(role, text) {
     messages.push({ role: role, text: text });
     var container = document.getElementById('aisend-messages');
     var msg = el('div', 'aisend-msg aisend-msg-' + role);
-    var bubble = el('div', 'aisend-bubble-msg');
-    if (role === 'bot') {
-      bubble.innerHTML = richText(text);
-      if (config.avatar_url) {
-        msg.className += ' aisend-has-av';
-        var av = document.createElement('img');
-        av.className = 'aisend-msg-av';
-        av.alt = '';
-        av.onerror = function () { if (av.parentNode) av.parentNode.removeChild(av); msg.className = msg.className.replace(' aisend-has-av', ''); };
-        av.src = config.avatar_url;
-        msg.appendChild(av);
-      }
-    } else {
-      bubble.textContent = text;
-    }
-    msg.appendChild(bubble);
+    msg.innerHTML = '<div class="aisend-bubble-msg">' + esc(text) + '</div>';
     container.appendChild(msg);
     container.scrollTop = container.scrollHeight;
   }
@@ -657,17 +431,11 @@
   }
 
   function addWhatsAppButton(phone, context) {
-    // Kept on purpose even when the WhatsApp strip is on: this button carries
-    // what the visitor just asked, the strip does not. The number is reduced
-    // to digits first, so a saved "+91 98201 23987" still makes a working link
-    // and nothing unescaped reaches innerHTML.
-    var digits = waDigits(phone) || String(phone).replace(/\D/g, '');
-    if (!digits) return;
     var container = document.getElementById('aisend-messages');
     var wrap = el('div', 'aisend-msg aisend-msg-bot');
     var waText = encodeURIComponent('Hi, I was chatting on your website about: ' + context);
     wrap.innerHTML =
-      '<a class="aisend-wa-btn" href="https://wa.me/' + digits + '?text=' + waText + '" target="_blank" rel="noopener noreferrer">' +
+      '<a class="aisend-wa-btn" href="https://wa.me/' + phone + '?text=' + waText + '" target="_blank">' +
       'Continue on WhatsApp →</a>';
     container.appendChild(wrap);
     container.scrollTop = container.scrollHeight;
@@ -686,121 +454,6 @@
     if (t) t.remove();
   }
 
-  // ── WhatsApp strip (optional, OFF unless the server turns it on) ──
-  // Shown only when BOTH: the owner switched "Add WhatsApp button" on (the
-  // server then sends whatsapp_button_enabled = true) AND the saved number
-  // is usable. A click opens https://wa.me/<digits>?text=<message> in a new tab.
-  function waStripOn() {
-    return config.whatsapp_button_enabled === true && !!waDigits(config.business_phone);
-  }
-  // Only static markup plus esc()-escaped text, never raw config values.
-  // Design B: icon badge, two-line copy, "Call now" (phones only) and "Chat".
-  function waCallOn() {
-    // tel: links only make sense on a phone; on a desktop they do nothing.
-    return !!(window.matchMedia && window.matchMedia('(max-width:480px), (pointer:coarse)').matches);
-  }
-  function waStripHtml() {
-    if (!waStripOn()) return '';
-    var digits = waDigits(config.business_phone);
-    return '<div class="aisend-wa-strip" id="aisend-wa-strip">' +
-      '<span class="aisend-wa-badge">' + waIcon() + '</span>' +
-      '<span class="aisend-wa-copy">' +
-        '<span class="aisend-wa-title">' + esc(waStripText(config.whatsapp_button_text)) + '</span>' +
-        '<span class="aisend-wa-sub">Reply on WhatsApp</span>' +
-      '</span>' +
-      (waCallOn() ? '<a class="aisend-wa-call" id="aisend-wa-call" href="tel:+' + digits + '">Call now</a>' : '') +
-      '<a class="aisend-wa-chat" id="aisend-wa-chat" href="#" target="_blank" rel="noopener noreferrer">Chat</a>' +
-      '</div>';
-  }
-  // The link is rebuilt just before it is used, so the message carries the
-  // page the visitor is on NOW (single-page sites change title and URL
-  // without reloading the widget).
-  function wireWaStrip(panel) {
-    var a = panel.querySelector('#aisend-wa-chat');
-    if (!a) return;
-    var refresh = function () {
-      a.href = waLink(waDigits(config.business_phone), document.title, window.location.href);
-    };
-    refresh();
-    a.addEventListener('mouseenter', refresh);
-    a.addEventListener('focus', refresh);
-    a.addEventListener('click', refresh);
-  }
-  function waIcon() {
-    return '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
-      '<path d="M12 2.5a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l4.8-1.3A9.5 9.5 0 1 0 12 2.5z" fill="#073b1f"/>' +
-      '<path d="M8.6 7.8c-.4 0-.9.3-1 1.1-.2 1.9 1.2 4.1 2.8 5.5 1.5 1.3 3.4 2.1 4.7 1.7.7-.2 1.1-.9 1.1-1.5 0-.2-.1-.3-.3-.4l-1.8-.9c-.2-.1-.4 0-.5.1l-.6.7c-.1.1-.3.2-.5.1-1-.4-2-1.2-2.6-2.2-.1-.2-.1-.3 0-.5l.5-.6c.1-.1.1-.3.1-.4l-.8-1.8c-.1-.2-.3-.3-.5-.3z" fill="#25D366"/>' +
-      '</svg>';
-  }
-
-  // WA-HELPERS-START
-  // Pure helpers (no DOM, no network). Unit-tested by
-  // src/lib/widget/whatsapp-strip.test.ts, which cuts this block out of the
-  // file and runs it, so keep the START/END markers.
-  var WA_TEXT_DEFAULT = 'Talk to the clinic team directly';
-  var WA_TEXT_MAX = 50;
-
-  // One line, no control characters.
-  function waClean(s) {
-    var str = s == null ? '' : String(s);
-    var out = '';
-    for (var i = 0; i < str.length; i++) {
-      var c = str.charCodeAt(i);
-      out += (c < 32 || (c >= 127 && c <= 159) || c === 8232 || c === 8233) ? ' ' : str.charAt(i);
-    }
-    return out.replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
-  }
-  // Cut to max characters (never half an emoji); dots=true ends with "...".
-  function waCut(s, max, dots) {
-    if (s.length <= max) return s;
-    var keep = dots ? max - 3 : max;
-    var t = s.slice(0, keep);
-    var last = t.charCodeAt(t.length - 1);
-    if (last >= 0xd800 && last <= 0xdbff) t = t.slice(0, -1);
-    t = t.replace(/\s+$/g, '');
-    return dots ? t + '...' : t;
-  }
-  // The strip text: owner's text (plain, one line, max 50), else the default.
-  function waStripText(raw) {
-    var t = waCut(waClean(raw).replace(/[<>]/g, ''), WA_TEXT_MAX, false);
-    return t || WA_TEXT_DEFAULT;
-  }
-  // Digits for wa.me, or null. Accepts 10-digit Indian mobile, 91XXXXXXXXXX,
-  // +91..., 0091..., and other international numbers (8 to 15 digits).
-  function waDigits(raw) {
-    if (raw == null) return null;
-    var s = String(raw).replace(/^\s+|\s+$/g, '');
-    if (/[a-z]/i.test(s)) return null;
-    var plus = s.charAt(0) === '+';
-    var d = s.replace(/\D/g, '');
-    if (!plus && d.slice(0, 2) === '00') d = d.slice(2);
-    if (!plus) {
-      if (d.length === 10) { if (!/^[6-9]/.test(d)) return null; d = '91' + d; }
-      else if (d.length === 11 && d.charAt(0) === '0' && /^[6-9]/.test(d.slice(1))) d = '91' + d.slice(1);
-    }
-    if (d.length < 8 || d.length > 15 || d.charAt(0) === '0') return null;
-    return d;
-  }
-  // "Hi, I'm on "<title>" <url> and I'd like to talk to the team."
-  // Title max 60 characters. The URL is the page address WITHOUT ?query and
-  // #hash (they can hold tracking codes or personal data); if it is still
-  // longer than 150 characters only the site address is used.
-  function waPrefill(title, url) {
-    var t = waCut(waClean(title).replace(/"/g, "'"), 60, true);
-    var u = waClean(url).replace(/\s/g, '').split('#')[0].split('?')[0];
-    if (u.length > 150) { var m = u.match(/^https?:\/\/[^\/]+/i); u = m ? m[0] : ''; }
-    u = waCut(u, 150, false);
-    var where = t && u ? '"' + t + '" ' + u : (t ? '"' + t + '"' : u);
-    return where
-      ? "Hi, I'm on " + where + " and I'd like to talk to the team."
-      : "Hi, I'd like to talk to the team.";
-  }
-  function waLink(digits, title, url) {
-    if (!digits) return '';
-    return 'https://wa.me/' + digits + '?text=' + encodeURIComponent(waPrefill(title, url));
-  }
-  // WA-HELPERS-END
-
   // ── Helpers ──
   function el(tag, cls) { var e = document.createElement(tag); if (cls) e.className = cls; return e; }
   function esc(s) {
@@ -809,17 +462,8 @@
     });
   }
   function chatIcon(white) {
-    // White speech bubble with three dots in the brand colour. The dots
-    // read the same CSS variable as the button, so every client's colour
-    // is picked up automatically.
     var color = white ? '#fff' : '#fff';
-    var dot = 'style="fill:var(--aisend-primary)"';
-    return '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">' +
-      '<path d="M14 3C7.9 3 3 7.4 3 12.8c0 2.8 1.3 5.3 3.4 7.1L5.6 25l4.9-2.6c1.1.3 2.3.5 3.5.5 6.1 0 11-4.4 11-9.8S20.1 3 14 3z" fill="' + color + '"/>' +
-      '<circle cx="9.5" cy="12.9" r="1.6" ' + dot + '/>' +
-      '<circle cx="14" cy="12.9" r="1.6" ' + dot + '/>' +
-      '<circle cx="18.5" cy="12.9" r="1.6" ' + dot + '/>' +
-      '</svg>';
+    return '<svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.04 2 11c0 2.5 1.14 4.75 3 6.36V22l3.6-2c1.06.32 2.2.5 3.4.5 5.52 0 10-4.04 10-9S17.52 2 12 2z" fill="' + color + '"/></svg>';
   }
   function sendIcon() {
     return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z" fill="#fff"/></svg>';
@@ -827,13 +471,8 @@
   function injectStyles() {
     var css =
       ':root{--aisend-primary:' + config.primary_color + '}' +
-      '.aisend-btn{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:var(--aisend-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.22),inset 0 0 0 2px rgba(255,255,255,.22);z-index:999998;transition:transform .2s,box-shadow .2s}' +
-      '.aisend-btn:hover{transform:scale(1.08);box-shadow:0 8px 24px rgba(0,0,0,.28),inset 0 0 0 2px rgba(255,255,255,.3)}' +
-      '.aisend-btn::before,.aisend-btn::after{content:"";position:absolute;inset:0;border-radius:50%;border:3px solid var(--aisend-primary);opacity:0;pointer-events:none;animation:aisendRing 2.2s ease-out 1s 6}' +
-      '.aisend-btn::before{animation-delay:1.8s}' +
-      '@keyframes aisendRing{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(2)}}' +
-      '.aisend-btn.aisend-open::before,.aisend-btn.aisend-open::after{animation:none;opacity:0}' +
-      '@media (prefers-reduced-motion:reduce){.aisend-btn::before,.aisend-btn::after{animation:none}}' +
+      '.aisend-btn{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:var(--aisend-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);z-index:999998;transition:transform .2s}' +
+      '.aisend-btn:hover{transform:scale(1.08)}' +
       '.aisend-bubble{position:fixed;bottom:90px;right:20px;max-width:260px;background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:999998;cursor:pointer;animation:aisendPop .3s ease}' +
       '.aisend-bubble-close{position:absolute;top:6px;right:10px;font-size:18px;color:#999;cursor:pointer;line-height:1}' +
       '.aisend-bubble-text{font-size:14px;color:#222;line-height:1.5;padding-right:12px;font-family:-apple-system,system-ui,sans-serif}' +
@@ -860,7 +499,7 @@
       // the VISITOR is about to say, and every other visitor message in
       // this panel sits on the right.
       '.aisend-suggestions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin:2px 0 4px}' +
-      '.aisend-chip{max-width:85%;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;text-align:left;font:inherit;font-size:13px;line-height:1.4;' +
+      '.aisend-chip{max-width:85%;text-align:left;font:inherit;font-size:13px;line-height:1.4;' +
         'padding:9px 14px;border-radius:16px 16px 4px 16px;cursor:pointer;' +
         'background:#fff;color:var(--aisend-primary);border:1.5px solid var(--aisend-primary);' +
         'transition:background .15s,color .15s}' +
@@ -871,25 +510,6 @@
       '.aisend-header-actions{display:flex;align-items:center;gap:10px}' +
       '.aisend-close{color:#fff;font-size:26px;cursor:pointer;line-height:1;opacity:.9}' +
       '.aisend-close:hover{opacity:1}' +
-      // WhatsApp strip: one 28px row between the header and the messages.
-      // flex-shrink:0 keeps it a fixed height, so the messages area (flex:1,
-      // scrolls) simply starts below it, on desktop and in the mobile sheet.
-      '.aisend-wa-strip{display:flex;align-items:center;gap:10px;flex-shrink:0;box-sizing:border-box;min-height:46px;padding:7px 10px;background:#fff;border-bottom:1px solid #bfe5cd;font-family:inherit}' +
-      '.aisend-wa-badge{position:relative;width:32px;height:32px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;flex-shrink:0}' +
-      '.aisend-wa-badge::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid #25D366;opacity:0;pointer-events:none;animation:aisendWaRing 1.8s ease-out .6s 3}' +
-      '@keyframes aisendWaRing{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(1.9)}}' +
-      '@media (prefers-reduced-motion:reduce){.aisend-wa-badge::after{animation:none}}' +
-      '.aisend-wa-copy{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}' +
-      '.aisend-wa-title{font-size:13px;font-weight:600;color:#073b1f}' +
-      '.aisend-wa-sub{font-size:11px;color:#4a6556}' +
-      '.aisend-wa-chat,.aisend-wa-call{flex-shrink:0;border-radius:16px;padding:7px 13px;font-size:12px;font-weight:600;line-height:1.2;white-space:nowrap;text-decoration:none;cursor:pointer}' +
-      '.aisend-wa-chat{background:#25D366;color:#073b1f;border:1px solid #25D366}' +
-      '.aisend-wa-call{background:#fff;color:#0e7a3f;border:1px solid #0e7a3f}' +
-      '.aisend-wa-chat:focus-visible,.aisend-wa-call:focus-visible{outline:2px solid #073b1f;outline-offset:2px}' +
-      '.aisend-panel.aisend-kb #aisend-wa-strip{display:none}' +
-      '.aisend-msg-bot.aisend-has-av{display:flex;align-items:flex-end;gap:8px;max-width:94%}' +
-      '.aisend-msg-av{width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#eee}' +
-      '.aisend-has-av .aisend-bubble-msg{min-width:0}' +
       // Patterned message ground.
       //
       // A flat panel makes the bubbles float in nothing; a texture
@@ -933,41 +553,12 @@
       '.aisend-input:focus{border-color:var(--aisend-primary)}' +
       '.aisend-send{width:42px;height:42px;border:none;border-radius:50%;background:var(--aisend-primary);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}' +
       '.aisend-wa-btn{display:inline-block;background:#25D366;color:#fff;padding:10px 18px;border-radius:22px;text-decoration:none;font-size:14px;font-weight:600}' +
-      '.aisend-newchat-btn{font:inherit;font-size:13px;padding:8px 14px;border-radius:18px;cursor:pointer;background:#fff;color:var(--aisend-primary);border:1.5px solid var(--aisend-primary)}' +
-      '.aisend-newchat-btn:hover{background:var(--aisend-primary);color:#fff}' +
       '.aisend-typing{display:flex;gap:4px;align-items:center}' +
       '.aisend-typing span{width:7px;height:7px;border-radius:50%;background:#bbb;animation:aisendBlink 1.4s infinite both}' +
       '.aisend-typing span:nth-child(2){animation-delay:.2s}' +
       '.aisend-typing span:nth-child(3){animation-delay:.4s}' +
       '@keyframes aisendBlink{0%,80%,100%{opacity:.3}40%{opacity:1}}' +
-      // Host-theme isolation. WordPress themes (Hello Elementor and others) style bare
-      // button / input[type=text] / a elements with their own colour, border and hover
-      // state, and a plain-class rule here loses to them (the send button turned pink,
-      // the input got a square dark border). ID-scoped !important rules win.
-      '#aisend-panel .aisend-input{border:1px solid #dde2e8!important;border-radius:22px!important;padding:10px 16px!important;background:#fff!important;color:#222!important;box-shadow:none!important;height:auto!important;margin:0!important;line-height:1.4!important}' +
-      '#aisend-panel .aisend-input:focus{border-color:var(--aisend-primary)!important;outline:none!important;background:#fff!important}' +
-      '#aisend-panel .aisend-send,#aisend-panel .aisend-send:hover,#aisend-panel .aisend-send:focus,#aisend-panel .aisend-send:active{background:var(--aisend-primary)!important;color:#fff!important;border:0!important;box-shadow:none!important;padding:0!important;min-width:42px!important}' +
-      '#aisend-panel .aisend-chip{background:#fff!important;color:var(--aisend-primary)!important;border:1.5px solid var(--aisend-primary)!important;text-transform:none!important;letter-spacing:normal!important;box-shadow:none!important}' +
-      '#aisend-panel .aisend-chip:hover,#aisend-panel .aisend-chip:focus,#aisend-panel .aisend-chip:active{background:var(--aisend-primary)!important;color:#fff!important}' +
-      '#aisend-panel .aisend-newchat-btn{background:#fff!important;color:var(--aisend-primary)!important;border:1.5px solid var(--aisend-primary)!important;text-transform:none!important;letter-spacing:normal!important;box-shadow:none!important}' +
-      '#aisend-panel .aisend-newchat-btn:hover,#aisend-panel .aisend-newchat-btn:focus{background:var(--aisend-primary)!important;color:#fff!important}' +
-      '#aisend-panel .aisend-lead-btn,#aisend-panel .aisend-lead-btn:hover,#aisend-panel .aisend-lead-btn:focus{background:var(--aisend-primary)!important;color:#fff!important;border:0!important;box-shadow:none!important;text-transform:none!important}' +
-      '#aisend-panel .aisend-lead-input{border:1px solid #e5e7eb!important;border-radius:9px!important;background:#fff!important;color:#111827!important;box-shadow:none!important}' +
-      '#aisend-panel a.aisend-wa-btn,#aisend-panel a.aisend-wa-btn:hover{background:#25D366!important;color:#fff!important;text-decoration:none!important}' +
-      '#aisend-panel a.aisend-wa-chat,#aisend-panel a.aisend-wa-chat:hover,#aisend-panel a.aisend-wa-chat:focus{background:#25D366!important;color:#073b1f!important;border:1px solid #25D366!important;text-decoration:none!important;box-shadow:none!important}' +
-      '#aisend-panel a.aisend-wa-call,#aisend-panel a.aisend-wa-call:hover,#aisend-panel a.aisend-wa-call:focus{background:#fff!important;color:#0e7a3f!important;border:1px solid #0e7a3f!important;text-decoration:none!important;box-shadow:none!important}' +
-      '.aisend-header,.aisend-input-row{flex-shrink:0}' +
-      '.aisend-messages{min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}' +
-      // Phones: full-screen chat like other mobile chat widgets. JS (fitPanel)
-      // sets top/height from the visual viewport so the keyboard never covers it.
-      '@media(max-width:480px){' +
-        '.aisend-panel{top:0;left:0;right:0;bottom:0;width:100%;max-width:none;height:100vh;height:100dvh;max-height:none;border-radius:0;box-shadow:none}' +
-        '.aisend-btn.aisend-open{display:none}' +
-        '.aisend-header{padding-top:calc(16px + env(safe-area-inset-top,0px))}' +
-        '.aisend-messages>:first-child{margin-top:auto}' +
-        // 16px: iOS Safari zooms the whole page when an input smaller than that is focused.
-        '.aisend-input{font-size:16px}' +
-        '.aisend-input-row{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}}';
+      '@media(max-width:480px){.aisend-panel{width:100vw;height:100vh;max-width:100vw;max-height:100vh;bottom:0;right:0;border-radius:0}}';
     var style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);

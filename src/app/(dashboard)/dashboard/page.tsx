@@ -3,7 +3,7 @@
 // src/app/(dashboard)/dashboard/page.tsx
 //
 // ────────────────────────────────────────────────────────────────────────────
-// AiSend Dashboard — Design System v2 (rebuilt 2026-10-11)
+// PerfChat Dashboard — Design System v2 (rebuilt 2026-10-11)
 // ────────────────────────────────────────────────────────────────────────────
 //
 // LAYOUT CONTRACT (matches the Design System v2 preview artifact)
@@ -449,7 +449,7 @@ export default function DashboardPage() {
             ₹0.00
           </div>
           <p className="mt-1 text-[12.5px]" style={{ color: "var(--ink-2)" }}>
-            Run Click-to-WhatsApp ads on Facebook &amp; Instagram directly from AiSend.
+            Run Click-to-WhatsApp ads on Facebook &amp; Instagram directly from PerfChat.
           </p>
           <Button
             render={<Link href="/ads" />}

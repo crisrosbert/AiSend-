@@ -2,7 +2,7 @@
 title: 7 Places to Put Your WhatsApp Link to Get More Chats
 description: Seven practical places to share your WhatsApp link, plus a simple way to see which of them brings customers to your chat.
 date: 2026-10-11
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-link, marketing, click-to-chat]
 
@@ -62,4 +62,4 @@ The message arrives as the first line of the chat, so you can see where each cus
 
 When someone messages your business, a 24-hour window opens in which you can reply freely if you use the WhatsApp Business API. Replying inside that window keeps the conversation simple, so aim to answer quickly.
 
-If more than one person handles your chats, a shared inbox and a few saved replies make a big difference. [AiSend](/whatsapp-business-api) is built for that.
+If more than one person handles your chats, a shared inbox and a few saved replies make a big difference. [PerfChat](/whatsapp-business-api) is built for that.

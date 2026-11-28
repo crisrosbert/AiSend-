@@ -273,7 +273,7 @@ export default function BillingPage() {
         key: data.keyId,
         amount: data.order.amount,
         currency: data.order.currency,
-        name: "AiSend",
+        name: "PerfChat",
         description: `${data.plan.name} — ${data.plan.cycle === "yearly" ? "yearly" : "monthly"}`,
         order_id: data.order.id,
         theme: { color: "var(--brand)" },

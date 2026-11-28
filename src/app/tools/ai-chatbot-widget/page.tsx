@@ -30,7 +30,7 @@ const FAQ = [
   { q: 'How does the chatbot learn about my business?', a: 'It reads the public pages of the website you enter, such as your home, services, pricing and contact pages, and answers visitor questions from that content. It does not invent details that are not on your site.' },
   { q: 'Can I change the chatbot name, tone and greeting?', a: 'Yes. After the scan you can edit the name, role, tone of voice, greeting, suggested questions and colour, and the preview updates straight away.' },
   { q: 'What happens when the chatbot does not know the answer?', a: 'It says it is not sure and points the visitor to your contact details, so customers are never given a made-up price or policy.' },
-  { q: 'Does it work with WhatsApp?', a: 'Yes. AiSend connects the same chatbot to your WhatsApp Business number, so one assistant can answer visitors on your website and customers on WhatsApp.' },
+  { q: 'Does it work with WhatsApp?', a: 'Yes. PerfChat connects the same chatbot to your WhatsApp Business number, so one assistant can answer visitors on your website and customers on WhatsApp.' },
   { q: 'Will it work on any website?', a: 'It works on most public websites. Sites that block bots, or that load all their text with JavaScript, may not be readable. In that case our team can set the chatbot up with you manually.' },
 ]
 

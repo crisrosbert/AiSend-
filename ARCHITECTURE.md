@@ -1,4 +1,4 @@
-# AiSend — Architecture & File Guide
+# PerfChat — Architecture & File Guide
 
 A tour of every part of the codebase and what it does.
 

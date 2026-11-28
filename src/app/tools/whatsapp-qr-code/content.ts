@@ -28,7 +28,7 @@ export const CONTENT: ToolPageContent = {
   toolLabel: 'WhatsApp QR code generator',
 
   seo: {
-    // The site appends " — AiSend", so this stays short enough for a search result.
+    // The site appends " — PerfChat", so this stays short enough for a search result.
     title: 'Free WhatsApp QR Code Generator with Logo',
     description:
       'Make a free WhatsApp QR code for your number, group or channel. Add a message, your logo and colours, then download a sharp PNG or SVG. No signup.',
@@ -45,7 +45,7 @@ export const CONTENT: ToolPageContent = {
     primaryLabel: 'Make my QR code',
     primaryHref: '#generator',
     secondaryLabel: 'Chat with our team',
-    whatsappMessage: 'Hi, I just used the WhatsApp QR code generator and I would like to know more about AiSend.',
+    whatsappMessage: 'Hi, I just used the WhatsApp QR code generator and I would like to know more about PerfChat.',
     proof: ['Free, with no watermark', 'PNG and SVG download', 'Your number stays in your browser'],
   },
 
@@ -335,7 +335,7 @@ export const CONTENT: ToolPageContent = {
           },
           {
             kind: 'p',
-            text: 'In a shared inbox such as the one in [AiSend](/signup), your whole team sees that first message at the top of every chat and can tag the conversation, so each placement can be counted without reading every chat by hand.',
+            text: 'In a shared inbox such as the one in [PerfChat](/signup), your whole team sees that first message at the top of every chat and can tag the conversation, so each placement can be counted without reading every chat by hand.',
           },
         ],
       },
@@ -366,9 +366,9 @@ export const CONTENT: ToolPageContent = {
   },
 
   beyond: {
-    heading: 'A QR code starts the chat. AiSend helps you run it.',
+    heading: 'A QR code starts the chat. PerfChat helps you run it.',
     intro:
-      'A printed code can bring in messages all day. AiSend gives your team one place to answer them, even when you are not at your desk.',
+      'A printed code can bring in messages all day. PerfChat gives your team one place to answer them, even when you are not at your desk.',
     features: [
       {
         icon: 'inbox',
@@ -414,11 +414,11 @@ export const CONTENT: ToolPageContent = {
   reviews: REVIEWS,
   reviewsCopy: {
     heading: 'What customers say',
-    intro: 'Words from businesses that use AiSend.',
-    inviteHeading: 'Using AiSend in your business?',
+    intro: 'Words from businesses that use PerfChat.',
+    inviteHeading: 'Using PerfChat in your business?',
     inviteText: 'Tell us how it is going. With your permission, we will share your story here.',
     inviteLabel: 'Share your feedback',
-    inviteMessage: 'Hi, I would like to share my feedback about AiSend.',
+    inviteMessage: 'Hi, I would like to share my feedback about PerfChat.',
   },
 
   postsCopy: {

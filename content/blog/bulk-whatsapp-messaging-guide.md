@@ -2,7 +2,7 @@
 title: "Bulk WhatsApp Messaging Made Easy with the Business API"
 description: Send bulk WhatsApp broadcast messages with the Business API: features, the steps to run a campaign and answers to common questions.
 date: 2026-10-13
-author: Team AiSend
+author: Team PerfChat
 category: Marketing
 tags: [bulk-whatsapp, broadcast, business-api, campaigns]
 accordion: true

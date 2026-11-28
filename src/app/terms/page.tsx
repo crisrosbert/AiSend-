@@ -1,8 +1,8 @@
 import LegalShell from '../(marketing)/legal-shell'
 
 export const metadata = {
-  title: 'Terms & Conditions — AiSend',
-  description: 'The terms governing your use of AiSend.',
+  title: 'Terms & Conditions — PerfChat',
+  description: 'The terms governing your use of PerfChat.',
   robots: { index: true, follow: true },
 }
 
@@ -17,13 +17,13 @@ export default function TermsPage() {
     <LegalShell title="Terms &amp; Conditions" subtitle="Last updated: October 2026">
       <p>
         These Terms &amp; Conditions (&quot;Terms&quot;) govern your access to and use of the
-        <strong> AiSend</strong> platform (the &quot;Service&quot;). By creating an account or
+        <strong> PerfChat</strong> platform (the &quot;Service&quot;). By creating an account or
         using the Service, you agree to these Terms. If you do not agree, do not use the Service.
       </p>
 
       <h2>1. The Service</h2>
       <p>
-        AiSend provides software to send and receive messages, run campaigns, automate
+        PerfChat provides software to send and receive messages, run campaigns, automate
         replies, and manage customers on the WhatsApp Business Platform via the Official WhatsApp
         Business API, and to collect leads from Facebook Lead Ads, websites and Click-to-WhatsApp
         ads into one dashboard. We are an independent software provider; WhatsApp and Meta are trademarks of
@@ -95,7 +95,7 @@ export default function TermsPage() {
       <h2>8. Disclaimers &amp; limitation of liability</h2>
       <p>
         The Service is provided &quot;as is&quot; without warranties of any kind. To the maximum
-        extent permitted by law, AiSend shall not be liable for indirect, incidental, or
+        extent permitted by law, PerfChat shall not be liable for indirect, incidental, or
         consequential damages, and our total liability shall not exceed the amount you paid to us in
         the three months preceding the claim.
       </p>

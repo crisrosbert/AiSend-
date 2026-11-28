@@ -2,7 +2,7 @@
 
 // src/components/settings/data-export.tsx
 //
-// Lets a business download everything it has put into AiSend: its
+// Lets a business download everything it has put into PerfChat: its
 // contacts, its website leads, and every chat message.
 //
 // ── WHY IT PAGES ─────────────────────────────────────────────────────

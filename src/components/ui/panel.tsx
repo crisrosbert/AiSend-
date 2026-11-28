@@ -4,7 +4,7 @@
 // shadows, and a tidy header slot with tabs/actions aligned to the right.
 // Replaces the mix of hand-rolled card markup you'll find across pages.
 //
-// Why this exists: AiSend's design-system v2 rule — one radius, one shadow,
+// Why this exists: PerfChat's design-system v2 rule — one radius, one shadow,
 // one border weight for every card. If a page needs a different treatment,
 // pass it in; don't fork the component.
 //

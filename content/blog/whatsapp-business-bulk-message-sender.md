@@ -1,13 +1,13 @@
 ---
 title: WhatsApp Business Bulk Message Sender (Official)
-description: Send bulk WhatsApp messages with the official Business API. Approved templates, scheduling, analytics and no ban risk. Start free with AiSend.
+description: Send bulk WhatsApp messages with the official Business API. Approved templates, scheduling, analytics and no ban risk. Start free with PerfChat.
 date: 2026-10-20
-author: Team AiSend
+author: Team PerfChat
 category: Bulk Messaging
 tags: [bulk whatsapp sender for business, official bulk whatsapp sender, whatsapp bulk message software, send bulk whatsapp messages safely]
 ---
 
-**Quick answer:** A WhatsApp business bulk message sender lets you send one approved message to many opted-in customers at once. The safe way is the official WhatsApp Business API through a Business Solution Provider like AiSend, not a browser extension, because [extensions can get your number banned](/blog/whatsapp-ban). For the full overview, see our bulk WhatsApp message sender guide.
+**Quick answer:** A WhatsApp business bulk message sender lets you send one approved message to many opted-in customers at once. The safe way is the official WhatsApp Business API through a Business Solution Provider like PerfChat, not a browser extension, because [extensions can get your number banned](/blog/whatsapp-ban). For the full overview, see our bulk WhatsApp message sender guide.
 
 ## What is a WhatsApp business bulk message sender?
 
@@ -35,14 +35,14 @@ The risk depends on how the tool works. Some tools automate the regular WhatsApp
 
 Details: unofficial vs official WhatsApp API.
 
-## How official bulk messaging works in AiSend
+## How official bulk messaging works in PerfChat
 
-1. **Connect your number** to the official WhatsApp Business API through AiSend. See [what a BSP does](/blog/whatsapp-business-solution-provider-bsp).
+1. **Connect your number** to the official WhatsApp Business API through PerfChat. See [what a BSP does](/blog/whatsapp-business-solution-provider-bsp).
 2. **Import your contacts** from a CSV or your CRM, with opt-in.
 3. **Create a template** with personalisation, a CTA or quick-reply buttons.
 4. **Submit it for approval.** Meta reviews templates.
 5. **Pick your audience** and segment by tags or attributes.
-6. **Send now or schedule.** AiSend supports scheduling up to two months ahead.
+6. **Send now or schedule.** PerfChat supports scheduling up to two months ahead.
 7. **Track results.** See read, reply and click rates per campaign.
 8. **Reply from the shared inbox** or let a chatbot handle common questions.
 
@@ -107,11 +107,11 @@ Yes. Opt-in protects your quality rating and follows the Business Messaging Poli
 Yes, in approved templates. Supported formats depend on the template type.
 
 **Is there a free way to send bulk WhatsApp messages?**
-AiSend offers a free plan and trial, and Meta may charge per message for some message types.
+PerfChat offers a free plan and trial, and Meta may charge per message for some message types.
 
 ## Send your first official bulk campaign
 
-[Start free with AiSend](/signup) and send approved WhatsApp campaigns without risking your number.
+[Start free with PerfChat](/signup) and send approved WhatsApp campaigns without risking your number.
 
 ---
 

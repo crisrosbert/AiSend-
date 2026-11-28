@@ -2,7 +2,7 @@
 title: "WhatsApp Business Web: How to Use It on Your Computer"
 description: Learn how to log in to WhatsApp Business Web, use it on Windows and Mac, and see when your business needs more than a browser.
 date: 2026-10-13
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-business-web, whatsapp-business, login, desktop]
 accordion: true

@@ -161,7 +161,7 @@ export default function AdminPage() {
             </div>
             <div>
               <h1 className="text-lg font-semibold">Admin Dashboard</h1>
-              <p className="text-xs text-slate-400">AiSend — Client Management</p>
+              <p className="text-xs text-slate-400">PerfChat — Client Management</p>
             </div>
           </div>
           <button

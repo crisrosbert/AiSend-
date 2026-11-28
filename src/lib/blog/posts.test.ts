@@ -12,7 +12,7 @@ const GOOD = `---
 title: How to Get the WhatsApp Business API
 description: A plain guide to getting the WhatsApp Business API approved and live.
 date: 2026-10-05
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp, api]
 ---

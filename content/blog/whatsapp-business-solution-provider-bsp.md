@@ -2,7 +2,7 @@
 title: WhatsApp Business Solution Provider (BSP): Guide
 description: What is a WhatsApp Business Solution Provider (BSP)? Learn what it does, how to choose one in India, and why it keeps your messaging official.
 date: 2026-10-20
-author: Team AiSend
+author: Team PerfChat
 category: WhatsApp Business API
 tags: [whatsapp business solution provider, what is a bsp whatsapp, whatsapp bsp india, official whatsapp api provider]
 ---
@@ -22,7 +22,7 @@ A BSP gives you the tools you need on top of the API:
 - Analytics
 - Billing for WhatsApp conversations and messages
 
-AiSend is a Meta Business Solution Partner built for businesses in India.
+PerfChat is a Meta Business Solution Partner built for businesses in India.
 
 ## BSP vs the WhatsApp Business app
 
@@ -67,7 +67,7 @@ Check these before you sign up:
 
 Costs usually have two parts: the BSP platform plan and the per-message charges from Meta. Rates differ by message type, such as marketing, utility, authentication and service conversations.
 
-See [AiSend pricing](/#pricing) for plans.
+See [PerfChat pricing](/#pricing) for plans.
 
 ## Use your BSP for bulk campaigns the right way
 
@@ -92,7 +92,7 @@ There can be a free plan on the BSP side, but Meta charges for many message type
 
 ## Get started with an official BSP
 
-[Start free with AiSend](/signup) and run your first official WhatsApp campaign.
+[Start free with PerfChat](/signup) and run your first official WhatsApp campaign.
 
 ---
 

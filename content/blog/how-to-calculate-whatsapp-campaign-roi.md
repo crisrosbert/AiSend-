@@ -2,7 +2,7 @@
 title: How to Calculate WhatsApp Campaign ROI, Step by Step
 description: A plain method for working out whether a WhatsApp campaign paid off, with a worked example, the numbers to collect and the mistakes that inflate results.
 date: 2026-10-11
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [roi-calculator, marketing, whatsapp]
 

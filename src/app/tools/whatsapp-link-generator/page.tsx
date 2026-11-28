@@ -73,7 +73,7 @@ function structuredData() {
         operatingSystem: 'Any',
         isAccessibleForFree: true,
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
-        provider: { '@type': 'Organization', name: 'AiSend', url: SITE_URL },
+        provider: { '@type': 'Organization', name: 'PerfChat', url: SITE_URL },
       },
       {
         '@type': 'BreadcrumbList',

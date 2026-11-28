@@ -36,9 +36,11 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { SocialAuthButtons } from "@/components/auth/social-auth-buttons";
 import { signupCss } from "@/components/auth/signup-styles";
+import { LogoMark } from "@/components/brand/logo";
+import { BRAND } from "@/lib/brand";
 import {
   AlertCircle, ArrowRight, BadgeCheck, Bot, Check, CreditCard, Eye, EyeOff,
-  Gift, Inbox, Loader2, MailCheck, MessageSquare, ShieldCheck, Sparkles,
+  Gift, Inbox, Loader2, MailCheck, ShieldCheck, Sparkles,
   Users, X, Zap,
 } from "lucide-react";
 
@@ -230,8 +232,8 @@ export default function SignupPage() {
 
       <header className="sg-top">
         <Link href="/" className="sg-brand">
-          <span className="sg-logo"><MessageSquare size={17} /></span>
-          AiSend
+          <LogoMark size={28} />
+          PerfChat
         </Link>
         <span className="sg-top-alt">
           Already have an account? <Link href="/login">Sign in</Link>
@@ -361,7 +363,7 @@ export default function SignupPage() {
               <div className="sg-field">
                 <label htmlFor="slug">Your workspace address</label>
                 <div className="sg-url">
-                  <span className="sg-url-prefix">aisend.in/</span>
+                  <span className="sg-url-prefix">{BRAND.host}/</span>
                   <input
                     id="slug" type="text" spellCheck={false} placeholder="sharma-retail"
                     value={slug}

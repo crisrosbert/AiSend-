@@ -258,12 +258,12 @@ describe('buildWidgetSnippet: text from the person using the tool', () => {
 describe('buildWidgetSnippet: made-with link', () => {
   it('adds a small link that search engines are told not to follow', () => {
     const html = buildWidgetSnippet(config({ poweredBy: true }))
-    expect(html).toMatch(/<a [^>]*rel="nofollow noopener noreferrer"[^>]*>Made with AiSend<\/a>/)
+    expect(html).toMatch(/<a [^>]*rel="nofollow noopener noreferrer"[^>]*>Made with PerfChat<\/a>/)
     expect(html).toContain('utm_source=chat-widget')
   })
 
   it('can be left out', () => {
-    expect(buildWidgetSnippet(config({ poweredBy: false }))).not.toContain('Made with AiSend')
+    expect(buildWidgetSnippet(config({ poweredBy: false }))).not.toContain('Made with PerfChat')
   })
 })
 

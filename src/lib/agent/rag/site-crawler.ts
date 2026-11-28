@@ -554,7 +554,7 @@ async function fetchPage(
       headers: {
         // Identify honestly. Pretending to be Chrome is how a crawler
         // gets an IP range banned.
-        'User-Agent': 'AiSendBot/1.0 (+website training)',
+        'User-Agent': 'PerfChatBot/1.0 (+website training)',
         Accept: 'text/html,application/xhtml+xml',
       },
     })

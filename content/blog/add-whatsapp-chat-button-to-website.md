@@ -2,7 +2,7 @@
 title: How to Add a WhatsApp Chat Button to Your Website
 description: A step-by-step guide to adding a floating WhatsApp chat button to WordPress, Shopify, Wix and any HTML website, with no plugin needed.
 date: 2026-10-11
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [chat-widget, click-to-chat, whatsapp-link]
 

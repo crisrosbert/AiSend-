@@ -2,7 +2,7 @@
 title: "WhatsApp Broadcasting: Complete Guide for Businesses"
 description: A complete guide to WhatsApp broadcasting: how it works, App vs API, sending steps, best practices, limits and use cases by industry.
 date: 2026-10-13
-author: Team AiSend
+author: Team PerfChat
 category: Marketing
 tags: [whatsapp-broadcast, broadcast-list, business-api, messaging-limits]
 accordion: true

@@ -4,7 +4,7 @@ Both new posts have `draft: true` in the settings block. They stay hidden until 
 
 ## whatsapp-business-solution-provider-bsp.md
 - Meta's current term for BSP (Business Solution Provider vs Tech Provider)
-- That AiSend is described correctly as a Meta partner (check the exact wording and tier before adding it to the post)
+- That PerfChat is described correctly as a Meta partner (check the exact wording and tier before adding it to the post)
 - Number migration rules (can an active app number move to the API?)
 - Current Meta pricing model (message types and India rates)
 
@@ -16,7 +16,7 @@ Both new posts have `draft: true` in the settings block. They stay hidden until 
 
 ## Both posts
 - Add a cover image and set `cover:` (and `coverMobile:`) like the other posts: /covers/blog-<slug>.webp
-- Add real AiSend screenshots as ![alt](url) where useful
+- Add real PerfChat screenshots as ![alt](url) where useful
 - Confirm /signup is the right signup URL
 - Links to existing posts used: whatsapp-ban-reasons-and-fix, official-whatsapp-business-api, bulk-whatsapp-messaging-guide, whatsapp-business-api-pricing-india, why-whatsapp-templates-get-rejected, whatsapp-business-web-desktop-vs-app
 - The two new posts link to each other

@@ -2,7 +2,7 @@
 title: WhatsApp vs SMS vs Email: How to Choose for Your Business
 description: Compare WhatsApp, SMS and email on cost, reach and the kind of message each suits, and learn how to test which one earns more for your own business.
 date: 2026-10-11
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [roi-calculator, marketing, whatsapp]
 cover: https://app.performancemktg.net/covers/blog-whatsapp-vs-sms-vs-email-marketing-desktop.webp

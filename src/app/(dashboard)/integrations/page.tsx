@@ -338,7 +338,7 @@ export default function IntegrationsPage() {
                 <path fill="#34a853" d="M12 23c3.24 0 5.97-1.07 7.96-2.92l-3.7-2.87c-1.1.74-2.52 1.18-4.26 1.18-3.24 0-5.99-2.19-6.97-5.65L1.2 15.71C3.16 19.7 7.21 23 12 23z"/>
               </svg>
               <h2 class="text-xl font-bold text-slate-800 mb-1">Choose an account</h2>
-              <p class="text-xs text-slate-500 mb-6">to continue to AiSend Integrations</p>
+              <p class="text-xs text-slate-500 mb-6">to continue to PerfChat Integrations</p>
               <button id="account-btn" class="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition text-left mb-3">
                 <div class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
                   ${user?.email?.charAt(0).toUpperCase() || "A"}
@@ -349,7 +349,7 @@ export default function IntegrationsPage() {
                 </div>
               </button>
               <p class="text-[10px] text-slate-400 leading-normal mt-4">
-                To continue, Google will share your name, email address, language preference, and profile picture with AiSend.
+                To continue, Google will share your name, email address, language preference, and profile picture with PerfChat.
               </p>
             </div>
             <script>
@@ -521,7 +521,7 @@ export default function IntegrationsPage() {
           )}
         </div>
         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          AiSend Integrations System
+          PerfChat Integrations System
         </div>
       </div>
 

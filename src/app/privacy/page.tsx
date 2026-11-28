@@ -1,8 +1,8 @@
 import LegalShell from '../(marketing)/legal-shell'
 
 export const metadata = {
-  title: 'Privacy Policy — AiSend',
-  description: 'How AiSend collects, uses, and protects your data.',
+  title: 'Privacy Policy — PerfChat',
+  description: 'How PerfChat collects, uses, and protects your data.',
   robots: { index: true, follow: true },
 }
 
@@ -19,7 +19,7 @@ export default function PrivacyPage() {
   return (
     <LegalShell title="Privacy Policy" subtitle="Last updated: October 2026">
       <p>
-        This Privacy Policy explains how <strong>AiSend</strong> (&quot;AiSend&quot;,
+        This Privacy Policy explains how <strong>PerfChat</strong> (&quot;PerfChat&quot;,
         &quot;we&quot;, &quot;us&quot;) collects, uses, shares, and protects information when you use our
         WhatsApp marketing and engagement platform (the &quot;Service&quot;) available at
         app.performancemktg.net and related domains. By using the Service, you agree to this Policy.
@@ -27,7 +27,7 @@ export default function PrivacyPage() {
 
       <h2>1. Who we are</h2>
       <p>
-        AiSend provides software that lets businesses send and receive messages, run
+        PerfChat provides software that lets businesses send and receive messages, run
         campaigns, automate replies, and manage customers on the WhatsApp Business Platform, using
         the Official WhatsApp Business API provided by Meta Platforms, Inc.
       </p>
@@ -51,6 +51,16 @@ export default function PrivacyPage() {
         (sender, recipient, timestamp, delivery and read status) strictly to provide the Service.
         This data is handled in accordance with Meta&apos;s WhatsApp Business Platform terms and
         policies.
+      </p>
+      <p>
+        You connect your WhatsApp Business Account through Meta&apos;s Embedded Signup, using Facebook
+        Login for Business. During signup you grant us the <em>whatsapp_business_management</em> and{' '}
+        <em>whatsapp_business_messaging</em> permissions. We use them only to (a) read your WhatsApp
+        Business Account and phone number details, (b) create and manage your message templates, and
+        (c) send and receive messages and delivery status on your behalf, as you direct. We store the
+        access token that Meta issues for your account encrypted, and you can disconnect your number at
+        any time from the Settings screen, which removes the stored token. We do not use WhatsApp or
+        Meta platform data for advertising, for profiling beyond your own customer management, or sell it.
       </p>
 
       <h3>Facebook Login, Lead Ads and ad-click data</h3>
@@ -118,6 +128,10 @@ export default function PrivacyPage() {
         Subject to applicable law, you may request to access, correct, export, or delete your
         personal data, and you may withdraw consent for certain processing. To exercise these
         rights, contact us at the address in Section 10.
+      </p>
+      <p>
+        You can also request deletion of your account and data using our{' '}
+        <a href="/data-deletion">data deletion page</a>.
       </p>
 
       <h2>8. Your customers&apos; data</h2>

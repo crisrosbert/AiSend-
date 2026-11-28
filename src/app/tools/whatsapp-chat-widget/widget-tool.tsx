@@ -396,7 +396,7 @@ export function ChatWidgetTool() {
                   <div className="tl-optlist">
                     <label className="tl-check">
                       <input type="checkbox" checked={poweredBy} onChange={(e) => setPoweredBy(e.target.checked)} />
-                      <span>Show a small &ldquo;Made with AiSend&rdquo; link in the popup</span>
+                      <span>Show a small &ldquo;Made with PerfChat&rdquo; link in the popup</span>
                     </label>
                   </div>
                 </>
@@ -488,7 +488,7 @@ export function ChatWidgetTool() {
 
       <p className="tl-upsell">
         Want every chat from your website to land in a shared team inbox, with automatic replies?{' '}
-        <Link href="/signup">Try AiSend free</Link>
+        <Link href="/signup">Try PerfChat free</Link>
       </p>
     </div>
   )

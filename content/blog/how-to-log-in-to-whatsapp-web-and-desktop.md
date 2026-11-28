@@ -2,7 +2,7 @@
 title: "How to Log In to WhatsApp Web and Desktop: Complete Guide"
 description: Log in to WhatsApp Web and Desktop with your phone number or a QR code, fix login problems and learn when to move to the Business API.
 date: 2026-10-13
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-web, whatsapp-login, desktop, business-api]
 accordion: true

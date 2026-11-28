@@ -2,7 +2,7 @@
 title: "WhatsApp Link Generator: Create and Share Your Link"
 description: What a WhatsApp link is, how to create one in three steps and where to share it on social media, your website and video descriptions.
 date: 2026-10-13
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-link, click-to-chat, link-generator, social-media]
 accordion: true

@@ -85,7 +85,7 @@ describe.each(LANDING_PAGES.map((p) => [p.slug, p] as [string, LandingContent]))
     })
 
     it('has a title that fits in a search result', () => {
-      // The root layout appends " — AiSend" (9 chars); Google shows ~60.
+      // The root layout appends " — PerfChat" (11 chars); Google shows ~60.
       expect(page.seo.title.length).toBeGreaterThanOrEqual(10)
       expect(page.seo.title.length).toBeLessThanOrEqual(60)
     })

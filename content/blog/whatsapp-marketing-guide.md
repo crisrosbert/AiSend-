@@ -2,7 +2,7 @@
 title: "WhatsApp Marketing: Take Your Marketing Up a Notch"
 description: What WhatsApp marketing is, why it works, how every industry uses it and the best practices to follow when you run campaigns.
 date: 2026-10-13
-author: Team AiSend
+author: Team PerfChat
 category: Marketing
 tags: [whatsapp-marketing, campaigns, business-api, best-practices]
 accordion: true

@@ -2,7 +2,7 @@
 title: WhatsApp Chat Button Best Practices: Popup and Placement
 description: Where to put a WhatsApp chat button, how to word the welcome popup and first message, and how to tell whether it brings you customers.
 date: 2026-10-11
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [chat-widget, marketing, click-to-chat]
 ---

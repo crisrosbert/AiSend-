@@ -174,7 +174,7 @@ export function CatalogExtractorTool() {
 
           <p className="mt-6 text-sm text-gray-500 text-center">
             Ready to send this catalogue on WhatsApp instead of copy-pasting it?{' '}
-            <Link href="/signup" className="text-[#1B6B4A] font-bold">Try AiSend free →</Link>
+            <Link href="/signup" className="text-[#1B6B4A] font-bold">Try PerfChat free →</Link>
           </p>
         </div>
       )}

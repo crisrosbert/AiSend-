@@ -3,7 +3,7 @@
 // src/components/tools/promo-banner.tsx
 //
 // The "ad block" for every /tools/* page — a dedicated, always-present
-// slot promoting AiSend itself. Content below is TEMPORARY placeholder
+// slot promoting PerfChat itself. Content below is TEMPORARY placeholder
 // copy: swap the props (or these defaults) for real campaign creative
 // once it's ready — the slot and its styling don't need to change.
 
@@ -17,9 +17,9 @@ interface PromoBannerProps {
 }
 
 export function PromoBanner({
-  headline = 'You just did this once. AiSend does it for every customer, automatically.',
+  headline = 'You just did this once. PerfChat does it for every customer, automatically.',
   sub = 'Broadcasts, auto-replies, and an AI agent that answers on WhatsApp while you\'re offline — free to start, no card required.',
-  ctaLabel = 'Try AiSend free',
+  ctaLabel = 'Try PerfChat free',
   ctaHref = '/signup',
 }: PromoBannerProps) {
   return (
@@ -47,7 +47,7 @@ export function PromoBanner({
             marginBottom: 10,
           }}
         >
-          AiSend
+          PerfChat
         </span>
         <h3 style={{ fontFamily: "'Inter', sans-serif", fontSize: 19, fontWeight: 800, margin: '0 0 6px', lineHeight: 1.3, color: '#fff' }}>
           {headline}

@@ -2,7 +2,7 @@
 title: WhatsApp Number Banned? What to Do Next
 description: Got "this account can no longer use WhatsApp Business"? Follow these steps to request a review, protect your business and avoid a repeat ban.
 date: 2026-10-20
-author: Team AiSend
+author: Team PerfChat
 category: Ban & Safety
 tags: [whatsapp number banned, whatsapp business account banned, whatsapp ban appeal, how to unban whatsapp number]
 ---
@@ -76,7 +76,7 @@ If you were using a Chrome extension before, compare your options in unofficial 
 
 A ban can also cut you off from your contacts. Keep a copy of your customer list in your CRM or inside your WhatsApp platform so you can reach customers on other channels if needed.
 
-AiSend lets you import and store contacts and send official campaigns from one place. See how it works on the bulk WhatsApp message sender page, or check [pricing](/#pricing).
+PerfChat lets you import and store contacts and send official campaigns from one place. See how it works on the bulk WhatsApp message sender page, or check [pricing](/#pricing).
 
 ## Frequently asked questions
 
@@ -97,7 +97,7 @@ Yes. Unofficial tools automate the app, which the terms do not allow, and your n
 
 ## Move to a safer setup
 
-Set up official WhatsApp campaigns with AiSend. [Start free](/signup).
+Set up official WhatsApp campaigns with PerfChat. [Start free](/signup).
 
 ---
 

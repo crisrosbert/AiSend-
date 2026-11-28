@@ -16,9 +16,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { SocialAuthButtons } from "@/components/auth/social-auth-buttons";
 import { authCss } from "@/components/auth/auth-styles";
+import { LogoMark } from "@/components/brand/logo";
 import {
   AlertCircle, ArrowRight, BadgeCheck, Bot, Eye, EyeOff, Loader2,
-  MessageSquare, Sparkles, Zap,
+  Sparkles, Zap,
 } from "lucide-react";
 
 export default function LoginPage() {
@@ -84,8 +85,8 @@ function LoginForm() {
       {/* ── Left: the pitch ── */}
       <aside className="au-pitch">
         <div className="au-brand">
-          <span className="au-logo"><MessageSquare size={18} /></span>
-          AiSend
+          <LogoMark size={30} onDark />
+          PerfChat
         </div>
 
         <div className="au-pitch-body">
@@ -97,14 +98,6 @@ function LoginForm() {
             Your inbox, campaigns and AI agents have been running while you were
             away. Pick up exactly where you left off.
           </p>
-
-          <div className="au-quote">
-            <p>
-              &ldquo;We replaced three tools with this and answer customers in
-              minutes instead of days.&rdquo;
-            </p>
-            <cite>— A retail team using AiSend daily</cite>
-          </div>
 
           <ul className="au-benefits">
             {[
@@ -123,15 +116,15 @@ function LoginForm() {
           </ul>
         </div>
 
-        <p className="au-pitch-foot">© {new Date().getFullYear()} AiSend. All rights reserved.</p>
+        <p className="au-pitch-foot">© {new Date().getFullYear()} PerfChat. All rights reserved.</p>
       </aside>
 
       {/* ── Right: the form ── */}
       <main className="au-panel">
         <div className="au-panel-top">
           <span className="au-brand mobile">
-            <span className="au-logo"><MessageSquare size={18} /></span>
-            AiSend
+            <LogoMark size={28} />
+            PerfChat
           </span>
           <span className="au-have-account">
             New here? <Link href="/signup">Create an account</Link>

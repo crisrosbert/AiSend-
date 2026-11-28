@@ -63,7 +63,7 @@ export default function GlobalError({
           </div>
 
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0c1f17" }}>
-            AiSend couldn&apos;t load
+            PerfChat couldn&apos;t load
           </h1>
           <p style={{ margin: "8px 0 0", fontSize: 14, color: "#64748b" }}>
             Something failed while starting the app. Your data is safe.

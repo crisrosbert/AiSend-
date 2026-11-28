@@ -63,7 +63,7 @@ async function fetchText(url: string, timeoutMs: number): Promise<string | null>
       signal: controller.signal,
       redirect: 'follow',
       headers: {
-        'User-Agent': 'AiSendBot/1.0 (+catalog builder tool)',
+        'User-Agent': 'PerfChatBot/1.0 (+catalog builder tool)',
         Accept: 'text/html,application/json,application/xhtml+xml',
       },
     })

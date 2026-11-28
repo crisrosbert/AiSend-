@@ -156,7 +156,7 @@ export function BlogLeadForm({ slug, title, text }: { slug: string; title: strin
         <label className="gform__consent" htmlFor={id('consent')}>
           <input id={id('consent')} type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} aria-invalid={bad('consent')} />
           <span>
-            I agree that AiSend may contact me on WhatsApp about this request, as described in the{' '}
+            I agree that PerfChat may contact me on WhatsApp about this request, as described in the{' '}
             <Link href="/privacy">Privacy Policy</Link> and <Link href="/terms">Terms</Link>.
           </span>
         </label>

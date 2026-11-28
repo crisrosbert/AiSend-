@@ -2,7 +2,7 @@
 title: WhatsApp Ban: Reasons, Fix & Safe Alternative
 description: Why WhatsApp bans numbers, how to avoid it, and how businesses send bulk messages safely with the official WhatsApp Business API. Start free.
 date: 2026-10-20
-author: Team AiSend
+author: Team PerfChat
 category: Ban & Safety
 tags: [whatsapp number banned, why does whatsapp ban numbers, how to avoid whatsapp ban, whatsapp ban for bulk messages]
 ---
@@ -79,7 +79,7 @@ Two or more "yes" answers means your number is at risk.
 
 ## Safe way to send bulk WhatsApp messages: the official API
 
-The WhatsApp Business API is the official channel Meta provides for businesses that need to message at scale. You access it through a Business Solution Provider, also called a BSP. AiSend is a Meta Business Solution Partner, so your campaigns run on the official platform instead of a workaround.
+The WhatsApp Business API is the official channel Meta provides for businesses that need to message at scale. You access it through a Business Solution Provider, also called a BSP. PerfChat is a Meta Business Solution Partner, so your campaigns run on the official platform instead of a workaround.
 
 With the official API:
 
@@ -113,9 +113,9 @@ If you currently use a Chrome extension for bulk sending, read Chrome extension 
 
 Full steps are in [this guide on banned numbers](/blog/whatsapp-number-banned-what-to-do).
 
-## How AiSend keeps your campaigns safe
+## How PerfChat keeps your campaigns safe
 
-AiSend gives businesses in India an official way to run WhatsApp marketing:
+PerfChat gives businesses in India an official way to run WhatsApp marketing:
 
 - Broadcast campaigns with approved templates
 - Contact import and segmentation
@@ -151,7 +151,7 @@ Sometimes. Submit a review request in the app and explain your use case. If the 
 
 ## Start sending safely
 
-Move your campaigns to the official WhatsApp Business API with AiSend. [Start free](/signup) and send your first approved campaign today.
+Move your campaigns to the official WhatsApp Business API with PerfChat. [Start free](/signup) and send your first approved campaign today.
 
 ---
 

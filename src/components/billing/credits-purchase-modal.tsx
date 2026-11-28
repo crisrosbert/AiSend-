@@ -100,7 +100,7 @@ export function CreditsPurchaseModal({
           key: data.keyId,
           amount: data.order.amount,
           currency: data.order.currency,
-          name: "AiSend",
+          name: "PerfChat",
           description: `Conversation credits recharge ₹${amount}`,
           order_id: data.order.id,
           theme: { color: "#1B6B4A" },

@@ -2,7 +2,7 @@
 title: "WhatsApp Automation: A Complete Guide for Businesses"
 description: Learn what WhatsApp automation is, how to automate the Business App or API, build a chatbot, set up templates and run workflows with PerformanceMktg.
 date: 2026-10-13
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-automation, chatbot, business-api, templates]
 accordion: true

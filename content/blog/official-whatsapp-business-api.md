@@ -2,7 +2,7 @@
 title: "Official WhatsApp Business API: Free to Start"
 description: Get the official WhatsApp Business API: how it differs from the Business App, what you can do with it and how each industry uses it.
 date: 2026-10-13
-author: Team AiSend
+author: Team PerfChat
 category: WhatsApp API
 tags: [whatsapp-business-api, business-api, official-api, automation]
 accordion: true

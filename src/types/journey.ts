@@ -1,5 +1,5 @@
 // src/types/journey.ts
-// Canonical types for AiSend Flow Studio.
+// Canonical types for PerfChat Flow Studio.
 // Designed deliberately distinct from existing /src/lib/automations/* types —
 // Journeys are the new node-based system; Automations are the older
 // keyword→step engine. They coexist; the migration plan is separate.

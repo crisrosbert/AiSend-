@@ -2,7 +2,7 @@
 title: WhatsApp Ban: Reasons, Fix and a Safe Alternative
 description: Why WhatsApp bans business numbers, what to do the day it happens, how to write an appeal, and how to message customers in bulk without losing your number.
 date: 2026-10-20
-author: Team AiSend
+author: Team PerfChat
 category: WhatsApp Safety
 tags: [whatsapp-ban, whatsapp-safety, business-api, bulk-messaging, whatsapp-compliance]
 cover: https://app.performancemktg.net/covers/blog-whatsapp-ban-reasons-and-fix.webp
@@ -184,9 +184,9 @@ Here is the flow we would suggest for a small business that wants to send an off
 
 You can run the whole thing from the [official bulk sender](/tools/whatsapp-bulk-sender), which handles templates, opt-outs and delivery tracking in one place. Not sure whether the numbers will work for you? The [ROI calculator](/tools/whatsapp-roi-calculator) lets you test an idea with your own figures first.
 
-# Where AiSend fits
+# Where PerfChat fits
 
-AiSend is built on the official WhatsApp Business API, so messages go through the route Meta provides. You can import contacts, submit templates, send campaigns, set up automatic replies and handle chats from one shared inbox. It also keeps opted-out contacts out of future sends.
+PerfChat is built on the official WhatsApp Business API, so messages go through the route Meta provides. You can import contacts, submit templates, send campaigns, set up automatic replies and handle chats from one shared inbox. It also keeps opted-out contacts out of future sends.
 
 That does not make any account untouchable. Your results still depend on who you message and what you say. What a good platform can do is make the right behaviour the easy one, by asking for approved templates, respecting opt-outs and showing you how a campaign performed.
 

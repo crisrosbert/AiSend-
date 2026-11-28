@@ -1,7 +1,5 @@
 'use client';
 import { TemplateLibrary } from './template-library';
-import { WaPhonePreview } from './wa-phone-preview';
-import { notifyWhatsappError } from '@/lib/whatsapp/connect-toast';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, Trash2, Loader2, RefreshCw, Link2, Upload, Phone, ExternalLink, MessageSquareReply } from 'lucide-react';
@@ -88,7 +86,7 @@ const COMMON_LANGUAGE_CODES = [
 
 export function TemplateManager() {
   const supabase = createClient();
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -245,7 +243,7 @@ export function TemplateManager() {
       await fetchTemplates(user.id);
     } catch (err) {
       console.error('Save error:', err);
-      notifyWhatsappError(err instanceof Error ? err.message : 'Failed to submit template');
+      toast.error(err instanceof Error ? err.message : 'Failed to submit template');
     } finally {
       setSaving(false);
     }
@@ -275,7 +273,7 @@ export function TemplateManager() {
       await fetchTemplates(user.id);
     } catch (err) {
       console.error('Template sync error:', err);
-      notifyWhatsappError(err instanceof Error ? err.message : 'Failed to sync templates');
+      toast.error(err instanceof Error ? err.message : 'Failed to sync templates');
     } finally {
       setSyncing(false);
     }
@@ -393,7 +391,7 @@ export function TemplateManager() {
 
       {/* New Template Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden bg-white border-[#e7ece9] p-0 sm:max-w-lg lg:max-w-5xl">
+        <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden bg-white border-[#e7ece9] p-0 sm:max-w-lg">
           <DialogHeader className="border-b border-[#e7ece9] px-4 pt-4 pb-3">
             <DialogTitle className="text-[#0c1f17]">New Message Template</DialogTitle>
             <DialogDescription className="text-slate-500">
@@ -401,8 +399,7 @@ export function TemplateManager() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
+          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-3">
             <div className="space-y-2">
               <Label className="text-slate-700">Template Name</Label>
               <Input
@@ -754,7 +751,7 @@ export function TemplateManager() {
                       <span className="text-xs text-slate-600">
                         <span className="font-medium text-[#0c1f17]">Enable Click Tracking</span>
                         <br />
-                        Route the Visit Website button through AiSend first, so taps show up as a real
+                        Route the Visit Website button through PerfChat first, so taps show up as a real
                         count on this template — visible to every plan, not just a toggle.
                       </span>
                     </label>
@@ -763,43 +760,79 @@ export function TemplateManager() {
               ) : null}
             </div>
 
-            {/* Phone preview inline on small screens; on large screens it sits in the side panel */}
-            <div className="space-y-2 lg:hidden">
+            {/* Live WhatsApp-style preview */}
+            <div className="space-y-2">
               <Label className="text-slate-700">Preview</Label>
-              <div className="rounded-2xl bg-gradient-to-b from-slate-100 to-slate-200 px-2 py-5">
-                <WaPhonePreview
-                  businessName={profile?.business_name ?? profile?.full_name ?? 'Your Business'}
-                  headerType={form.header_type}
-                  headerContent={form.header_content}
-                  body={form.body_text}
-                  footer={form.footer_text}
-                  buttons={form.buttons}
-                  sampleValues={form.sampleValues}
-                />
+              <div className="rounded-xl bg-[#e5ddd5] p-4">
+                <div className="ml-auto max-w-[85%] rounded-lg rounded-tr-none bg-[#d9fdd3] px-3 py-2 shadow-sm">
+                  {form.header_type === 'text' && form.header_content.trim() && (
+                    <p className="mb-1 text-sm font-bold text-[#0c1f17] whitespace-pre-line">
+                      {form.header_content}
+                    </p>
+                  )}
+                  {form.header_type === 'image' && form.header_content.trim() && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={form.header_content}
+                      alt=""
+                      className="mb-1.5 max-h-40 w-full rounded-md object-cover"
+                    />
+                  )}
+                  {form.header_type === 'video' && form.header_content.trim() && (
+                    <video
+                      src={form.header_content}
+                      controls
+                      className="mb-1.5 max-h-40 w-full rounded-md bg-black"
+                    />
+                  )}
+                  <p className="text-sm text-[#0c1f17] whitespace-pre-line">
+                    {form.body_text.trim()
+                      ? form.body_text.replace(
+                          /\{\{\s*(\d+)\s*\}\}/g,
+                          (_, n) => form.sampleValues[Number(n) - 1]?.trim() || `[{{${n}}}]`,
+                        )
+                      : 'Your message body will appear here…'}
+                  </p>
+                  {form.footer_text.trim() && (
+                    <p className="mt-1 text-xs text-slate-500 whitespace-pre-line">
+                      {form.footer_text}
+                    </p>
+                  )}
+                  <span className="mt-1 block text-right text-[10px] text-slate-400">
+                    {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                {buttonMode === 'quick_reply' && form.buttons.filter((b) => b.text.trim()).length > 0 && (
+                  <div className="ml-auto flex max-w-[85%] flex-wrap gap-1.5 pt-1.5">
+                    {form.buttons.filter((b) => b.text.trim()).map((btn, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#e7ece9] bg-white px-2.5 py-1 text-xs font-medium text-[#128C7E] shadow-sm"
+                      >
+                        <MessageSquareReply className="h-3 w-3" />
+                        {btn.text}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {buttonMode === 'cta' && form.buttons.filter((b) => b.text.trim()).length > 0 && (
+                  <div className="ml-auto max-w-[85%] overflow-hidden rounded-lg bg-white shadow-sm">
+                    {form.buttons.filter((b) => b.text.trim()).map((btn, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-center gap-1.5 border-t border-[#e7ece9] px-3 py-2 text-sm font-medium text-[#128C7E]"
+                      >
+                        {btn.type === 'url' ? <ExternalLink className="h-3.5 w-3.5" /> : <Phone className="h-3.5 w-3.5" />}
+                        {btn.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <p className="text-[11px] text-slate-400">
                 Variables like <code>{'{{1}}'}</code> are filled per-contact when you send.
               </p>
             </div>
-          </div>
-
-          {/* Side panel: live phone simulation (large screens) */}
-          <aside className="hidden w-[360px] shrink-0 flex-col items-center overflow-y-auto border-l border-[#e7ece9] bg-gradient-to-b from-[#f4f9f6] to-[#e6efe9] px-4 py-5 lg:flex">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Live preview</p>
-            <WaPhonePreview
-              businessName={profile?.business_name ?? profile?.full_name ?? 'Your Business'}
-              headerType={form.header_type}
-              headerContent={form.header_content}
-              body={form.body_text}
-              footer={form.footer_text}
-              buttons={form.buttons}
-              sampleValues={form.sampleValues}
-            />
-            <p className="mt-3 max-w-[260px] text-center text-[11px] text-slate-500">
-              This is how your customer sees the message. It updates as you type. Variables like{' '}
-              <code>{'{{1}}'}</code> use your sample values.
-            </p>
-          </aside>
           </div>
 
           <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t border-[#e7ece9] bg-white px-4 py-3 shadow-[0_-6px_12px_-6px_rgba(12,31,23,0.12)]">

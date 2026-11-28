@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================================
-   AISEND THEME · V2 (10 Oct 2026)
+   PerfChat THEME · V2 (10 Oct 2026)
    ============================================================================
    HOW TO RETHEME THE WHOLE APP
    -----------------------------
@@ -12,7 +12,7 @@
    sidebar highlight is built from these variables — nothing else here needs
    to change.
 
-   The palette is AiSend's refined green: a confident signal-green (#00855A)
+   The palette is PerfChat's refined green: a confident signal-green (#00855A)
    over a warm cream canvas, with ink text in a dark green-tinted near-black.
    To use a different brand color, replace --brand with your hue and the
    deep/press shades will auto-cascade.

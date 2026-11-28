@@ -3,7 +3,7 @@ title: WhatsApp Business API Pricing in India: Rates & Calculator
 description: Meta's WhatsApp API rates in India per message: marketing ₹0.8631, utility ₹0.115. See free windows, GST, worked examples and a formula to estimate your bill.
 date: 2026-10-11
 hideDate: true
-author: Team AiSend
+author: Team PerfChat
 category: Pricing
 tags: [whatsapp-api-pricing, business-api, pricing, india]
 cover: https://app.performancemktg.net/covers/whatsappdesktop.webp
@@ -170,7 +170,7 @@ Some providers add a small amount to every message on top of Meta's rate. A ₹0
 
 Entry plans are useful for testing, but check what they exclude. Common limits are one agent seat, no campaign scheduling, no API access, no chatbot builder, or caps on contacts. A plan that looks cheap can become expensive once you need a second agent.
 
-At AiSend we separate the two clearly: Meta's per-message charge is shown as its own line, and the platform fee covers the inbox, campaigns, automation and support. If you want a quote built around your message mix, [talk to our team](/contact).
+At PerfChat we separate the two clearly: Meta's per-message charge is shown as its own line, and the platform fee covers the inbox, campaigns, automation and support. If you want a quote built around your message mix, [talk to our team](/contact).
 
 # Hidden costs to check before you sign
 
@@ -421,7 +421,7 @@ A service-led small business can run under a thousand rupees of Meta charges a m
 
 Yes, if your number and data are portable. Ask about number migration and data export before you sign.
 
-## Does AiSend add a markup on Meta's message price?
+## Does PerfChat add a markup on Meta's message price?
 
 We keep Meta's message charge visible as a separate line, so you can compare it to Meta's published rate. Ask our team for a quote based on your message mix.
 
@@ -434,4 +434,4 @@ We keep Meta's message charge visible as a separate line, so you can compare it 
 - Test with a small campaign before scaling.
 - Track cost per order, not only cost per message.
 
-WhatsApp API pricing in India is predictable once you split it into Meta's per-message charge and your provider's fee. Keep transactional messages clean, segment your marketing, use free entry windows, and measure the return. When you are ready to see what your mix would cost on AiSend, [message our team](/contact) and we will build the estimate with you.
+WhatsApp API pricing in India is predictable once you split it into Meta's per-message charge and your provider's fee. Keep transactional messages clean, segment your marketing, use free entry windows, and measure the return. When you are ready to see what your mix would cost on PerfChat, [message our team](/contact) and we will build the estimate with you.

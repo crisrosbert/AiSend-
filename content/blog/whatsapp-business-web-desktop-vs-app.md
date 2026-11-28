@@ -2,7 +2,7 @@
 title: "WhatsApp Business Web: Desktop vs App, QR Code Login"
 description: How WhatsApp Business Web works, how to log in with the QR code, how it compares with the app, and how to fix common login issues.
 date: 2026-10-13
-author: Team AiSend
+author: Team PerfChat
 category: Guides
 tags: [whatsapp-business-web, desktop, qr-code, whatsapp-business-app]
 accordion: true

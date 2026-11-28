@@ -2,7 +2,7 @@
 title: WhatsApp Green Tick: How to Get Verified
 description: What is the WhatsApp green tick, who can get it and how to apply. Build trust with a verified WhatsApp Business profile. Step-by-step guide.
 date: 2026-10-20
-author: Team AiSend
+author: Team PerfChat
 category: WhatsApp Business API
 tags: [whatsapp green tick, whatsapp business verification, whatsapp official business account, how to get verified on whatsapp business]
 ---
@@ -65,9 +65,9 @@ No. The verified badge belongs to the official API ecosystem. Unofficial tools d
 - Avoid ban triggers. If you already had a problem, see [what to do if your number is banned](/blog/whatsapp-number-banned-what-to-do).
 - Get press mentions, social profiles and a strong web presence.
 
-## How AiSend helps
+## How PerfChat helps
 
-As a Meta Business Solution Partner, AiSend helps businesses in India set up the official WhatsApp Business API, create approved templates and run campaigns that protect their number. See how campaigns work in [bulk WhatsApp sending for business](/blog/whatsapp-business-bulk-message-sender).
+As a Meta Business Solution Partner, PerfChat helps businesses in India set up the official WhatsApp Business API, create approved templates and run campaigns that protect their number. See how campaigns work in [bulk WhatsApp sending for business](/blog/whatsapp-business-bulk-message-sender).
 
 ## Frequently asked questions
 
@@ -88,7 +88,7 @@ No. You still need opt-in, relevant content and compliance with the policy.
 
 ## Start building a verified WhatsApp presence
 
-[Start free with AiSend](/signup) and set up your official WhatsApp Business account.
+[Start free with PerfChat](/signup) and set up your official WhatsApp Business account.
 
 ---
 
